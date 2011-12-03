@@ -727,7 +727,7 @@ PREFIXED_EXPR.setParseAction(apply_prefixed_expr)
 # are suppressed.
 #
 # Only specific prefixes are identified for indexing. They are BODY, FRAME,
-# TKFRAME, TKFRAME_DSS, INS, CK, SCLK.
+# TKFRAME, TKFRAME_DSS, INS, CK, and SCLK.
 #
 # Whenever the suffix string is "NAME", the name is entered into the
 # prefix dictionary so that [name] and [index] point to the same information.
@@ -1067,7 +1067,7 @@ class Test_STATEMENT(unittest.TestCase):
 # Parsing methods
 ################################################################################
 
-def ParseText(kernel_text, commented=False, clear=True):
+def from_text(kernel_text, commented=False, clear=True):
     """This routine parses a string as a text kernel, returning a dictionary of
     the values found.
 
@@ -1133,9 +1133,14 @@ def ParseText(kernel_text, commented=False, clear=True):
     # Return the dictionary
     return DICTIONARY.copy()
 
+def ParseText(kernel_text, commented=False, clear=True):
+    """Legacy name for parse_text()"""
+
+    return parse_text(kernel_text, commented, clear)
+
 ########################################
 
-def FromFile(filename, clear=True):
+def from_file(filename, clear=True):
     """This routine reads a text kernel returning a dictionary of the values
     found.
 
@@ -1179,11 +1184,16 @@ def FromFile(filename, clear=True):
     f.close()
 
     # Parse the string and return the dictionary
-    return ParseText(kernel_text, commented=True, clear=clear)
+    return from_text(kernel_text, commented=True, clear=clear)
+
+def FromFile(filename, clear=True):
+    """Legacy name for from_file()"""
+
+    return from_file(filename, clear)
 
 ########################################
 
-def DefaultBodies(clear=True):
+def default_bodies(clear=True):
     """This routine loads a dictionary with all of the default body information.
 
     Input:
@@ -1222,9 +1232,14 @@ def DefaultBodies(clear=True):
 
     return DICTIONARY
 
+def DefaultBodies(clear=True):
+    """Legacy name for load_default_bodies()"""
+
+    return default_bodies(clear)
+
 ########################################
 
-def DefaultFrames(clear=True):
+def default_frames(clear=True):
     """This routine loads a dictionary with all of the default frame
     information.
 
@@ -1276,6 +1291,11 @@ def DefaultFrames(clear=True):
 
     return DICTIONARY
 
+def DefaultFrames(clear=True):
+    """Legacy name for load_default_frames()"""
+
+    return default_frames(clear)
+
 ########################################
 # UNIT TESTS
 ########################################
@@ -1285,7 +1305,7 @@ class Test_FromFile(unittest.TestCase):
   def runTest(self):
 
     # Test DefaultBodies()
-    dict = DefaultBodies(clear=True)
+    dict = default_bodies(clear=True)
     self.assertEqual(dict["BODY"][618], dict["BODY"]["PAN"])
     self.assertEqual(dict["BODY"][618]["NAME"], "PAN")
     self.assertEqual(dict["BODY"][618]["ID"],     618)
@@ -1295,7 +1315,7 @@ class Test_FromFile(unittest.TestCase):
     DICTIONARY["BODY"] = {618: {"ID":618, "NAME":"ALIAS"}}
     DICTIONARY["BODY"]["ALIAS"] = DICTIONARY["BODY"][618]
 
-    dict = DefaultBodies(clear=False)
+    dict = default_bodies(clear=False)
 
     self.assertEqual(dict["BODY"][618],   dict["BODY"]["ALIAS"])
     self.assertEqual(dict["BODY"]["PAN"], dict["BODY"]["ALIAS"])
@@ -1303,7 +1323,7 @@ class Test_FromFile(unittest.TestCase):
     self.assertEqual(dict["BODY"]["PAN"]["ID"],      618)
 
     # Test DefaultFrames()
-    dict = DefaultFrames(clear=True)
+    dict = default_frames(clear=True)
     self.assertEqual(dict["FRAME"][618], dict["FRAME"]["IAU_PAN"])
     self.assertEqual(dict["FRAME"][618], dict["FRAME"][10082])
     self.assertEqual(dict["FRAME"][618]["ID"],       10082)
@@ -1318,7 +1338,7 @@ class Test_FromFile(unittest.TestCase):
     DICTIONARY.clear()
     DICTIONARY["FRAME"] = {618: {"CENTER":618, "NAME":"NOT_IAU", "ID":11111}}
 
-    dict = DefaultFrames(clear=False)
+    dict = default_frames(clear=False)
 
     self.assertEqual(dict["FRAME"][10082], dict["FRAME"]["IAU_PAN"])
     self.assertEqual(dict["FRAME"][10082]["ID"],       10082)
@@ -1330,88 +1350,30 @@ class Test_FromFile(unittest.TestCase):
     self.assertEqual(dict["FRAME"][618]["CENTER"],     618)
 
     # Test FromFile() by attempting to parse every text kernel
-    prefix = "/Library/WebServer/SPICE/"
-    filenames = ["Cassini/FK/cas_rocks_v18.tf",
-                 "Cassini/FK/cas_status_v04.tf",
-                 "Cassini/FK/cas_v40.tf",
-                 "Cassini/FK/earth_topo_050714.tf",
-                 "Cassini/IK/cas_caps_v03.ti",
-                 "Cassini/IK/cas_cda_v01.ti",
-                 "Cassini/IK/cas_cirs_v09.ti",
-                 "Cassini/IK/cas_inms_v02.ti",
-                 "Cassini/IK/cas_iss_v10.ti",
-                 "Cassini/IK/cas_mag_v01.ti",
-                 "Cassini/IK/cas_mimi_v11.ti",
-                 "Cassini/IK/cas_radar_v11.ti",
-                 "Cassini/IK/cas_rpws_v01.ti",
-                 "Cassini/IK/cas_rss_v03.ti",
-                 "Cassini/IK/cas_sru_v02.ti",
-                 "Cassini/IK/cas_uvis_v06.ti",
-                 "Cassini/IK/cas_vims_v06.ti",
-                 "Cassini/PCK/cpck07Jan2010.tpc",
-                 "Cassini/PCK/cpck09Mar2011.tpc",
-                 "Cassini/PCK/cpck09Mar2011_Nav.tpc",
-                 "Cassini/PCK/cpck14Oct2010.tpc",
-                 "Cassini/PCK/cpck14Oct2010_Nav.tpc",
-                 "Cassini/PCK/cpck16Jun2010.tpc",
-                 "Cassini/PCK/cpck16Jun2010_Nav.tpc",
-                 "Cassini/PCK/cpck_rock_11May2009_merged.tpc",
-                 "Cassini/PCK/cpck_rock_21Jan2011.tpc",
-                 "Cassini/PCK/cpck_rock_21Jan2011_merged.tpc",
-                 "Cassini/SCLK/cas00136.tsc",
-                 "Cassini/SCLK/cas00144.tsc",
-                 "Cassini/SCLK/cas00145.tsc",
-                 "Cassini/SCLK/cas00147.tsc",
-                 "Galileo/PCK/mips_010314.tpc",
-                 "Galileo/PCK/pck00007.tpc",
-                 "Galileo/PCK/pk96030a.tpc",
-                 "Galileo/SCLK/mk00062a.tsc",
-                 "General/LSK/naif0009.tls",
-                 "General/PCK/pck00008.tpc",
-                 "General/PCK/pck00008_edit.tpc",
-                 "General/PCK/pck00009.tpc",
-                 "Juno/IK/juno_jade_v00.ti",
-                 "Juno/IK/juno_jedi_v00.ti",
-                 "Juno/IK/juno_jiram_v00.ti",
-                 "Juno/IK/juno_junocam_v00.ti",
-                 "Juno/IK/juno_mag_v00.ti",
-                 "Juno/IK/juno_mwr_v00.ti",
-                 "Juno/IK/juno_struct_v00.ti",
-                 "Juno/IK/juno_uvs_v00.ti",
-                 "Juno/IK/juno_waves_v00.ti",
-                 "Juno/SCLK/JNO_SCLKSCET.00000.tsc",
-                 "Juno/SPK/juno_v02.tf",
-                 "Mars/PCK/mars_iau2000_v0.tpc",
-                 "New-Horizons/FK/nh_v110.tf",
-                 "New-Horizons/IK/nh_alice_v101.ti",
-                 "New-Horizons/IK/nh_lorri_v100.ti",
-                 "New-Horizons/IK/nh_pepssi_v110.ti",
-                 "New-Horizons/IK/nh_ralph_v100.ti",
-                 "New-Horizons/IK/nh_rex_v100.ti",
-                 "New-Horizons/IK/nh_sdc_v100.ti",
-                 "New-Horizons/IK/nh_swap_v100.ti",
-                 "New-Horizons/SCLK/new_horizons_295.tsc",
-                 "Saturn/FK/cas_rocks_v10.tf",
-                 "Saturn/PCK/cassini_merged.tpc",
-                 "Saturn/PCK/cpck30Jul2007.tpc",
-                 "Saturn/PCK/cpck30Jul2007_Nav.tpc",
-                 "Saturn/PCK/cpck_rock_19Apr2007_merged.tpc",
-                 "Voyager/FK/vg1_v02.tf",
-                 "Voyager/FK/vg2_v02.tf",
-                 "Voyager/IK/vg1_issna_v02.ti",
-                 "Voyager/IK/vg1_isswa_v01.ti",
-                 "Voyager/IK/vg2_issna_v02.ti",
-                 "Voyager/IK/vg2_isswa_v01.ti",
-                 "Voyager/SCLK/vg100010.tsc",
-                 "Voyager/SCLK/vg100011.tsc",
-                 "Voyager/SCLK/vg200010.tsc",
-                 "Voyager/SCLK/vg200011.tsc"]
+    prefix = "test/SPICE/"
+    filenames = ["cas_iss_v10.ti",
+                 "cas_rocks_v18.tf",
+                 "cas_status_v04.tf",
+                 "cas_v40.tf",
+                 "cas00149.tsc",
+                 "cpck_rock_21Jan2011_merged.tpc",
+                 "cpck14Oct2011.tpc",
+                 "earth_topo_050714.tf",
+                 "juno_jiram_v00.ti",
+                 "juno_v02.tf",
+                 "mars_iau2000_v0.tpc",
+                 "mk00062a.tsc",
+                 "naif0009.tls",
+                 "new_horizons_295.tsc",
+                 "nh_lorri_v100.ti",
+                 "nh_v110.tf",
+                 "vg2_isswa_v01.ti",
+                 "vg2_v02.tf",
+                 "vg200011.tsc"]
 
     for file in filenames:
         print file
-        d = FromFile(prefix + file)
-        #print d
-        #print "*******************************"
+        d = from_file(prefix + file)
 
 ################################################################################
 # Perform unit testing if executed from the command line
