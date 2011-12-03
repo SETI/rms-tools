@@ -8,13 +8,13 @@
 # Revised October 2011.
 # Revised December 2, 2011 (BSW) - add unit tests
 #                                - change solve_a() to handle arrays
+# Revised December 3, 2011 (MRS)
+#   - Fixed errors that made poor initial guesses in solve_a(). Reduced default
+#     number of iterations to 5.
+#   - Added unit tests giving array arguments to solve_a().
 ################################################################################
 import numpy as np
-import random
 import unittest
-
-PRECISION = 1.e-15      # Minimum allowed precision in semimajor axis solution
-SOLVE_A_MAXITERS = 7    # Total iterations in solve_a().
 
 # Useful unit conversions
 DPR = 180. / np.pi      # Converts radians to degrees
@@ -138,7 +138,7 @@ class Gravity():
         sum_values = 0.
 
         # omega term
-        if factors[0]:
+        if factors[0] != 0:
             omega2_jsum = Gravity._jseries(self.omega_jn, ratio2)
             omega2 = gm_over_a3 * (1. + omega2_jsum)
             omega  = np.sqrt(omega2)
@@ -147,7 +147,7 @@ class Gravity():
             sum_values  += factors[0] * omega
 
         # kappa term
-        if factors[1]:
+        if factors[1] != 0:
             kappa2_jsum = Gravity._jseries(self.kappa_jn, ratio2)
             kappa2 = gm_over_a3 * (1. + kappa2_jsum)
             kappa  = np.sqrt(kappa2)
@@ -156,7 +156,7 @@ class Gravity():
             sum_values  += factors[1] * kappa
 
         # nu term
-        if factors[2]:
+        if factors[2] != 0:
             nu2_jsum = Gravity._jseries(self.nu_jn, ratio2)
             nu2 = gm_over_a3 * (1. + nu2_jsum)
             nu  = np.sqrt(nu2)
@@ -183,15 +183,15 @@ class Gravity():
         sqrt_gm_over_a3 = np.sqrt(gm_over_a3)
         sum_values = 0.
 
-        if factors[0]:
+        if factors[0] != 0:
             omega_diff = gm_over_a3 * omega2_jsum / (omega + sqrt_gm_over_a3)
             sum_values += factors[0] * omega_diff
 
-        if factors[1]:
+        if factors[1] != 0:
             kappa_diff = gm_over_a3 * kappa2_jsum / (kappa + sqrt_gm_over_a3)
             sum_values += factors[1] * kappa_diff
 
-        if factors[2]:
+        if factors[2] != 0:
             nu_diff = gm_over_a3 * nu2_jsum / (nu + sqrt_gm_over_a3)
             sum_values += factors[2] * nu_diff
 
@@ -237,7 +237,7 @@ class Gravity():
 
         return sum_values
 
-    def solve_a(self, freq, factors):
+    def solve_a(self, freq, factors, iters=5):
         """Solves for the semimajor axis at which the frequency is equal to the
             given combination of factors on omega, kappa and nu. Solution is via
             Newton's method."""
@@ -248,41 +248,41 @@ class Gravity():
         # No first-order cancellation:
         #   freq(a) ~ sum[factors] * sqrt(GM/a^3)
         #
-        #   a^3 ~ GM * (sum_factors/freq)^2
+        #   a^3 ~ GM * (sum[factors] / freq)^2
 
         if sum_factors != 0:
             a = (self.gm * (sum_factors/freq)**2)**(1./3.)
 
         # No second-order cancellation:
-        #   freq(a) ~ term * sqrt(GM/a^3) * Rp^2 / a^2
+        #   freq(a) ~ 1/2 * sum[factor*term] * sqrt(GM/a^3) * Rp^2 / a^2
         #
-        #   a^7 ~ GM * (term/freq)^2 Rp^4
+        #   a^7 ~ GM * (sum[factor*term]/2 / freq)^2 Rp^4
 
         elif factors[1] != factors[2]:
             term = (factors[0] * self.omega_jn[0] +
                     factors[1] * self.kappa_jn[0] +
-                    factors[2] * self.nu_jn[0])
+                    factors[2] * self.nu_jn[0]) / 2.
             a = (self.gm * (term * self.r2 / freq)**2)**(1/7.)
 
         # Second-order cancellation:
-        #   freq(a) ~ term * sqrt(GM/a^3) * Rp^4 / a^4
+        #   freq(a) ~ -1/8 * sum[factor*term^2] * sqrt(GM/a^3) * Rp^4 / a^4
         #
-        #   a^11 ~ GM * (term/freq)^2 Rp^8
+        #   a^11 ~ GM * (-sum[factor*term^2]/8 / freq)^2 Rp^8
 
         else:
-            term = (factors[0] * self.omega_jn[1] +
-                    factors[1] * self.kappa_jn[1] +
-                    factors[2] * self.nu_jn[1])
+            term = (factors[0] * self.omega_jn[0]**2 +
+                    factors[1] * self.kappa_jn[0]**2 +
+                    factors[2] * self.nu_jn[0]**2) / (-8.)
             a = (self.gm * (term * self.r2 * self.r2 / freq)**2)**(1/11.)
 
         # Iterate using Newton's method
-        #da = a      # Initial value for da just needs to be large
-        for iter in range(SOLVE_A_MAXITERS):
+        for iter in range(iters):
             # a step in Newton's method: x(i+1) = x(i) - f(xi) / fp(xi)
             # our f(x) = self.combo() - freq
             #     fp(x) = self.dcombo()
-            a = a - ((self.combo(a, factors) - freq) /
-                     self.dcombo_da(a, factors))
+
+            a -= ((self.combo(a, factors) - freq) / self.dcombo_da(a, factors))
+
         return a
 
     # Useful alternative names...
@@ -345,46 +345,55 @@ PLUTO_CHARON = Gravity(870.3 + 101.4, [], 1151.)
 # UNIT TESTS
 ########################################
 
-ALLOWABLE_RADIUS_DIFF = 0.00001
+ERROR_TOLERANCE = 1.e-15
 
 class Test_Gravity(unittest.TestCase):
-    
-    def setUp(self):
-        
-        # create JUPITER
-        JUPITER = Gravity(126686535., [14696.43e-06, -587.14e-06, 34.25e-06],
-                          71492. )
-        SATURN  = Gravity( 37931208., [16290.71e-06, -935.83e-06, 86.14e-06],
-                          60330. )
-        URANUS  = Gravity(  5793964., [ 3341.29e-06,  -30.44e-06           ],
-                          26200. )
-        NEPTUNE = Gravity(  6835100., [ 3408.43e-06,  -33.40e-06           ],
-                          25225. )
-        PLUTO_ONLY   = Gravity(870.3, [], 1151.)
-        PLUTO_CHARON = Gravity(870.3 + 101.4, [], 1151.)
-        self.planets = np.array([JUPITER, SATURN, URANUS, NEPTUNE, PLUTO_CHARON])
-        
-        # set up factors - will be an array in the future
-        self.factors = np.array([(1, 0, 0), (0, 1, 0), (0, 0, 1)])
-        #self.factors = np.array([(1, 0, 0), (0, 1, 0), (0, 0, 1), (1, -1, 0),
-        #                         (1, 0, -1), (0, 1, -1), (2, -1, -1)])
-        #self.factors = np.array([(1, 0, 0)])
-    
-    
+
     def test_uncombo(self):
-        for obj in self.planets:
-            a = obj.rp * 10. ** (random.random() * 2.)
-            print 'doing a = %f' % (a)
-            for f in self.factors:
-                print(f)
-                print(obj.kappa_jn)
+
+        # Testing scalars in a loop...
+        tests = 100
+        planets = [JUPITER, SATURN, URANUS, NEPTUNE, PLUTO_CHARON]
+        factors = [(1, 0, 0), (0, 1, 0), (0, 0, 1)]
+
+        for test in range(tests):
+          for obj in planets:
+            a = obj.rp * 10. ** (np.random.rand() * 2.)
+            for f in factors:
                 b = obj.solve_a(obj.combo(a, f), f)
-                c = abs(b - a)
-                print '%d has error %f' % (obj.rp,c)
-                self.assertTrue(np.all(c < ALLOWABLE_RADIUS_DIFF))
-#self.assertEqual(self.a, JUPITER.solve_a(JUPITER.combo(self.a,
-#                                                   self.factors),
-#                                     self.factors))
+                c = abs((b - a) / a)
+                self.assertTrue(c < ERROR_TOLERANCE)
+
+        # Testing a 100x100 array
+        for obj in planets:
+            a = obj.rp * 10. ** (np.random.rand(100,100) * 2.)
+            for f in factors:
+                b = obj.solve_a(obj.combo(a, f), f)
+                c = abs((b - a) / a)
+                self.assertTrue(np.all(c < ERROR_TOLERANCE))
+
+        # Testing with first-order cancellation
+        factors = [(1, -1, 0), (1, 0, -1), (0, 1, -1)]
+        planets = [JUPITER, SATURN, URANUS, NEPTUNE]
+
+        for obj in planets:
+            a = obj.rp * 10. ** (np.random.rand(100,100) * 2.)
+            for f in factors:
+                b = obj.solve_a(obj.combo(a, f), f)
+                c = abs((b - a) / a)
+                self.assertTrue(np.all(c < ERROR_TOLERANCE))
+
+        # Testing with second-order cancellation
+        factors = [(2, -1, -1)]
+        planets = [JUPITER, SATURN, URANUS, NEPTUNE]
+
+        for obj in planets:
+            a = obj.rp * 10. ** (np.random.rand(100,100) * 2.)
+            for f in factors:
+                b = obj.solve_a(obj.combo(a, f), f)
+                c = abs((b - a) / a)
+                self.assertTrue(np.all(c < ERROR_TOLERANCE))
+
 if __name__ == '__main__':
     unittest.main()
 
