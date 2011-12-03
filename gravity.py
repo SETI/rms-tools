@@ -6,12 +6,15 @@
 #
 # Mark R. Showalter, SETI Institute, March 2010
 # Revised October 2011.
+# Revised December 2, 2011 (BSW) - add unit tests
+#                                - change solve_a() to handle arrays
 ################################################################################
 import numpy as np
+import random
+import unittest
 
 PRECISION = 1.e-15      # Minimum allowed precision in semimajor axis solution
-SOLVE_A_MAXITERS = 100  # Maximum allowed iterations in solve_a(). Should never
-                        # be reached.
+SOLVE_A_MAXITERS = 7    # Total iterations in solve_a().
 
 # Useful unit conversions
 DPR = 180. / np.pi      # Converts radians to degrees
@@ -23,7 +26,7 @@ class Gravity():
     def __init__(self, gm, jlist=[], radius=1.):
         """The constructor for a Gravity object.
 
-        Input:
+            Input:
             gm          The body's GM in units of km^3/s^2
             jlist       optional list of even gravity harmonics: [jJ2, J4, ...].
             radius      body radius for associated J-values.
@@ -65,7 +68,7 @@ class Gravity():
     @staticmethod
     def _jseries(coefficients, ratio2):
         """Internal method to evaluate a series of the form:
-                coefficients[0] * ratio2 + coefficients[1] * ratio2^2 ..."""
+            coefficients[0] * ratio2 + coefficients[1] * ratio2^2 ..."""
 
         return ratio2 * np.polyval(coefficients[::-1], ratio2)
 
@@ -79,7 +82,7 @@ class Gravity():
 
     def kappa(self, a):
         """Returns the radial oscillation frequency (radians/s) at semimajor
-        axis a."""
+            axis a."""
 
         a2 = a * a
         kappa2 = self.gm/(a*a2) * (1. +
@@ -88,7 +91,7 @@ class Gravity():
 
     def nu(self, a):
         """Returns the vertical oscillation frequency (radians/s) at semimajor
-        axis a."""
+            axis a."""
 
         a2 = a * a
         nu2 = self.gm/(a*a2) * (1. +
@@ -97,7 +100,7 @@ class Gravity():
 
     def domega_da(self, a):
         """Returns the radial derivative of the mean motion (radians/s/km) at
-        semimajor axis a."""
+            semimajor axis a."""
 
         a2 = a * a
         domega2 = self.gm/(a2*a2) * (-3. +
@@ -106,7 +109,7 @@ class Gravity():
 
     def dkappa_da(self, a):
         """Returns the radial derivative of the radial oscillation frequency
-        (radians/s/km) at semimajor axis a."""
+            (radians/s/km) at semimajor axis a."""
 
         a2 = a * a
         dkappa2 = self.gm/(a2*a2) * (-3. +
@@ -115,7 +118,7 @@ class Gravity():
 
     def dnu_da(self, a):
         """Returns the radial derivative of the vertical oscillation frequency
-        (radians/s/km) at semimajor axis a."""
+            (radians/s/km) at semimajor axis a."""
 
         a2 = a * a
         dnu2 = self.gm/(a2*a2) * (-3. +
@@ -124,8 +127,8 @@ class Gravity():
 
     def combo(self, a, factors):
         """Returns a frequency combination, based on given coefficients for
-        omega, kappa and nu. Full numeric precision is preserved in the limit
-        of first- or second-order cancellation of the coefficients."""
+            omega, kappa and nu. Full numeric precision is preserved in the limit
+            of first- or second-order cancellation of the coefficients."""
 
         a2 = a * a
         ratio2 = self.r2 / a2
@@ -222,9 +225,9 @@ class Gravity():
 
     def dcombo_da(self, a, factors):
         """Returns the radial derivative of a frequency combination, based on
-        given coefficients for omega, kappa and nu. Unlike method combo(), this
-        one does not guarantee full precision if the coefficients cancel to
-        first or second order."""
+            given coefficients for omega, kappa and nu. Unlike method combo(), this
+            one does not guarantee full precision if the coefficients cancel to
+            first or second order."""
 
         sum_values = 0.
 
@@ -236,8 +239,8 @@ class Gravity():
 
     def solve_a(self, freq, factors):
         """Solves for the semimajor axis at which the frequency is equal to the
-        given combination of factors on omega, kappa and nu. Solution is via
-        Newton's method."""
+            given combination of factors on omega, kappa and nu. Solution is via
+            Newton's method."""
 
         # Find an initial guess
         sum_factors = np.sum(factors)
@@ -273,66 +276,55 @@ class Gravity():
             a = (self.gm * (term * self.r2 * self.r2 / freq)**2)**(1/11.)
 
         # Iterate using Newton's method
-        da = a      # Initial value for da just needs to be large
+        #da = a      # Initial value for da just needs to be large
         for iter in range(SOLVE_A_MAXITERS):
-
-            # Save previous values
-            prev_a  = a
-            prev_da = da
-
-            # Take a step with Newton's method
-            da = (self.combo(a, factors) - freq) / self.dcombo_da(a, factors)
-            a = prev_a - da
-            # print "newton: a=%s, da=%s, f(x)=%s"%(a, da, self.combo(a,factors))
-
-            # Stop on exact convergence
-            if a == prev_a: return a
-
-            # Stop if we're close and convergence has stopped
-            # This prevents infinite alternation between two nearby solutions
-            da = abs(da)
-            if da < a * PRECISION and da >= prev_da: return a
+            # a step in Newton's method: x(i+1) = x(i) - f(xi) / fp(xi)
+            # our f(x) = self.combo() - freq
+            #     fp(x) = self.dcombo()
+            a = a - ((self.combo(a, factors) - freq) /
+                     self.dcombo_da(a, factors))
+        return a
 
     # Useful alternative names...
     def n(self, a):
         """Returns the mean motion at semimajor axis a. Identical to omega(a).
-        """
+            """
 
         return self.omega(a)
 
     def dmean_dt(self, a):
         """Returns the mean motion at semimajor axis a. Identical to omega(a).
-        """
+            """
 
         return self.omega(a)
 
     def dperi_dt(self, a):
         """Returns the pericenter precession rate at semimajor axis a. Identical
-        to combo(a, (1,-1,0))."""
+            to combo(a, (1,-1,0))."""
 
         return self.combo(a, (1,-1,0))
 
     def dnode_dt(self, a):
         """Returns the nodal regression rate (negative) at semimajor axis a.
-        Identical to combo(a, (1,0,-1))."""
+            Identical to combo(a, (1,0,-1))."""
 
         return self.combo(a, (1,0,-1))
 
     def d_dmean_dt_da(self, a):
         """Returns the radial derivative of the mean motion at semimajor axis a. 
-        Identical to domega_da(a)."""
+            Identical to domega_da(a)."""
 
         return self.domega_da(a)
 
     def d_dperi_dt_da(self, a):
         """Returns the radial derivative of the pericenter precession rate at
-        semimajor axis a. Identical to dcombo_da(a, (1,-1,0))."""
+            semimajor axis a. Identical to dcombo_da(a, (1,-1,0))."""
 
         return self.dcombo_da(a, (1,-1,0))
 
     def d_dnode_dt_da(self, a):
         """Returns the radial derivative of the nodal regression rate (negative)
-        at semimajor axis a. Identical to dcombo_da(a, (1,0,-1))."""
+            at semimajor axis a. Identical to dcombo_da(a, (1,0,-1))."""
 
         return self.dcombo_da(a, (1,0,-1))
 
@@ -348,6 +340,53 @@ NEPTUNE = Gravity(  6835100., [ 3408.43e-06,  -33.40e-06           ], 25225. )
 PLUTO_ONLY   = Gravity(870.3, [], 1151.)
 PLUTO_CHARON = Gravity(870.3 + 101.4, [], 1151.)
 # from http://arxiv.org/abs/0712.1261
+
+########################################
+# UNIT TESTS
+########################################
+
+ALLOWABLE_RADIUS_DIFF = 0.00001
+
+class Test_Gravity(unittest.TestCase):
+    
+    def setUp(self):
+        
+        # create JUPITER
+        JUPITER = Gravity(126686535., [14696.43e-06, -587.14e-06, 34.25e-06],
+                          71492. )
+        SATURN  = Gravity( 37931208., [16290.71e-06, -935.83e-06, 86.14e-06],
+                          60330. )
+        URANUS  = Gravity(  5793964., [ 3341.29e-06,  -30.44e-06           ],
+                          26200. )
+        NEPTUNE = Gravity(  6835100., [ 3408.43e-06,  -33.40e-06           ],
+                          25225. )
+        PLUTO_ONLY   = Gravity(870.3, [], 1151.)
+        PLUTO_CHARON = Gravity(870.3 + 101.4, [], 1151.)
+        self.planets = np.array([JUPITER, SATURN, URANUS, NEPTUNE, PLUTO_CHARON])
+        
+        # set up factors - will be an array in the future
+        self.factors = np.array([(1, 0, 0), (0, 1, 0), (0, 0, 1)])
+        #self.factors = np.array([(1, 0, 0), (0, 1, 0), (0, 0, 1), (1, -1, 0),
+        #                         (1, 0, -1), (0, 1, -1), (2, -1, -1)])
+        #self.factors = np.array([(1, 0, 0)])
+    
+    
+    def test_uncombo(self):
+        for obj in self.planets:
+            a = obj.rp * 10. ** (random.random() * 2.)
+            print 'doing a = %f' % (a)
+            for f in self.factors:
+                print(f)
+                print(obj.kappa_jn)
+                b = obj.solve_a(obj.combo(a, f), f)
+                c = abs(b - a)
+                print '%d has error %f' % (obj.rp,c)
+                self.assertTrue(np.all(c < ALLOWABLE_RADIUS_DIFF))
+#self.assertEqual(self.a, JUPITER.solve_a(JUPITER.combo(self.a,
+#                                                   self.factors),
+#                                     self.factors))
+if __name__ == '__main__':
+    unittest.main()
 
 ################################################################################
 # End of file
