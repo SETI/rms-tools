@@ -1350,7 +1350,7 @@ class Test_FromFile(unittest.TestCase):
     self.assertEqual(dict["FRAME"][618]["CENTER"],     618)
 
     # Test FromFile() by attempting to parse every text kernel
-    prefix = "test/SPICE/"
+    prefix = "test_data/SPICE/"
     filenames = ["cas_iss_v10.ti",
                  "cas_rocks_v18.tf",
                  "cas_status_v04.tf",
@@ -1367,6 +1367,7 @@ class Test_FromFile(unittest.TestCase):
                  "new_horizons_295.tsc",
                  "nh_lorri_v100.ti",
                  "nh_v110.tf",
+                 "pck00010.tpc",
                  "vg2_isswa_v01.ti",
                  "vg2_v02.tf",
                  "vg200011.tsc"]
