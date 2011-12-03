@@ -28,6 +28,7 @@
 # Mark R. Showalter
 # PDS Rings Node
 # August 2011
+# Updated December 2011
 ################################################################################
 
 import numpy as np
@@ -37,20 +38,49 @@ import julian_isoparser as iso
 import datetime as dt
 import pyparsing
 import unittest
+import os
 
 ################################################################################
-# Leapseconds Kernel Loader
+# Initialization
+#
+# At load time, this file looks for an environment variable SPICE_LSK_FILEPATH.
+# If found, this file is used to initialize the module. Otherwise, the text
+# defined internally as SPICE_LSK_TEXT is used.
 ################################################################################
 
-# Define the default SPICE path
-global SPICE_PATH, SPICE_NAME
-SPICE_PATH = "/Library/WebServer/SPICE/General/LSK/"
-SPICE_NAME = "naif0009.tls"
+# Define the text from the latest LSK file, naif0009.tls
+SPICE_LSK_DICT = {
+    "DELTA_T_A": 32.184,
+    "K": 1.657e-3,
+    "EB": 1.671e-2,
+    "M": (6.239996, 1.99096871e-7),
+    "DELTA_AT": (10, dt.date(1972,1,1),
+                 11, dt.date(1972,7,1),
+                 12, dt.date(1973,1,1),
+                 13, dt.date(1974,1,1),
+                 14, dt.date(1975,1,1),
+                 15, dt.date(1976,1,1),
+                 16, dt.date(1977,1,1),
+                 17, dt.date(1978,1,1),
+                 18, dt.date(1979,1,1),
+                 19, dt.date(1980,1,1),
+                 20, dt.date(1981,7,1),
+                 21, dt.date(1982,7,1),
+                 22, dt.date(1983,7,1),
+                 23, dt.date(1985,7,1),
+                 24, dt.date(1988,1,1),
+                 25, dt.date(1990,1,1),
+                 26, dt.date(1991,1,1),
+                 27, dt.date(1992,7,1),
+                 28, dt.date(1993,7,1),
+                 29, dt.date(1994,7,1),
+                 30, dt.date(1996,1,1),
+                 31, dt.date(1997,7,1),
+                 32, dt.date(1999,1,1),
+                 33, dt.date(2006,1,1),
+                 34, dt.date(2009,1,1))}
 
 # Define the static variables needed for TAI-ET conversions
-global LOADED_FILESPEC
-LOADED_FILESPEC = ""
-
 global DELTET_T_A, DELTET_K, DELTET_EB, DELTET_M0, DELTET_M1
 DELTET_T_A = 0.     # indicates un-initialized data
 DELTET_K   = 0.
@@ -65,35 +95,26 @@ LS_YEARS = 0
 LS_ARRAY1D = None
 LS_ARRAY2D = None
 
-########################################
+def load_from_dict(dict):
+    """Loads the SPICE LSK parameters from the given dictionary. The dictionary
+    is that returned by textkernel.from_file()["DELTET"].
+    """
 
-def reload_kernel(filespec=None):
-    """Procedure to load the parameters from the SPICE leapseconds kernel. This
-    version will reload the kernel even if the name has not changed."""
-
-    global LOADED_FILESPEC
     global DELTET_T_A, DELTET_K, DELTET_EB, DELTET_M0, DELTET_M1
     global LS_YEAR0, LS_YEARS, LS_ARRAY1D, LS_ARRAY2D
 
-    # If the given filespec is missing, use the default
-    if filespec == None or filespec == "":
-        filespec = SPICE_PATH + SPICE_NAME
-
-    # Load the kernel as a dictionary
-    tls_dict = tk.FromFile(filespec)["DELTET"]
-
     # Look up the needed variables and save them as globals
-    DELTET_T_A = tls_dict["DELTA_T_A"]
-    DELTET_K   = tls_dict["K"]
-    DELTET_EB  = tls_dict["EB"]
+    DELTET_T_A = dict["DELTA_T_A"]
+    DELTET_K   = dict["K"]
+    DELTET_EB  = dict["EB"]
 
-    (DELTET_M0, DELTET_M1) = tls_dict["M"]
+    (DELTET_M0, DELTET_M1) = dict["M"]
 
     # Construct a static array of (TAI minus UTC), the number of elapsed leap
     # seconds, and save them indexed by [year,halfyear]...
 
     # Get the list of leapseconds from the kernel
-    delta_at = tls_dict["DELTA_AT"]
+    delta_at = dict["DELTA_AT"]
     LS_YEAR0 = delta_at[1].year - 1     # subtract one so the first tabulated
                                         # year has zero leapseconds.
     LS_YEARS = delta_at[-1].year - LS_YEAR0 + 1
@@ -111,38 +132,26 @@ def reload_kernel(filespec=None):
     # These arrays share the same data
     LS_ARRAY2D = LS_ARRAY1D.reshape((LS_YEARS,2))
 
-    # Save the name of the loaded kernel
-    LOADED_FILESPEC = filespec
+def load_from_kernel(filespec):
+    """Loads the SPICE LSK parameters from the given text kernel."""
 
-########################################
+    # Load the kernel as a dictionary
+    load_from_dict(tk.from_file(filespec)["DELTET"])
 
-def load_kernel(filespec=None):
-    """Procedure to load the parameters from the SPICE leapseconds kernel, but
-    only if the name has changed."""
+# INITIALIZE PARAMETERS...
 
-    global SPICE_PATH, SPICE_NAME
-    global LOADED_FILESPEC
+load_from_dict(SPICE_LSK_DICT)
 
-    # If the current global filespec is empty, always load
-    if LOADED_FILESPEC == "":
-        reload_kernel(filespec)
-        return
-
-    # For an empty filespec, there's nothing to do
-    if filespec == None or filespec == "": return
-
-    # If this is the same file already loaded, don't repeat
-    if filespec == LOADED_FILESPEC: return
-
-    # Otherwise, load the new file
-    reload_kernel(filespec)
+try:
+    filespec = os.environ["SPICE_LSK_FILEPATH"]
+    load_from_kernel(filespec)
+except KeyError: pass
 
 ########################################
 # UNIT TESTS
 ########################################
 
-class Test_Loader(unittest.TestCase):
-    def setUp(self): load_kernel()
+class Test_Initialize(unittest.TestCase):
 
     def runTest(self):
         self.assertEqual(DELTET_T_A, 32.184,
@@ -397,8 +406,6 @@ def leapsecs_from_ym(y, m):
     """Returns the number of elapsed leapseconds for a given year and month.
     Supports scalar or array arguments."""
 
-    load_kernel()       # acts only if needed
-
     # Scalar version...
     if np.shape(y) == () and np.shape(m) == ():
         index = 2*(y - LS_YEAR0) + (m-1)/6
@@ -650,8 +657,6 @@ def tdb_from_tai(tai, iters=2):
     The default value of 2 iterations appears to give full double-precision
     convergencec for every possible case."""
 
-    load_kernel()       # acts only if needed
-
     if np.shape(tai) != (): tai = np.asfarray(tai)
 
     # Solve:
@@ -676,8 +681,6 @@ def tdb_from_tai(tai, iters=2):
 def tai_from_tdb(tdb):
     """Converts from TDB to TAI. Operates on either a single scalar or an
     arbitrary array of values. An exact solution(); no iteration required."""
-
-    load_kernel()       # acts only if needed
 
     if np.shape(tdb) != (): tdb = np.asfarray(tdb)
 
