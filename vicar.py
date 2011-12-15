@@ -19,6 +19,7 @@
 #                   content of a VICAR file.
 #
 # Mark R. Showalter, SETI Institute, June 2009
+# December 2011: Functions renamed to conform to our preferred style.
 ################################################################################
 
 import numpy as np
@@ -122,7 +123,6 @@ class VicarImage():
                           "BINTFMT" ,
                           "BREALFMT"]
 
-
     ############################################################################
     # Constructor
     ############################################################################
@@ -164,28 +164,28 @@ class VicarImage():
                        ["BLTYPE"  , ""     ] ]  # For all output files
 
         # Keeps track of whether the VicarImage was read from a file or not.
-        # If fromfile is True, then we will need to revise the header before
+        # If is_from_file is True, then we will need to revise the header before
         # it can be written, since the read routine supports more options than
         # the write routine does.
-        self.fromfile = False
+        self.is_from_file = False
 
     ############################################################################
-    # FromFile: Create VicarImage object from a file
+    # from_file: Create VicarImage object from a file
     ############################################################################
 
     @staticmethod
-    def FromFile(filename):
+    def from_file(filename):
         """Returns a VicarImage object given the name of an existing VICAR file.
     
         Inputs:
-            filename = the name of the file to load.
+            filename        the name of the file to load.
 
-        SIde effects: a VicarImage object is returned.
+        Return:             a VicarImage object.
         """
 
         # Create the object
         this = VicarImage()
-        this.fromfile = True    # Remember that this file was read
+        this.is_from_file = True    # Remember that this file was read
 
         # Open the file for binary read
         file = open(filename, "rb")
@@ -204,24 +204,24 @@ class VicarImage():
         header = file.read(vicar_LBLSIZE)
 
         # Interpret the header
-        this._LoadTable(header)
+        this._load_table(header)
 
         # Extract the basic VICAR file properties that we need
-        vicar_FORMAT  = this.GetValue("FORMAT" )
-        vicar_TYPE    = this.GetValue("TYPE"   )
-        vicar_EOL     = this.GetValue("EOL"    )
-        vicar_RECSIZE = this.GetValue("RECSIZE")
-        vicar_ORG     = this.GetValue("ORG"    , default="BSQ")
-        vicar_NL      = this.GetValue("NL"     )
-        vicar_NS      = this.GetValue("NS"     )     
-        vicar_NB      = this.GetValue("NB"     , default=1    )
-        vicar_N1      = this.GetValue("N1"     )
-        vicar_N2      = this.GetValue("N2"     )
-        vicar_N3      = this.GetValue("N3"     )
-        vicar_NBB     = this.GetValue("NBB"    , default=0    )
-        vicar_NLB     = this.GetValue("NLB"    , default=0    )
-        vicar_INTFMT  = this.GetValue("INTFMT" , default="LOW")
-        vicar_REALFMT = this.GetValue("REALFMT", default="VAX")
+        vicar_FORMAT  = this.get_value("FORMAT" )
+        vicar_TYPE    = this.get_value("TYPE"   )
+        vicar_EOL     = this.get_value("EOL"    )
+        vicar_RECSIZE = this.get_value("RECSIZE")
+        vicar_ORG     = this.get_value("ORG"    , default="BSQ")
+        vicar_NL      = this.get_value("NL"     )
+        vicar_NS      = this.get_value("NS"     )     
+        vicar_NB      = this.get_value("NB"     , default=1    )
+        vicar_N1      = this.get_value("N1"     )
+        vicar_N2      = this.get_value("N2"     )
+        vicar_N3      = this.get_value("N3"     )
+        vicar_NBB     = this.get_value("NBB"    , default=0    )
+        vicar_NLB     = this.get_value("NLB"    , default=0    )
+        vicar_INTFMT  = this.get_value("INTFMT" , default="LOW")
+        vicar_REALFMT = this.get_value("REALFMT", default="VAX")
 
         # Interpret image properties
         if vicar_TYPE != "IMAGE":
@@ -247,7 +247,7 @@ class VicarImage():
 
             header = header + extension[iblank:]
 
-            this._LoadTable(header)
+            this._load_table(header)
 
         # Look up the numpy dtype corresponding to the VICAR FORMAT
         dtypename = VicarImage.FORMAT_DICT[vicar_FORMAT]
@@ -309,33 +309,43 @@ class VicarImage():
         file.close()
 
         return this
-        
+
+    @staticmethod
+    def FromFile(filename):
+        """Deprecated, alternative name for from_file()"""
+        return VicarImage.from_file(filename)
+
     ############################################################################
-    # FromArray: Create VicarImage object from a numpy ndarray
+    # from_array: Create VicarImage object from a numpy ndarray
     ############################################################################
 
     @staticmethod
-    def FromArray(array):
+    def from_array(array):
         """Returns a VicarImage object given an array.
     
         Inputs:
-            array = the array containing the data to use in the VicarImage
-                    object.
+            array       the array containing the data to use in the VicarImage
+                        object.
 
-        SIde effects: a VicarImage object is returned.
+        Return:         a VicarImage object.
         """
 
         this = VicarImage()
-        this.SetArray(array)
-        this.fromfile = False
+        this.set_array(array)
+        this.is_from_file = False
 
         return this
 
+    @staticmethod
+    def FromArray(array):
+        """Deprecated, alternative name for from_array()"""
+        return VicarImage.from_array(array)
+
     ############################################################################
-    # ToFile(): Public Method to write a VICAR image file
+    # to_file(): Public Method to write a VICAR image file
     ############################################################################
 
-    def ToFile(self, filename):
+    def to_file(self, filename):
         """Writes the VicarImage object into a file.
 
         Inputs:
@@ -346,88 +356,93 @@ class VicarImage():
         file = open(filename, "wb")
 
         # Revise some VICAR header parameters if necessary
-        if self.fromfile:
-            self.SetArray(self.data)
-            self.fromfile = False
+        if self.is_from_file:
+            self.set_array(self.data)
+            self.is_from_file = False
 
         # Write the header
-        file.write(self.GetHeader())
+        file.write(self.get_header())
         
         # Write the array
-        self.data.tofile(file, sep="")
+        self.data.to_file(file, sep="")
 
         # Close file
         file.close()
 
         return
-        
+
+    def ToFile(self, filename):
+        """Deprecated, alternative name for to_file()"""
+        return to_file(self, filename)
+
     ############################################################################
     # Public Methods for manipulating VICAR (keyword,value) pairs
     ############################################################################
 
     def __len__(self):
-        return self.KeywordCount()
+        return self.keyword_count()
 
     def __getitem__(self, key):
         if type(key) == type(""):
-            return self.GetValue(keyword=key)
+            return self.get_value(keyword=key)
         if type(key) == type(0):
-            return self.GetValue(occurrence=key)
+            return self.get_value(occurrence=key)
         if type(key) == type(()):
             if len(key) != 2:
                 raise ValueError("Tuple must contain keyword and index")
-            return self.GetValue(keyword=key[0], occurrence=key[1])
+            return self.get_value(keyword=key[0], occurrence=key[1])
 
         raise TypeError("Invalid index type")
 
     def __setitem__(self, key, value):
         if type(key) == type(""):
-            i = self.KeywordIndex(keyword=key)
-            self.SetValueByIndex(i, value)
+            i = self.keyword_index(keyword=key)
+            self.set_value_by_index(i, value)
         if type(key) == type(0):
-            i = self.KeywordIndex(occurrence=key)
-            self.SetValueByIndex(i, value)
+            i = self.keyword_index(occurrence=key)
+            self.set_value_by_index(i, value)
         if type(key) == type(()):
             if len(key) != 2:
                 raise ValueError("Tuple must contain keyword and index")
-            i = self.KeywordIndex(keyword=key[0], occurrence=key[1])
-            self.SetValueByIndex(i, value)
+            i = self.keyword_index(keyword=key[0], occurrence=key[1])
+            self.set_value_by_index(i, value)
 
         raise TypeError("Invalid index type")
 
     def __delitem__(self, key):
         if type(key) == type(""):
-            i = self.KeywordIndex(keyword=key)
-            self.DeleteByIndex(i)
+            i = self.keyword_index(keyword=key)
+            self.delete_by_index(i)
         if type(key) == type(0):
-            i = self.KeywordIndex(occurrence=key)
-            self.DeleteByIndex(i)
+            i = self.keyword_index(occurrence=key)
+            self.delete_by_index(i)
         if type(key) == type(()):
             if len(key) != 2:
                 raise ValueError("Tuple must contain keyword and index")
-            i = self.KeywordIndex(keyword=key[0], occurrence=key[1])
-            self.DeleteByIndex(i)
+            i = self.keyword_index(keyword=key[0], occurrence=key[1])
+            self.delete_by_index(i)
 
         raise TypeError("Invalid index type")
 
-    def FindKeyword(self, keyword=".*", occurrence=0, start=0):
+    def find_keyword(self, keyword=".*", occurrence=0, start=0):
         """Returns the index of a keyword in the VICAR header. Returns -1 if the
         keyword is not found.
 
         Inputs:
-            keyword = A regular expression to match the VICAR keyword(s). Case
-                is ignored.
+            keyword         A regular expression to match the VICAR keyword(s).
+                            Case is ignored.
 
-            occurrence = which occurrence of the keyword to return; provided
-                because the same keyword can occur multiple times. Use 0
-                for the first occurrence; this is the default.
+            occurrence      An index defining which occurrence of the keyword to
+                            return; provided because the same keyword can occur
+                            multiple times. Use 0 for the first occurrence; this
+                            is the default.
 
-            start = location of the keyword at which the search is to begin.
-                Optional; default is 0, which means that the search will begin
-                at the first keyword.
+            start           The index of the keyword at which the search is to
+                            begin. Optional; default is 0, which means that the
+                            search will begin at the first keyword.
 
-        Return: the index of the matching keyword in the table; -1 if the
-                keyword is not found.
+        Return:             The index of the matching keyword in the table;
+                            -1 if the keyword is not found.
         """
 
         # Compile the regular expression
@@ -454,24 +469,24 @@ class VicarImage():
         # No match was found
         return -1
         
-    def KeywordIndex(self, keyword=".*", occurrence=0, start=0):
+    def keyword_index(self, keyword=".*", occurrence=0, start=0):
         """Returns the index of a keyword in the VICAR header. Raises an error
         if the keyword is not found.
 
         Inputs:
-            keyword = A regular expression to match the VICAR keyword(s). Case
-                is ignored.
+            keyword         A regular expression to match the VICAR keyword(s).
+                            Case is ignored.
 
-            occurrence = which occurrence of the keyword to return; provided
-                because the same keyword can occur multiple times. Use 0
-                for the first occurrence; this is the default.
+            occurrence      An index defining which occurrence of the keyword to
+                            return; provided because the same keyword can occur
+                            multiple times. Use 0 for the first occurrence; this
+                            is the default.
 
-            start = location of the keyword at which the search is to begin.
-                Optional; default is 0, which means that the search will begin
-                at the first keyword.
+            start           The index of the keyword at which the search is to
+                            begin. Optional; default is 0, which means that the
+                            search will begin at the first keyword.
 
-        Return: the index of the matching keyword in the table; -1 if the
-                keyword is not found.
+        Return:             the index of the matching keyword in the table.
         """
 
         # Compile the regular expression
@@ -512,38 +527,41 @@ class VicarImage():
 
         raise ValueError(message)
 
-    def KeywordCount(self):
+    def keyword_count(self):
         """Returns the number of keywords.
         """
 
         return len(self.table)
 
-    def GetValueByIndex(self, index):
-        """Returns the value of a keyword at the given index.
+    def get_value_by_index(self, index):
+        """Returns the value of the keyword at the given index.
 
         Inputs:
-            index = keyword index, as returned by FindKeyword().
+            index           The keyword index, as returned by find_keyword().
 
-        Return: the value of the keyword. The value type is that given in the
-                header: integer, float, decimal, string, or list.
+        Return:             The value of the keyword. The value type is that
+                            given in the header: integer, float, decimal,
+                            string, or list.
         """
 
         # Return the value of the keyword
         return self.table[index][1]
 
-    def SetValueByIndex(self, index, value, ignore=False, override=False):
+    def set_value_by_index(self, index, value, ignore=False, override=False):
         """Replaces the value of a keyword in the VICAR header.
 
         Inputs:
-            index = keyword index, as returned by FindKeyword().
+            index           The keyword index, as returned by find_keyword().
 
-            value = new value of the keyword.
+            value           The new value of the keyword.
 
-            ignore = False (default) to raise an error when the user attempts
-                     to modify an immutable keyword; True to ignore these
-                     errors.
+            ignore          False (default) to raise an error when the user
+                            attempts to modify an immutable keyword; True to
+                            ignore these errors.
         """
-        # The override option is intentionally undocumented
+
+        # The override option is intentionally undocumented above. A value of
+        # True enables the modification of immutable keywords.
 
         # Raise an error if necessary
         immutable = self.table[index][0] in VicarImage.IMMUTABLE_KEYWORDS
@@ -560,21 +578,27 @@ class VicarImage():
         # Replace the value
         self.table[index][1] = value
 
-    def DeleteByIndex(self, index, stop=None, ignore=False, override=False):
+    def delete_by_index(self, index, stop=None, ignore=False, override=False):
         """Deletes one or more keywords, starting at the specified location in
         the VICAR header.
 
         Inputs:
-            index = the index of the first keyword to delete. Negative indices
-                    count from the end of the keyword list; -1 is the last.
-            stop = the index after the last keyword to delete. The default,
-                   None, indicates that only one keyword should be deleted. Use
-                   0 to delete to the end of the list.
-            ignore = True to ignore attempts to delete required keywords;
-                   otherwise, nothing is deleted and an exception is raised.
-        
+            index           The index of the first keyword to delete. Negative
+                            indices count from the end of the keyword list; -1
+                            is the last.
+
+            stop            The index after the last keyword to delete. The
+                            default, None, indicates that only one keyword
+                            should be deleted. Use 0 to delete to the end of the
+                            list.
+
+            ignore          True to ignore attempts to delete required keywords;
+                            otherwise, nothing is deleted and an exception is
+                            raised.
         """
-        # The override option is intentionally undocumented
+
+        # The override option is intentionally undocumented above. A value of
+        # True enables the deletion of immutable keywords.
 
         # If stop value is unspecified, just delete one keyword
         if stop == None: stop = index + 1
@@ -601,22 +625,28 @@ class VicarImage():
             if not (self.table[i][0] in VicarImage.REQUIRED_KEYWORDS):
                 self.table[i:] = self.table[i+1:]
 
-    def CopyByIndex(self, destination, index, stop=None, ignore=False,
+    def copy_by_index(self, destination, index, stop=None, ignore=False,
                     override=False):
-        """Copies one or more keywords and their values, to the header of the
+        """Copies one or more keywords and their values to the header of the
         destination VicarImage.
 
         Inputs:
-            index = the index of the first keyword to delete. Negative indices
-                    count from the end of the keyword list; -1 is the last.
-            stop = the index after the last keyword to delete. The default,
-                   None, indicates that only one keyword should be deleted. Use
-                   0 to delete to the end of the list.
-            ignore = True to ignore attempts to delete required keywords;
-                   otherwise, nothing is deleted and an exception is raised.
-        
+            index           The index of the first keyword to copy. Negative
+                            indices count from the end of the keyword list; -1
+                            is the last.
+
+            stop            The index after the last keyword to copy. The
+                            default, None, indicates that only one keyword
+                            should be deleted. Use 0 to delete to the end of the
+                            list.
+
+            ignore          True to ignore attempts to delete required keywords;
+                            otherwise, nothing is deleted and an exception is
+                            raised.
         """
-        # The override option is intentionally undocumented
+
+        # The override option is intentionally undocumented above. A value of
+        # True enables the copying of immutable keywords.
 
         # If stop value is unspecified, just copy one keyword
         if stop == None: stop = index + 1
@@ -647,25 +677,27 @@ class VicarImage():
 
             # Replace the values of required keywords
             if required:
-                destination.SetValue(keyword, value, ignore=True,
+                destination.set_value(keyword, value, ignore=True,
                                                      override=override)
             # Otherwise just append a new keyword
             else:
-                destination.AppendKeyword(keyword, value)
+                destination.append_keyword(keyword, value)
 
-    def InsertKeyword(self, keyword, value=None, index=-1, override=False):
+    def insert_keyword(self, keyword, value=None, index=-1, override=False):
         """Inserts a new keyword at the specified location in the VICAR header.
 
         Inputs:
-            keyword = keyword to insert into the header.
+            keyword         The keyword to insert into the header.
 
-            value = value of the keyword. Default value is None, in which case
-                    it must be set afterward.
+            value           The value of the keyword. Default is None, in which
+                            case the value must be set later.
 
-            index = the index of the new keyword in the list. Use -1 to append
-                    to the end of the list.
+            index           The index of the new keyword in the list. Use -1 to
+                            append to the end of the list.
         """
-        # The override option is intentionally undocumented
+
+        # The override option is intentionally undocumented above. A value of
+        # True enables the insertion of immutable keywords.
 
         # Make sure this keyword can be inserted
         if not override:
@@ -682,17 +714,19 @@ class VicarImage():
         else:
             self.table.insert(index, [keyword.upper(), value])
 
-    def AppendKeyword(self, keyword, value=None, override=False):
+    def append_keyword(self, keyword, value=None, override=False):
         """Appends a keyword and value to the VICAR header.
 
         Inputs:
-            keyword = keyword to append to the end of the header. 
+            keyword         The keyword to append to the end of the header.
 
-            value = value of the keyword.  Default value is None, in which case
-                    it must be set afterward.
+            value           The value of the keyword. Default is None, in which
+                            case the value must be set afterward.
 
         """
-        # The override option is intentionally undocumented
+
+        # The override option is intentionally undocumented above. A value of
+        # True enables the appending of immutable keywords.
 
         # Make sure this keyword can be inserted
         if not override:
@@ -706,55 +740,60 @@ class VicarImage():
         # Append keyword and set value
         self.table.append([keyword.upper(), value])
 
-    def DeleteKeyword(self, keyword, occurrence=0, start=0, override=False):
+    def delete_keyword(self, keyword, occurrence=0, start=0, override=False):
         """Deletes one keyword by name and location.
 
         Inputs:
-            keyword = A regular expression to match the VICAR keyword(s). Case
-                is ignored.
+            keyword         A regular expression to match the VICAR keyword(s).
+                            Case is ignored.
 
-            occurrence = which occurrence of the keyword to delete; provided
-                because the same keyword can occur multiple times. Use 0
-                for the first occurrence; this is the default.
+            occurrence      An index defining which occurrence of the keyword to
+                            delete; provided because the same keyword can occur
+                            multiple times. Use 0 for the first occurrence; this
+                            is the default.
 
-            start = location of the keyword at which the search is to begin.
-                Optional; default is 0, which means that the search will begin
-                at the first keyword.
-
+            start           index of the keyword at which the search is to
+                            begin. Optional; default is 0, which means that the
+                            search will begin at the first keyword.
         """
 
+        # The override option is intentionally undocumented above. A value of
+        # True enables the deletion of immutable keywords.
+
         # Locate the keyword
-        i = self.KeywordIndex(keyword, occurrence, start)
+        i = self.keyword_index(keyword, occurrence, start)
 
         # Delete it
-        self.DeleteByIndex(i, override)
+        self.delete_by_index(i, override)
 
-    def GetValue(self, keyword=".*", occurrence=0, start=0, default=None):
+    def get_value(self, keyword=".*", occurrence=0, start=0, default=None):
         """Returns the value of a keyword in the VICAR header.
 
         Inputs:
-            keyword = A regular expression to match the VICAR keyword(s). Case
-                is ignored.
+            keyword         A regular expression to match the VICAR keyword(s).
+                            Case is ignored.
 
-            occurrence = which occurrence of the keyword to return; provided
-                because the same keyword can occur multiple times. Use 0
-                for the first occurrence; this is the default.
+            occurrence      An index defining which occurrence of the keyword to
+                            return; provided because the same keyword can occur
+                            multiple times. Use 0 for the first occurrence; this
+                            is the default.
 
-            start = location of the keyword at which the search is to begin.
-                Optional; default is 0, which means that the search will begin
-                at the first keyword.
+            start           Index of the keyword at which the search is to
+                            begin. Optional; default is 0, which means that the
+                            search will begin at the first keyword.
 
-            default = value to return if the keyword is not found. Optional;
-                if not provided, the VicarKeywordMissing exception will be
-                raised.
+            default         The value to return if the keyword is not found.
+                            Optional; if not provided, the VicarKeywordMissing
+                            exception will be raised.
 
-        Return: the value of the matching keyword in the table, or the default
-                value if provided. The value type is that given in the header:
-                integer, float, decimal, string, or tuple.
+        Return:             The value of the matching keyword in the table, or
+                            the default value if provided. The value type is
+                            that given in the header: integer, float, decimal,
+                            string, or tuple.
         """
 
         # Find the keyword
-        i = self.FindKeyword(keyword, occurrence, start)
+        i = self.find_keyword(keyword, occurrence, start)
 
         # Return the value if found
         if i >= 0: return self.table[i][1]
@@ -763,60 +802,63 @@ class VicarImage():
         if default != None: return default
 
         # Otherwise raise the normal exception
-        i = self.KeywordIndex(keyword, occurrence, start)
+        i = self.keyword_index(keyword, occurrence, start)
 
-    def SetValue(self, keyword, value, occurrence=0, start=0, ignore=False,
+    def set_value(self, keyword, value, occurrence=0, start=0, ignore=False,
                                                               override=False):
         """Replaces the value of a keyword in the VICAR header, or inserts the
         new keyword if it was not found.
 
         Inputs:
-            keyword = A regular expression to match the VICAR keyword(s). Case
-                is ignored.
+            keyword         A regular expression to match the VICAR keyword(s).
+                            Case is ignored.
 
-            value = The replacement value of the keyword.
+            value           The replacement value of the keyword.
 
-            occurrence = which occurrence of the keyword to replace; provided
-                because the same keyword can occur multiple times. Use 0
-                for the first occurrence; this is the default.
+            occurrence      An index defining which occurrence of the keyword to
+                            set; provided because the same keyword can occur
+                            multiple times. Use 0 for the first occurrence; this
+                            is the default.
 
-            start = location of the keyword at which the search is to begin.
-                Optional; default is 0, which means that the search will begin
-                at the first keyword.
+            start           Index of the keyword at which the search is to
+                            begin. Optional; default is 0, which means that the
+                            search will begin at the first keyword.
 
-            ignore = False (default) to raise an error when the user attempts
-                     to modify an immutable keyword; True to ignore these
-                     errors.
+            ignore          False (default) to raise an error when the user
+                            attempts to modify an immutable keyword; True to
+                            ignore these errors.
         """
-        # The override option is intentionally undocumented
+
+        # The override option is intentionally undocumented above. A value of
+        # True enables the setting of immutable keywords.
 
         # Find the keyword
-        i = self.FindKeyword(keyword, occurrence, start)
+        i = self.find_keyword(keyword, occurrence, start)
 
         # Set the value if found
         if i >= 0:
-            self.SetValueByIndex(i, value, ignore, override)
+            self.set_value_by_index(i, value, ignore, override)
             return
 
         # Otherwise insert the new keyword
-        self.InsertKeyword(self, keyword, value, start)
+        self.insert_keyword(self, keyword, value, start)
 
-    def GetHeader(self):
+    def get_header(self):
         """Returns a string containing the properly formatted keyword=value
         pairs currently in the VICAR header.
         """
 
         ### Internal method returns a value in VICAR header format
-        def _ValueString(value):
+        def _value_string(value):
 
             # Anything but list
-            if type(value) != type([]): return _ValueString1(value)
+            if type(value) != type([]): return _value_string1(value)
 
             # Add the individual elements to a list
             result = ["("]
 
             for v in value:
-                result.append(_ValueString1(v))
+                result.append(_value_string1(v))
                 result.append(", ")
 
             result[-1] = ")"
@@ -826,7 +868,7 @@ class VicarImage():
 
         ### Internal method returns a value in VICAR header format but does not
         ### deal with lists
-        def _ValueString1(value):
+        def _value_string1(value):
 
             typestr = str(type(value))
 
@@ -859,7 +901,7 @@ class VicarImage():
             (keyword,value) = self.table[i]
 
             # Format the value as a string
-            value = _ValueString(value)
+            value = _value_string(value)
 
             # Append individual pieces to the list of strings
             result.append("  ")
@@ -873,12 +915,12 @@ class VicarImage():
         # Update the LBLSIZE value to accommodate the whole header
 
         digits = 8      # A practical upper limit on the digits of LBLSIZE!
-        vicar_RECSIZE = self.GetValue("RECSIZE")
+        vicar_RECSIZE = self.get_value("RECSIZE")
         vicar_LBLSIZE = vicar_RECSIZE * ((length + digits + vicar_RECSIZE - 1)
                                         / vicar_RECSIZE)
 
         self.table[0] = ["LBLSIZE", vicar_LBLSIZE]
-        result[1] = _ValueString(vicar_LBLSIZE)
+        result[1] = _value_string(vicar_LBLSIZE)
 
         # Iterate once to allow fewer digits in LBLSIZE, which might cut the
         # LBLSIZE by one whole record
@@ -887,7 +929,7 @@ class VicarImage():
                                        / vicar_RECSIZE)
 
         self.table[0] = ["LBLSIZE", vicar_LBLSIZE]
-        result[1] = _ValueString(vicar_LBLSIZE)
+        result[1] = _value_string(vicar_LBLSIZE)
 
         # Fill out the length with blanks
         result.append(" " * (vicar_LBLSIZE - length - digits))
@@ -895,26 +937,80 @@ class VicarImage():
         # Finally, return the joined strings
         return "".join(result)
 
+    def FindKeyword(self, keyword=".*", occurrence=0, start=0):
+        """Deprecated, alternative name for find_keyword()"""
+        return self.find_keyword(keyword, occurrence, start)
+
+    def KeywordIndex(self, keyword=".*", occurrence=0, start=0):
+        """Deprecated, alternative name for keyword_index()"""
+        return self.keyword_index(keyword, occurrence, start)
+
+    def KeywordCount(self):
+        """Deprecated, alternative name for keyword_count()"""
+        return self.keyword_count()
+
+    def GetValueByIndex(self, index):
+        """Deprecated, alternative name for get_value_by_index()"""
+        return self.get_value_by_index(index)
+
+    def SetValueByIndex(self, index, value, ignore=False, override=False):
+        """Deprecated, alternative name for set_value_by_index()"""
+        self.set_value_by_index(index, value, ignore, override)
+
+    def DeleteByIndex(self, index, stop=None, ignore=False, override=False):
+        """Deprecated, alternative name for delete_by_index()"""
+        self.delete_by_index(index, stop, ignore, override)
+
+    def CopyByIndex(self, destination, index, stop=None, ignore=False,
+                    override=False):
+        """Deprecated, alternative name for copy_by_index()"""
+        self.copy_by_index(destination, index, stop, ignore, override)
+
+    def InsertKeyword(self, keyword, value=None, index=-1, override=False):
+        """Deprecated, alternative name for insert_keyword()"""
+        self.insert_keyword(keyword, value, index, override)
+
+    def AppendKeyword(self, keyword, value=None, override=False):
+        """Deprecated, alternative name for append_keyword()"""
+        self.append_keyword(keyword, value, override)
+
+    def DeleteKeyword(self, keyword, occurrence=0, start=0, override=False):
+        """Deprecated, alternative name for delete_keyword()"""
+        self.delete_keyword(keyword, occurrence, start, override)
+
+    def GetValue(self, keyword=".*", occurrence=0, start=0, default=None):
+        """Deprecated, alternative name for get_value()"""
+        return self.get_value(keyword, occurrence, start, default)
+
+    def SetValue(self, keyword, value, occurrence=0, start=0, ignore=False,
+                                                              override=False):
+        """Deprecated, alternative name for set_value()"""
+        self.set_value(keyword, value, occurrence, start, ignore, override)
+
+    def GetHeader(self):
+        """Deprecated, alternative name for get_header()"""
+        return self.get_header()
+
     ############################################################################
     # Public Methods for manipulating VICAR array data
     ############################################################################
 
-    def Get3dArray(self):
+    def get_3d_array(self):
         """Returns the image data as a 3-D ndarray."""
 
         return self.data
 
-    def Get2dArray(self):
+    def get_2d_array(self):
         """Returns the first band of the image as a 2-D ndarray."""
 
         return self.data[0,:,:]
 
-    def SetArray(self, array):
+    def set_array(self, array):
         """Replaces the array data in a VicarImage. It also updates all the
         descriptive parameters in the VICAR header.
 
         Input:
-            array = ndarray to replace.
+            array           The numpy ndarray to replace.
         """
 
         self.data = array
@@ -951,38 +1047,50 @@ class VicarImage():
             vicar_HOST = sys.platform.upper()
 
         # Fill in the required VICAR keywords
-        self.SetValue("LBLSIZE" , 0            , override=True)
-        self.SetValue("FORMAT"  , vicar_FORMAT , override=True)
-        self.SetValue("TYPE"    , "IMAGE"      , override=True)
-        self.SetValue("BUFSIZ"  , 20480        , override=True)
-        self.SetValue("DIM"     , 3            , override=True)
-        self.SetValue("EOL"     , 0            , override=True)
-        self.SetValue("RECSIZE" , vicar_RECSIZE, override=True)
-        self.SetValue("ORG"     , "BSQ"        , override=True)
-        self.SetValue("NL"      , vicar_NL     , override=True)
-        self.SetValue("NS"      , vicar_NS     , override=True)
-        self.SetValue("NB"      , vicar_NB     , override=True)
-        self.SetValue("N1"      , vicar_N1     , override=True)
-        self.SetValue("N2"      , vicar_N2     , override=True)
-        self.SetValue("N3"      , vicar_N3     , override=True)
-        self.SetValue("N4"      , 1            , override=True)
-        self.SetValue("NBB"     , 0            , override=True)
-        self.SetValue("NLB"     , 0            , override=True)
-        self.SetValue("HOST"    , vicar_HOST   , override=True)
-        self.SetValue("INTFMT"  , vicar_INTFMT , override=True)
-        self.SetValue("REALFMT" , vicar_REALFMT, override=True)
-        self.SetValue("BHOST"   , vicar_HOST   , override=True)
-        self.SetValue("BINTFMT" , vicar_INTFMT , override=True)
-        self.SetValue("BREALFMT", vicar_REALFMT, override=True)
-        self.SetValue("BLTYPE"  , ""           , override=True)
+        self.set_value("LBLSIZE" , 0            , override=True)
+        self.set_value("FORMAT"  , vicar_FORMAT , override=True)
+        self.set_value("TYPE"    , "IMAGE"      , override=True)
+        self.set_value("BUFSIZ"  , 20480        , override=True)
+        self.set_value("DIM"     , 3            , override=True)
+        self.set_value("EOL"     , 0            , override=True)
+        self.set_value("RECSIZE" , vicar_RECSIZE, override=True)
+        self.set_value("ORG"     , "BSQ"        , override=True)
+        self.set_value("NL"      , vicar_NL     , override=True)
+        self.set_value("NS"      , vicar_NS     , override=True)
+        self.set_value("NB"      , vicar_NB     , override=True)
+        self.set_value("N1"      , vicar_N1     , override=True)
+        self.set_value("N2"      , vicar_N2     , override=True)
+        self.set_value("N3"      , vicar_N3     , override=True)
+        self.set_value("N4"      , 1            , override=True)
+        self.set_value("NBB"     , 0            , override=True)
+        self.set_value("NLB"     , 0            , override=True)
+        self.set_value("HOST"    , vicar_HOST   , override=True)
+        self.set_value("INTFMT"  , vicar_INTFMT , override=True)
+        self.set_value("REALFMT" , vicar_REALFMT, override=True)
+        self.set_value("BHOST"   , vicar_HOST   , override=True)
+        self.set_value("BINTFMT" , vicar_INTFMT , override=True)
+        self.set_value("BREALFMT", vicar_REALFMT, override=True)
+        self.set_value("BLTYPE"  , ""           , override=True)
 
         return
+
+    def Get3dArray(self):
+        """Deprecated, alternative name for get_3d_array()"""
+        return self.get_3d_array()
+
+    def Get2dArray(self):
+        """Deprecated, alternative name for get_2d_array()"""
+        return self.get_2d_array()
+
+    def SetArray(self, array):
+        """Deprecated, alternative name for set_array()"""
+        self.set_array(array)
 
     ############################################################################
     # Private methods
     ############################################################################
 
-    def _LoadTable(self, header):
+    def _load_table(self, header):
         """Creates a list of (keyword,value) pairs and saves them inside the
         VicarImage object.
 
@@ -993,7 +1101,7 @@ class VicarImage():
         """
 
         ### Internal method to parse one item starting at index i
-        def _ParseSingle(i):
+        def _parse_single(i):
             while header[i] == " ": i +=  1
 
             if header[i] == "'":
@@ -1023,11 +1131,11 @@ class VicarImage():
             return (value, j)
 
         ### Internal method to parse one item starting at index i
-        def _ParseGroup(i):
+        def _parse_group(i):
             value = []
             i +=  1
             while 1:
-                (nextval, i) = _ParseSingle(i)
+                (nextval, i) = _parse_single(i)
 
                 value.append(nextval)
 
@@ -1056,9 +1164,9 @@ class VicarImage():
 
             # Interpret value
             if header[ivalue] == "(":
-                (value, jvalue) = _ParseGroup(ivalue)
+                (value, jvalue) = _parse_group(ivalue)
             else:
-                (value, jvalue) = _ParseSingle(ivalue)
+                (value, jvalue) = _parse_single(ivalue)
 
             self.table.append([keyword, value])
             ikey = jvalue
@@ -1077,50 +1185,50 @@ class VicarError(Exception):
 
 def test():
         filename = sys.argv[1]
-        vic = VicarImage.FromFile(filename)
+        vic = VicarImage.from_file(filename)
 
-        print vic.GetValue("LBLSIZE")
-        print vic.GetValue("FORMAT")
-        print vic.GetValue("DAT_TIM",occurrence=0)
-        print vic.GetValue("DAT_TIM",occurrence=1)
-        print vic.GetValue("FOOBAR",default=55)
-        print vic.GetValue(".*",default=55)
+        print vic.get_value("LBLSIZE")
+        print vic.get_value("FORMAT")
+        print vic.get_value("DAT_TIM",occurrence=0)
+        print vic.get_value("DAT_TIM",occurrence=1)
+        print vic.get_value("FOOBAR",default=55)
+        print vic.get_value(".*",default=55)
 
 #       print "set RECSIZE..."
-#       vic.SetValue("RecsizE", 999)
+#       vic.set_value("RecsizE", 999)
 
         print "set HOST..."
-        vic.SetValue("HOST", "Foobar")
+        vic.set_value("HOST", "Foobar")
 
 #       print "delete HOST..."
-#       vic.DeleteKeyword("Host")
+#       vic.delete_keyword("Host")
 
-        a = vic.Get2dArray()
+        a = vic.get_2d_array()
         print a
         print a.shape, a.min(), a.max()
 
-        a = vic.Get3dArray()
+        a = vic.get_3d_array()
         print a
         print a.ndim, a.shape, a.min(), a.max()
 
-#        print vic.GetHeader()
-#        print len(vic.GetHeader())
+#        print vic.get_header()
+#        print len(vic.get_header())
 #
-#        vic.ToFile("tofile.img")
+#        vic.to_file("to_file.img")
 #
-#        print vic.GetHeader()
-#        print len(vic.GetHeader())
+#        print vic.get_header()
+#        print len(vic.get_header())
 #
-#        vic.DeleteByIndex(0,0,ignore=True)
+#        vic.delete_by_index(0,0,ignore=True)
 
-        print vic.GetHeader()
-        print len(vic.GetHeader())
+        print vic.get_header()
+        print len(vic.get_header())
 
-        test = VicarImage.FromArray(a)
-        print test.GetHeader().strip()
+        test = VicarImage.from_array(a)
+        print test.get_header().strip()
 
-        vic.CopyByIndex(test, 0, 0, ignore=True)
-        print test.GetHeader().strip()
+        vic.copy_by_index(test, 0, 0, ignore=True)
+        print test.get_header().strip()
 
 # Execute the main test progam if this is not imported
 if __name__ == "__main__": test()
