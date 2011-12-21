@@ -1,6 +1,6 @@
 #!/usr/bin/python
 ################################################################################
-# pds.py
+# pdsparser.py
 #
 # Classes and methods to read, write and parse PDS labels.
 #
@@ -123,7 +123,7 @@ class PdsNode(object):
         else:                   return len(self.pdsvalue)
 
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
 
         global PARSE_NODES
 
@@ -132,7 +132,7 @@ class PdsNode(object):
 
         # Locate extra EOLs around equal sign
         struct.keyword = tokens[0]      # Keyword is always first
-        struct.pdsvalue = tokens[1]    # Value is always second
+        struct.pdsvalue = tokens[1]     # Value is always second
 
         # This is an initial guess
         struct.type = "KEYWORD"
@@ -187,7 +187,7 @@ class PdsNode(object):
         return
 
     @staticmethod
-    def ParseEnd(s, l, tokens):
+    def parse_end(s, l, tokens):
 
         global PARSE_NODES
 
@@ -196,7 +196,7 @@ class PdsNode(object):
                 PARSE_NODES[-1].name)
 
     @staticmethod
-    def InitCurrentNode():
+    def init_current_node():
 
         global PARSE_NODES
 
@@ -296,13 +296,13 @@ class PdsInteger(PdsNumber):
 
     # Interpret parser tokens
     @staticmethod
-    def Parse(s, l, tokens):
-        struct = PdsInteger.FromInt(int(tokens[0]))
+    def parse(s, l, tokens):
+        struct = PdsInteger.from_int(int(tokens[0]))
         return struct
 
     # Create an object
     @staticmethod
-    def FromInt(value=0):
+    def from_int(value=0):
         """Returns a PdsInteger given an int."""
 
         struct = PdsInteger()
@@ -311,7 +311,7 @@ class PdsInteger(PdsNumber):
         return struct
 
 #-----------------------------------------------------------------------
-INTEGER.setParseAction(PdsInteger.Parse)
+INTEGER.setParseAction(PdsInteger.parse)
 ################################################################################
 # PdsBasedInteger
 ################################################################################
@@ -343,17 +343,17 @@ class PdsBasedInteger(PdsInteger):
 
     # Interpret parser tokens
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
 
         radix = int(tokens[0])
         (number, ndigits, use_plus) = PdsBasedInteger._number(tokens[1], radix)
 
-        struct = PdsBasedInteger.FromInt(number, radix, ndigits, use_plus)
+        struct = PdsBasedInteger.from_int(number, radix, ndigits, use_plus)
         return struct
 
     # Create an object
     @staticmethod
-    def FromInt(number, radix, mindigits=1, use_plus=False):
+    def from_int(number, radix, mindigits=1, use_plus=False):
         """Returns a new PdsBasedInteger given a number or string and a
         radix."""
 
@@ -421,7 +421,7 @@ class PdsBasedInteger(PdsInteger):
         return (value, len(digits), use_plus)
 
 #-----------------------------------------------------------------------
-BASED_INT.setParseAction(PdsBasedInteger.Parse)
+BASED_INT.setParseAction(PdsBasedInteger.parse)
 ################################################################################
 # PdsReal
 ################################################################################
@@ -459,7 +459,7 @@ class PdsReal(PdsNumber):
 
     # Interpret parser tokens
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
         struct = PdsReal()
 
         struct.value = float(tokens[0])
@@ -467,7 +467,7 @@ class PdsReal(PdsNumber):
         return struct
 
     @staticmethod
-    def FromValue(value=0., format=""):
+    def from_value(value=0., format=""):
         """Returns a PdsReal given a double or decimal."""
 
         struct = PdsDouble()
@@ -481,7 +481,7 @@ class PdsReal(PdsNumber):
             struct.decimal = dec.Decimal(struct.string)
 
 #-----------------------------------------------------------------------
-REAL_NUMBER.setParseAction(PdsReal.Parse)
+REAL_NUMBER.setParseAction(PdsReal.parse)
 #-----------------------------------------------------------------------
 NUMBER_WO_UNITS = REAL_NUMBER | BASED_INT | INTEGER     # Order matters here!
 ################################################################################
@@ -500,7 +500,7 @@ class PdsUnitExpr(PdsValue):
         return "<" + self.value + ">"
 
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
 
         struct = PdsUnitExpr()
         struct.value = tokens[0][1:-1]
@@ -508,7 +508,7 @@ class PdsUnitExpr(PdsValue):
         return struct
 
 #-----------------------------------------------------------------------
-UNIT_EXPR.setParseAction(PdsUnitExpr.Parse)
+UNIT_EXPR.setParseAction(PdsUnitExpr.parse)
 ################################################################################
 # PdsNumberWithUnits
 ################################################################################
@@ -529,7 +529,7 @@ class PdsNumberWithUnits(PdsNumber):
 
     # Interpret parser tokens
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
 
         struct = PdsNumberWithUnits()
         struct.pdsnumber = tokens[0]
@@ -539,7 +539,7 @@ class PdsNumberWithUnits(PdsNumber):
         return struct
 
 #-----------------------------------------------------------------------
-NUMBER_W_UNITS.setParseAction(PdsNumberWithUnits.Parse)
+NUMBER_W_UNITS.setParseAction(PdsNumberWithUnits.parse)
 #-----------------------------------------------------------------------
 NUMBER          = NUMBER_W_UNITS | NUMBER_WO_UNITS      # Order matters here!
 ################################################################################
@@ -587,10 +587,10 @@ class PdsHmsTime(PdsTime):
 
     # Interpret parser tokens
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
 
         if len(tokens) == 2:
-            struct = PdsHmsTime.FromHMS(int(tokens[0]), int(tokens[1]), 0)
+            struct = PdsHmsTime.from_hms(int(tokens[0]), int(tokens[1]), 0)
             struct.index1 = l
             return struct
 
@@ -599,11 +599,11 @@ class PdsHmsTime(PdsTime):
         except:
             second = dec.Decimal(tokens[2])
 
-        struct = PdsHmsTime.FromHMS(int(tokens[0]), int(tokens[1]), second)
+        struct = PdsHmsTime.from_hms(int(tokens[0]), int(tokens[1]), second)
         return struct
 
     @staticmethod
-    def FromHMS(hour, minute, second=0):
+    def from_hms(hour, minute, second=0):
         """Returns a new PdsHmsTime given an hour, minute and optional second.
         "The second can be int, float or decimal."""
 
@@ -625,7 +625,7 @@ class PdsHmsTime(PdsTime):
         return struct
 
 #-----------------------------------------------------------------------
-HMS_TIME.setParseAction(PdsHmsTime.Parse)
+HMS_TIME.setParseAction(PdsHmsTime.parse)
 ################################################################################
 # PdsTimeZone (used only internally): value is a string representation
 ################################################################################
@@ -646,7 +646,7 @@ class PdsTimeZone(PdsValue):
 
     # Interpret parser tokens
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
 
         struct = PdsTimeZone()
 
@@ -666,7 +666,7 @@ class PdsTimeZone(PdsValue):
         return struct
 
 #-----------------------------------------------------------------------
-TIME_ZONE.setParseAction(PdsTimeZone.Parse)
+TIME_ZONE.setParseAction(PdsTimeZone.parse)
 ################################################################################
 # PdsZonedTime
 ################################################################################
@@ -689,7 +689,7 @@ class PdsZonedTime(PdsTime):
 
     # Interpret parser tokens
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
 
         struct = PdsZonedTime()
         struct.pdshms  = tokens[0]
@@ -701,7 +701,7 @@ class PdsZonedTime(PdsTime):
         return struct
 
 #-----------------------------------------------------------------------
-ZONED_TIME.setParseAction(PdsZonedTime.Parse)
+ZONED_TIME.setParseAction(PdsZonedTime.parse)
 #-----------------------------------------------------------------------
 TIME_WO_WHITE   = ZONED_TIME | HMS_TIME                 # Order matters here!
 TIME            = Suppress(Optional(WHITE)) + TIME_WO_WHITE
@@ -739,18 +739,18 @@ class PdsDate(PdsScalar):
 
     # Interpret parser tokens
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
 
         if len(tokens) == 2:
-            struct = PdsDate.FromYD(int(tokens[0]), int(tokens[1]))
+            struct = PdsDate.from_yd(int(tokens[0]), int(tokens[1]))
         else:
-            struct = PdsDate.FromYMD(int(tokens[0]), int(tokens[1]),
-                                                     int(tokens[2]))
+            struct = PdsDate.from_ymd(int(tokens[0]), int(tokens[1]),
+                                                      int(tokens[2]))
 
         return struct
 
     @staticmethod
-    def FromYMD(year, month, day):
+    def from_ymd(year, month, day):
         """Returns a new PdsDate given a year, month and day."""
 
         struct = PdsDate()
@@ -766,7 +766,7 @@ class PdsDate(PdsScalar):
         return struct
 
     @staticmethod
-    def FromYD(year, day):
+    def from_yd(year, day):
         """Returns a new PdsDate given a year and day of year."""
 
         struct = PdsDate()
@@ -782,7 +782,7 @@ class PdsDate(PdsScalar):
         return struct
 
 #-----------------------------------------------------------------------
-DATE.setParseAction(PdsDate.Parse)
+DATE.setParseAction(PdsDate.parse)
 ################################################################################
 # PdsDateTime
 ################################################################################
@@ -808,13 +808,13 @@ class PdsDateTime(PdsScalar):
 
     # Interpret parser tokens
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
 
-        struct = PdsDateTime.FromDT(tokens[0], tokens[1])
+        struct = PdsDateTime.from_dt(tokens[0], tokens[1])
         return struct
 
     @staticmethod
-    def FromDT(pdsdate, pdstime):
+    def from_dt(pdsdate, pdstime):
         """Constructs a new PdsDateTime from PdsDate and PdsTime objects."""
 
         struct = PdsDateTime()
@@ -828,7 +828,7 @@ class PdsDateTime(PdsScalar):
         return struct
 
 #-----------------------------------------------------------------------
-DATE_TIME.setParseAction(PdsDateTime.Parse)
+DATE_TIME.setParseAction(PdsDateTime.parse)
 ################################################################################
 # PdsText: value is the contents of the text string, quoted or not.
 ################################################################################
@@ -855,7 +855,7 @@ class PdsText(PdsScalar):
 
     # Interpret parser tokens
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
 
         struct = PdsText()
 
@@ -874,7 +874,7 @@ class PdsText(PdsScalar):
         return struct
 
     @staticmethod
-    def FromString(string, quote):
+    def from_string(string, quote):
         """Return a new PdsText object containing the given string, which has
         been checked for suitability."""
 
@@ -904,7 +904,7 @@ class PdsText(PdsScalar):
         return struct
 
 #-----------------------------------------------------------------------
-TEXT_VALUE.setParseAction(PdsText.Parse)
+TEXT_VALUE.setParseAction(PdsText.parse)
 #-----------------------------------------------------------------------
 PDS_SCALAR      = DATE_TIME | DATE | TIME | NUMBER | TEXT_VALUE # Order counts!
 ################################################################################
@@ -963,13 +963,13 @@ class PdsSet(PdsVector):
 
     # Interpret parser tokens
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
         struct = PdsSet()
         struct.value = list(tokens)
         return struct
 
 #-----------------------------------------------------------------------
-SET_VALUE.setParseAction(PdsSet.Parse)
+SET_VALUE.setParseAction(PdsSet.parse)
 ################################################################################
 # PdsSequence
 ################################################################################
@@ -994,13 +994,13 @@ class PdsSequence(PdsVector):
 
     # Interpret parser tokens
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
         struct = PdsSequence()
         struct.value = list(tokens)
         return struct
 
 #-----------------------------------------------------------------------
-SEQUENCE.setParseAction(PdsSequence.Parse)
+SEQUENCE.setParseAction(PdsSequence.parse)
 ################################################################################
 # PdsSequence2D
 ################################################################################
@@ -1023,13 +1023,13 @@ class PdsSequence2D(PdsVector):
 
     # Interpret parser tokens
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
         struct = PdsSequence2D()
         struct.value = list(tokens)
         return struct
 
 #-----------------------------------------------------------------------
-SEQUENCE_2D.setParseAction(PdsSequence2D.Parse)
+SEQUENCE_2D.setParseAction(PdsSequence2D.parse)
 #-----------------------------------------------------------------------
 VECTOR_VALUE    = SET_VALUE | SEQUENCE | SEQUENCE_2D
 #-----------------------------------------------------------------------
@@ -1067,13 +1067,13 @@ class PdsSimplePointer(PdsPointer):
     def __str__(self): return '"' + self.value + '"'
 
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
         struct = PdsSimplePointer()
         struct.value = tokens[0]
         return struct
 
 #-----------------------------------------------------------------------
-SIMPLE_POINTER.setParseAction(PdsSimplePointer.Parse)
+SIMPLE_POINTER.setParseAction(PdsSimplePointer.parse)
 ################################################################################
 # PdsOffsetPointer
 ################################################################################
@@ -1081,9 +1081,9 @@ BYTE_UNIT       = Literal("<BYTES>") | Literal("<bytes>")
 ROW_OFFSET      = Combine(UNSIGNED_INT)
 BYTE_OFFSET     = ROW_OFFSET + ZeroOrMore(EOL) + BYTE_UNIT
 
-BYTE_UNIT.setParseAction(PdsUnitExpr.Parse)
-ROW_OFFSET.setParseAction(PdsInteger.Parse)
-BYTE_OFFSET.setParseAction(PdsNumberWithUnits.Parse)
+BYTE_UNIT.setParseAction(PdsUnitExpr.parse)
+ROW_OFFSET.setParseAction(PdsInteger.parse)
+BYTE_OFFSET.setParseAction(PdsNumberWithUnits.parse)
 #-----------------------------------------------------------------------
 OFFSET_POINTER  = (LPAREN                       + ZeroOrMore(EOL)
                 +  SIMPLE_POINTER               + ZeroOrMore(EOL)
@@ -1106,7 +1106,7 @@ class PdsOffsetPointer(PdsPointer):
         return "(" + str(self.pdspointer) + ", " + str(self.pdsnumber) + ")"
 
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
 
         struct = PdsOffsetPointer()
         struct.pdspointer = tokens[0]
@@ -1120,7 +1120,7 @@ class PdsOffsetPointer(PdsPointer):
         return struct
 
 #-----------------------------------------------------------------------
-OFFSET_POINTER.setParseAction(PdsOffsetPointer.Parse)
+OFFSET_POINTER.setParseAction(PdsOffsetPointer.parse)
 ################################################################################
 # PdsLocalPointer
 ################################################################################
@@ -1140,7 +1140,7 @@ class PdsLocalPointer(PdsPointer):
         return str(self.pdsnumber)
 
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
         struct = PdsLocalPointer()
         struct.pdsnumber = tokens[0]
         struct.value = tokens[0].value
@@ -1149,7 +1149,7 @@ class PdsLocalPointer(PdsPointer):
         return struct
 
 #-----------------------------------------------------------------------
-#LOCAL_POINTER.setParseAction(PdsLocalPointer.Parse)
+#LOCAL_POINTER.setParseAction(PdsLocalPointer.parse)
 #-----------------------------------------------------------------------
 POINTER_VALUE   = SIMPLE_POINTER | OFFSET_POINTER | LOCAL_POINTER
 POINTER_VALUE.setName("POINTER_VALUE")
@@ -1197,7 +1197,7 @@ class PdsAttributeID(PdsKeyword):
 
     # Interpret parser tokens
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
 
         struct = PdsAttributeID()
         struct.name = tokens[-1]
@@ -1207,7 +1207,7 @@ class PdsAttributeID(PdsKeyword):
         return struct
 
 #-----------------------------------------------------------------------
-ATTRIBUTE_ID.setParseAction(PdsAttributeID.Parse)
+ATTRIBUTE_ID.setParseAction(PdsAttributeID.parse)
 ################################################################################
 # PdsPointerID
 ################################################################################
@@ -1224,7 +1224,7 @@ class PdsPointerID(PdsKeyword):
 
     # Interpret parser tokens
     @staticmethod
-    def Parse(s, l, tokens):
+    def parse(s, l, tokens):
         struct = PdsPointerID()
         struct.name = tokens[0].name
         struct.namespace = tokens[0].namespace
@@ -1233,7 +1233,7 @@ class PdsPointerID(PdsKeyword):
         return struct
 
 #-----------------------------------------------------------------------
-POINTER_ID.setParseAction(PdsPointerID.Parse)
+POINTER_ID.setParseAction(PdsPointerID.parse)
 ################################################################################
 ################################################################################
 # Statements
@@ -1249,10 +1249,10 @@ ATTRIBUTE_STMT  = (ATTRIBUTE_ID         + ZeroOrMore(EOL)
 
 STATEMENT       = (POINTER_STMT | ATTRIBUTE_STMT)
 STATEMENT.setName("STATEMENT")
-STATEMENT.setParseAction(PdsNode.Parse)
+STATEMENT.setParseAction(PdsNode.parse)
 
 END_STATEMENT   = Suppress(Literal("END") + ZeroOrMore(NEWLINE))
-END_STATEMENT.setParseAction(PdsNode.ParseEnd)
+END_STATEMENT.setParseAction(PdsNode.parse_end)
 #-----------------------------------------------------------------------
 PDS_LABEL       = OneOrMore(STATEMENT) + END_STATEMENT
 ################################################################################
@@ -1276,7 +1276,7 @@ class PdsLabel():
     def __len__(self): return len(self.root)
 
     @staticmethod
-    def FromFile(filename):
+    def from_file(filename):
         """Loads and parses a PDS label."""
 
         global PARSE_NODES
@@ -1313,13 +1313,18 @@ class PdsLabel():
         this.string = "\n".join(lines) + "\n"
 
         # Initialize the object status in the parsed label
-        PdsNode.InitCurrentNode()
+        PdsNode.init_current_node()
 
         # Parse the label
         this.label = PDS_LABEL.parseString(this.string).asList()
         this.root = PARSE_NODES[0]
 
         return this
+
+    def FromFile(filename):
+        """Deprecated alternative name for from_file()"""
+
+        return from_file(filename)
 
 ################################################################################
 # Test program
