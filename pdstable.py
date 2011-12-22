@@ -1,3 +1,12 @@
+################################################################################
+# pdstable.py
+#
+# Classes and methods to deal with PDS index and table files
+#
+# Mark R. Showalter, SETI Institute, December 2011
+# Revised December 22, 2011 (BSW) - add ability to read, parse, and return data
+#                                   that take multiple columns
+################################################################################
 import numpy as np
 import os
 import pdsparser
@@ -123,9 +132,7 @@ class PdsTable(object):
         for column_info in self.info.column_info_list:
             data_type = column_info.data_type
 
-            if column_info.items != 1:
-                dtype = None        # to be ignored for now. FIX THIS
-            elif "INT" in data_type:
+            if "INT" in data_type:
                 dtype = "int"
             elif "REAL" in data_type:
                 dtype = "float"
@@ -137,6 +144,9 @@ class PdsTable(object):
 
             if dtype is None:
                 buffer = None
+            elif column_info.items != 1:
+                buffer = np.empty((self.info.rows,column_info.items),
+                                  dtype=dtype)
             else:
                 buffer = np.empty((self.info.rows,), dtype=dtype)
 
@@ -155,20 +165,21 @@ class PdsTable(object):
                 if self.column_list[c] == None: continue
 
                 substring = record_string[k0[c]:k1[c]]
-
-                if buffer.dtype == np.dtype("int"):
-                    self.column_list[c][row] = int(substring)
-                elif buffer.dtype == np.dtype("float"):
-                    self.column_list[c][row] = float(substring)
-                else:
+                column_info = self.info.column_info_list[c]
+                if column_info.items == 1:
                     self.column_list[c][row] = substring
+                else:
+                    offset = column_info.item_offset
+                    for i in range(column_info.items):
+                        end = offset + column_info.item_bytes
+                        self.column_list[c][row][i] = substring[offset:end]
 
             row += 1
 
         file.close()
 
 # To test...
-#   test = pdstable.PdsTable(".../pds-tools/test_data/cassini/index.lbl")
+#   test = pdstable.PdsTable("./test_data/cassini/index.lbl")
 #   test.column_dict["FILE_SPECIFICATION_NAME"]
 # or
 #   test.column_dict["EXPOSURE_DURATION"]
