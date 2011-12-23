@@ -6,10 +6,13 @@
 # Mark R. Showalter, SETI Institute, December 2011
 # Revised December 22, 2011 (BSW) - add ability to read, parse, and return data
 #                                   that take multiple columns
+# Revised December 23, 2011 (BSW) - add adaptation to seconds for TIME fields
 ################################################################################
 import numpy as np
 import os
 import pdsparser
+import julian
+import datetime as dt
 
 class PdsColumnInfo(object):
     """The PdsColumnInfo class holds the attributes of one column in a PDS
@@ -112,7 +115,7 @@ class PdsTable(object):
         (7) Time fields are represented as character strings at this stage.
     """
 
-    def __init__(self, label_file_path):
+    def __init__(self, label_file_path, time_format_list=[]):
         """Constructor for a PdsTable object given the path to the detached
         label file.
 
@@ -136,9 +139,16 @@ class PdsTable(object):
                 dtype = "int"
             elif "REAL" in data_type:
                 dtype = "float"
-            elif ("CHAR" in data_type or "TIME" in data_type
-                                      or "DATE" in data_type):
+            elif "TIME" in data_type or "DATE" in data_type:
+                if column_info.name in time_format_list:
+                    dtype = "float"
+                else:
+                    dtype = "S" + str(column_info.bytes)
+            elif "CHAR" in data_type:
                 dtype = "S" + str(column_info.bytes)
+                    #elif ("CHAR" in data_type or "TIME" in data_type
+                #                          or "DATE" in data_type):
+                    #    dtype = "S" + str(column_info.bytes)
             else:
                 raise IOError("unsupported data type: " + data_type)
 
@@ -167,7 +177,13 @@ class PdsTable(object):
                 substring = record_string[k0[c]:k1[c]]
                 column_info = self.info.column_info_list[c]
                 if column_info.items == 1:
-                    self.column_list[c][row] = substring
+                    data_type = column_info.data_type
+                    if "TIME" in data_type or "DATE" in data_type:
+                        (day,sec) = julian.day_sec_from_iso(substring.strip())
+                        tai = julian.tai_from_day(day) + sec
+                        self.column_list[c][row] = tai
+                    else:
+                        self.column_list[c][row] = substring.strip()
                 else:
                     offset = column_info.item_offset
                     for i in range(column_info.items):
@@ -179,7 +195,7 @@ class PdsTable(object):
         file.close()
 
 # To test...
-#   test = pdstable.PdsTable("./test_data/cassini/index.lbl")
+#   test = pdstable.PdsTable("./test_data/cassini/ISS/index.lbl")
 #   test.column_dict["FILE_SPECIFICATION_NAME"]
 # or
 #   test.column_dict["EXPOSURE_DURATION"]
