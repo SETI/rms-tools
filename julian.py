@@ -28,13 +28,17 @@
 # Mark R. Showalter
 # PDS Rings Node
 # August 2011
-# Updated December 2011
+#
+# 12/31/11 (MRS) Removed julian_isoparser based on indications that its
+#   performance was unacceptably slow. New ISO routines parse the strings
+#   without resorting to pyparsing, and also support array-like arguments. Also
+#   added routine tai_from_iso().
 ################################################################################
 
 import numpy as np
 import textkernel as tk
 import julian_dateparser as jdp
-import julian_isoparser as iso
+# import julian_isoparser as iso -- replaced by faster parser
 import datetime as dt
 import pyparsing
 import unittest
@@ -1199,42 +1203,141 @@ def day_sec_type_from_string(string, order="YMD", validate=True):
 
 ########################################
 
-def day_from_iso(string):
+def day_from_iso(strings):
     """Returns a day number based on a parsing of a date string in ISO format.
-    The format is strictly enforced to be either yyyy-mm-dd or yyyy-ddd."""
+    The format is strictly required to be either yyyy-mm-dd or yyyy-ddd.
+
+    Now revised to avoid the slow julian_isoparser routines. It should be very
+    fast. It also works for lists or arrays of arbitrary shape, provided every
+    item uses the same format. Note that syntax is no longer checked in detail.
+    """
 
     # Give the list a zero month entry for the year and day-of-year case
-    list = [["MONTH",0]] + iso.ISO_DATE.parseString(string).asList()
-    dict = _dict_from_parselist(list)
+    # list = [["MONTH",0]] + iso.ISO_DATE.parseString(string).asList()
+    # dict = _dict_from_parselist(list)
+    # 
+    # return _day_from_dict(dict)
 
-    return _day_from_dict(dict)
+    strings = np.asarray(strings)
+
+    # yyyy-mm-dd case:
+    if strings.dtype == np.dtype("|S10"):
+        strings.dtype = np.dtype({"y":("|S4",0), "m":("|S2",5), "d":("|S2",8)})
+        y = strings["y"].astype("int")
+        m = strings["m"].astype("int")
+        d = strings["d"].astype("int")
+        return day_from_ymd(y,m,d)
+
+    # yyyy-ddd case:
+    elif strings.dtype == np.dtype("|S8"):
+        strings.dtype = np.dtype({"y":("|S4",0), "d":("|S3",5)})
+        y = strings["y"].astype("int")
+        d = strings["d"].astype("int")
+        return day_from_yd(y,d)
+
+    else:
+        raise ValueError("invalid ISO date syntax: " + strings.ravel()[0])
 
 ########################################
 
-def sec_from_iso(string):
+def sec_from_iso(strings):
     """Returns a second value based on a parsing of a time string in ISO format.
-    The format is strictly enforced to be hh:mm:ss[.s...][Z]."""
+    The format is strictly required to be hh:mm:ss[.s...][Z].
 
-    list = iso.ISO_TIME.parseString(string).asList()
-    dict = _dict_from_parselist(list)
+    Now revised to avoid the slow julian_isoparser routines. It should be very
+    fast. It also works for lists or arrays of arbitrary shape, provided every
+    item uses the same format. Note that syntax is no longer checked in detail.
+    """
 
-    return _sec_from_dict(dict)
+    # list = iso.ISO_TIME.parseString(string).asList()
+    # dict = _dict_from_parselist(list)
+    # 
+    # return _sec_from_dict(dict)
+
+    # Convert to an array of strings
+    strings = np.asarray(strings)
+
+    # Prepare a dictionary to define the string format
+    dtype_dict = {"h":("|S2",0),
+                  "m":("|S2",3)}
+
+    # Get the first string. Every subsequent string is assumed to match in
+    # format.
+    first = str(strings.ravel()[0])
+    lstring = len(first)
+
+    # Check for a trailing "Z" to ignore
+    if first[-1] == "Z":
+        lstring -= 1
+        dtype_dict["z"] = ("|S1", lstring)
+
+    # Figure out the type of the seconds field
+    dtype_dict["s"] = ("|S" + str(lstring - 6), 6)
+    if ("." in first):
+        ntype = "float"
+    else:
+        ntype = "int"
+
+    strings.dtype = np.dtype(dtype_dict)
+    h = strings["h"].astype("int")
+    m = strings["m"].astype("int")
+    s = strings["s"].astype(ntype)
+
+    return sec_from_hms(h,m,s)
 
 ########################################
 
-def day_sec_from_iso(string, validate=True):
+def day_sec_from_iso(strings, validate=True):
     """Returns a day and second based on a parsing of the string in ISO
     date-time format. The format is strictly enforced to be an ISO date plus an
     ISO time, separated by a single space or a "T"."""
 
     # Give the default entries in case they are needed
-    list = [["MONTH",0]] + iso.ISO_DATETIME.parseString(string).asList()
-    dict = _dict_from_parselist(list)
+    # list = [["MONTH",0]] + iso.ISO_DATETIME.parseString(string).asList()
+    # dict = _dict_from_parselist(list)
+    #
+    # day = _day_from_dict(dict)
+    # sec = _sec_from_dict(dict, day, True, validate)
+    # 
+    # return (day, sec)
 
-    day = _day_from_dict(dict)
-    sec = _sec_from_dict(dict, day, True, validate)
+    strings = np.asarray(strings)
+
+    # Check for a T or blank separator
+    first = str(strings.ravel()[0])
+    sep = first.find("T")
+    if sep == -1:
+        sep = first.find(" ")
+
+    # If no separator is found, assume it is just a date
+    if sep == -1:
+        day = day_from_iso(strings)
+        sec = 0
+
+    # Otherwise, parse the date and time separately
+    else:
+        dtype = "|S" + str(sep)
+        stype = "|S" + str(len(first) - sep - 1)
+        strings.dtype = np.dtype({"day":(dtype,0), "sec":(stype,sep+1)})
+
+        day = day_from_iso(strings["day"])
+        sec = sec_from_iso(strings["sec"])
+
+    # Validate if necessary
+    if validate:
+        if np.any(sec < 0) or np.any(sec >= seconds_on_day(day)):
+            raise ValueError("seconds value is outside allowed range")
 
     return (day, sec)
+
+########################################
+
+def tai_from_iso(strings, validate=True):
+    """Returns the elapsed seconds TAI from January 1, 2000 given an ISO date
+    or date-time string. Works for scalars or arrays."""
+
+    (day, sec) = day_sec_from_iso(strings, validate)
+    return tai_from_day(day) + sec
 
 ####################
 # internals...
@@ -1385,6 +1488,59 @@ class Test_Parsing(unittest.TestCase):
 
         self.assertRaises(ValueError, day_sec_from_iso, "2000-01-01 23:59:60")
         self.assertRaises(ValueError, day_sec_from_iso, "1999-12-31 23:59:61")
+
+        # Check handling of ISO string lists/arrays
+        strings = ["1999-01-01", "2000-01-01", "2001-01-01"]
+        days    = [       -365 ,           0 ,         366 ]
+        self.assertTrue(np.all(day_from_iso(strings) == np.array(days)))
+
+        strings = [["2000-001", "2000-002"], ["2000-003", "2000-004"]]
+        days    = [[        0 ,         1 ], [        2 ,         3 ]]
+        self.assertTrue(np.all(day_from_iso(strings) == np.array(days)))
+
+        strings = ["00:00:00", "00:01:00", "00:02:00"]
+        secs    = [        0 ,        60 ,       120 ]
+        self.assertTrue(np.all(sec_from_iso(strings) == np.array(secs)))
+
+        strings = [["00:02:00Z", "00:04:00Z"], ["00:06:00Z", "00:08:01Z"]]
+        secs    = [[      120  ,       240  ], [       360 ,        481 ]]
+        self.assertTrue(np.all(sec_from_iso(strings) == np.array(secs)))
+
+        strings = ["00:00:00.01", "00:01:00.02", "00:02:00.03"]
+        secs    = [        0.01 ,        60.02 ,       120.03 ]
+        self.assertTrue(np.all(sec_from_iso(strings) == np.array(secs)))
+
+        strings = ["00:02:00.1Z", "00:04:00.2Z", "00:06:00.3Z"]
+        secs    = [      120.1  ,       240.2  ,       360.3  ]
+        self.assertTrue(np.all(sec_from_iso(strings) == np.array(secs)))
+
+        strings = ["1999-01-01", "2000-01-01", "2001-01-01"]
+        days    = [       -365 ,           0 ,         366 ]
+        self.assertTrue(np.all(day_sec_from_iso(strings)[0] == np.array(days)))
+        self.assertTrue(np.all(day_sec_from_iso(strings)[1] == 0))
+
+        strings = [["2000-001", "2000-002"], ["2000-003", "2000-004"]]
+        days    = [[        0 ,         1 ], [        2 ,         3 ]]
+        self.assertTrue(np.all(day_sec_from_iso(strings)[0] == np.array(days)))
+        self.assertTrue(np.all(day_sec_from_iso(strings)[1] == 0))
+
+        strings = ["1998-12-31 23:59:60", "2001-01-01 01:00:01"]
+        days    = [       -366          ,         366          ]
+        secs    = [               86400 ,                 3601 ]
+        self.assertTrue(np.all(day_sec_from_iso(strings)[0] == np.array(days)))
+        self.assertTrue(np.all(day_sec_from_iso(strings)[1] == np.array(secs)))
+
+        strings = ["1998-12-31T23:59:60", "2001-01-01T01:00:01"]
+        days    = [       -366          ,         366          ]
+        secs    = [               86400 ,                 3601 ]
+        self.assertTrue(np.all(day_sec_from_iso(strings)[0] == np.array(days)))
+        self.assertTrue(np.all(day_sec_from_iso(strings)[1] == np.array(secs)))
+
+        strings = ["1998-12-31 23:59:60Z", "2001-01-01 01:00:01Z"]
+        days    = [       -366           ,         366           ]
+        secs    = [               86400  ,                 3601  ]
+        self.assertTrue(np.all(day_sec_from_iso(strings)[0] == np.array(days)))
+        self.assertTrue(np.all(day_sec_from_iso(strings)[1] == np.array(secs)))
 
 ################################################################################
 # Perform unit testing if executed from the command line
