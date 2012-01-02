@@ -12,6 +12,15 @@ import tabulation as tab
 AU = 149597870.7    # km
 C = 299792.458      # km/sec
 
+# Converts from W/m^2 to erg/s/cm^2
+TO_CGS = 1.e7 / 1.e4
+
+# Converts from flux per micron to flux per Angstrom
+TO_PER_ANGSTROM = 1.e-4
+
+# Converts from flux per micron to flux per nanometer
+TO_PER_NM = 1.e-3
+
 ################################################################################
 # Models for the solar spectrum at 1 AU in absolute units of W/m^2/micron
 ################################################################################
@@ -3052,7 +3061,7 @@ def mean_flux_density(center, width, sun_range=1., model="STIS"):
     # Return the mean over the filter
     return bandpass_flux_density(bandpass, sun_range, model)
 
-def bandpass_f(bandpass, sun_range=1., model="STIS"):
+def bandpass_f(bandpass, wavelength_unit="MICRON", sun_range=1., model="STIS"):
     """Returns the solar F averaged over a filter bandpass. F is defined such
     that pi*F is the solar flux density.
 
@@ -3060,6 +3069,8 @@ def bandpass_f(bandpass, sun_range=1., model="STIS"):
         bandpass        a tuple (wavelength,throughput) of 1-D arrays,
                         describing the throughput of a filter as a function
                         of wavelength in microns.
+        wavelength_unit the units in which the bandpass wavelength are
+                        tabulated. Choices are "MICRON", "NM", and "ANGSTROM".
         sun_range       the distance from the Sun to the target body in units of
                         AU.
         model           the ame of the model for solar flux density, either
