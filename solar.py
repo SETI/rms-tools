@@ -3061,7 +3061,7 @@ def mean_flux_density(center, width, sun_range=1., model="STIS"):
     # Return the mean over the filter
     return bandpass_flux_density(bandpass, sun_range, model)
 
-def bandpass_f(bandpass, wavelength_unit="MICRON", sun_range=1., model="STIS"):
+def bandpass_f(bandpass, sun_range=1., model="STIS"):
     """Returns the solar F averaged over a filter bandpass. F is defined such
     that pi*F is the solar flux density.
 
@@ -3069,8 +3069,6 @@ def bandpass_f(bandpass, wavelength_unit="MICRON", sun_range=1., model="STIS"):
         bandpass        a tuple (wavelength,throughput) of 1-D arrays,
                         describing the throughput of a filter as a function
                         of wavelength in microns.
-        wavelength_unit the units in which the bandpass wavelength are
-                        tabulated. Choices are "MICRON", "NM", and "ANGSTROM".
         sun_range       the distance from the Sun to the target body in units of
                         AU.
         model           the ame of the model for solar flux density, either
