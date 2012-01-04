@@ -1,3 +1,4 @@
+#!/usr/bin/python
 ################################################################################
 # pdstable.py
 #
@@ -7,12 +8,18 @@
 # Revised December 22, 2011 (BSW) - add ability to read, parse, and return data
 #                                   that take multiple columns
 # Revised December 23, 2011 (BSW) - add adaptation to seconds for TIME fields
+# Revised January 3, 2012 (BSW) - changed conversion to floats to happen in one
+#                                 step for entire column of TIMEs
+#                               - fixed parsing of vectors that were not getting
+#                                 all 3 values
+#                               - implemented unit tests
 ################################################################################
 import numpy as np
 import os
 import pdsparser
 import julian
 import datetime as dt
+import unittest
 
 class PdsColumnInfo(object):
     """The PdsColumnInfo class holds the attributes of one column in a PDS
@@ -121,6 +128,7 @@ class PdsTable(object):
 
         Input:
             label_file_path     the path to the PDS label of the table file.
+            time_format_list    list of time columns to be stored as floats.
         """
 
         # Parse the label
@@ -146,9 +154,6 @@ class PdsTable(object):
                     dtype = "S" + str(column_info.bytes)
             elif "CHAR" in data_type:
                 dtype = "S" + str(column_info.bytes)
-                    #elif ("CHAR" in data_type or "TIME" in data_type
-                #                          or "DATE" in data_type):
-                    #    dtype = "S" + str(column_info.bytes)
             else:
                 raise IOError("unsupported data type: " + data_type)
 
@@ -169,6 +174,9 @@ class PdsTable(object):
         # Load the table data into the buffers
         file = open(self.info.table_file_path, "r")
 
+        #times that will be converted to seconds
+        time_strings = []
+
         row = 0
         for record_string in file:
             for c in range(self.info.columns):
@@ -179,20 +187,39 @@ class PdsTable(object):
                 if column_info.items == 1:
                     data_type = column_info.data_type
                     if "TIME" in data_type or "DATE" in data_type:
-                        (day,sec) = julian.day_sec_from_iso(substring.strip())
-                        tai = julian.tai_from_day(day) + sec
-                        self.column_list[c][row] = tai
+                        if column_info.name in time_format_list:
+                            time_strings.append(substring.strip())
+                        else:
+                            self.column_list[c][row] = substring.strip()
                     else:
                         self.column_list[c][row] = substring.strip()
                 else:
-                    offset = column_info.item_offset
+                    offset = 0
                     for i in range(column_info.items):
                         end = offset + column_info.item_bytes
                         self.column_list[c][row][i] = substring[offset:end]
-
+                        offset += column_info.item_offset
             row += 1
 
         file.close()
+
+        # convert any times that need to be converted from strings
+        time_string_cols = [time_strings[i:i+row] for i in
+                            range(0, len(time_strings), row)]
+        time_c = 0
+        for c in range(self.info.columns):
+            if self.column_list[c] == None: continue
+
+            column_info = self.info.column_info_list[c]
+            if column_info.items == 1:
+                data_type = column_info.data_type
+                if "TIME" in data_type or "DATE" in data_type:
+                    if column_info.name in time_format_list:
+                        (day,sec) = julian.day_sec_from_iso(np.array(time_string_cols[time_c]))
+                        tai = julian.tai_from_day(day) + sec
+                        self.column_list[c] = tai
+                        self.column_dict[column_info.name] = tai
+                        time_c += 1
 
 # To test...
 #   test = pdstable.PdsTable("./test_data/cassini/ISS/index.lbl")
@@ -207,3 +234,61 @@ class PdsTable(object):
 # column.
 #
 # Also needs some good unit testing.
+
+########################################
+# UNIT TESTS
+########################################
+
+ERROR_TOLERANCE = 1.e-15
+
+class Test_PdsTable(unittest.TestCase):
+    
+    def test_table_parse(self):
+        
+        # Testing different values parsed correctly...
+        test_table_basic = PdsTable("./test_data/cassini/ISS/index.lbl")
+        #test strings
+        test_file_names = test_table_basic.column_dict['FILE_NAME']
+        file_name_test_set = np.array(['N1573186009_1.IMG',
+                                       'W1573186009_1.IMG',
+                                       'N1573186041_1.IMG',
+                                       'W1573186041_1.IMG'])
+        self.assertTrue(np.all(file_name_test_set == test_file_names[0:4]))
+
+        #test floats
+        test_cbody_dists = test_table_basic.column_dict['CENTRAL_BODY_DISTANCE']
+        cent_body_dist_test_set = np.array([2869736.9, 2869736, 2869707,
+                                            2869706.9])
+        self.assertTrue(np.all(cent_body_dist_test_set == test_cbody_dists[0:4]))
+
+        #test vectors
+        test_sc_vels = test_table_basic.column_dict['SC_TARGET_VELOCITY_VECTOR']
+        sc_vels_test_set = np.array([[1.2223705, -1.1418157, -0.055303727],
+                                     [1.2223749, -1.1418146, -0.055303917],
+                                     [1.2225166, -1.1417793, -0.055309978],
+                                     [1.2225173, -1.1417791, -0.055310007]])
+        self.assertTrue(np.all(sc_vels_test_set == test_sc_vels[0:4]))
+
+        #test times as strings
+        test_start_time_strs = test_table_basic.column_dict['START_TIME']
+        start_time_str_test_set = np.array(['2007-312T03:31:12.392',
+                                            '2007-312T03:31:14.372',
+                                            '2007-312T03:31:45.832',
+                                            '2007-312T03:31:46.132'])
+        self.assertTrue(np.all(start_time_str_test_set ==
+                               test_start_time_strs[0:4]))
+
+        test_table_secs = PdsTable("./test_data/cassini/ISS/index.lbl",
+                                   ['START_TIME'])
+        #test times as seconds (floats)
+        test_start_times = test_table_secs.column_dict['START_TIME']
+        start_time_test_set = np.array([247807905.392, 247807907.372,
+                                        247807938.832, 247807939.132])
+        self.assertTrue(np.all(start_time_test_set == test_start_times[0:4]))
+
+if __name__ == '__main__':
+    unittest.main()
+
+################################################################################
+# End of file
+################################################################################
