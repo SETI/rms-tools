@@ -225,6 +225,21 @@ class PdsTable(object):
                         self.column_dict[column_info.name] = tai
                         time_c += 1
 
+    def columns_between(self, min, max, category_index):
+        column_info = self.info.column_info_list[category_index]
+        ndx_arr = np.array()
+        if column_info.items == 1:
+            dtype = column_dict[column_info.name].dtype()
+            if dtype is float:
+                column = self.column_list[category_index]
+                for ndx in range(len(column)):
+                    x = collumn[ndx]
+                    if x >= min and x <= max:
+                        ndx_arr.append(ndx)
+        return ndx_arr
+                
+                
+
 # To test...
 #   test = pdstable.PdsTable("./test_data/cassini/ISS/index.lbl")
 #   test.column_dict["FILE_SPECIFICATION_NAME"]
