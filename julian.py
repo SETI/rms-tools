@@ -29,10 +29,12 @@
 # PDS Rings Node
 # August 2011
 #
-# 12/31/11 (MRS) Removed julian_isoparser based on indications that its
+# 12/31/11 (MRS) - Removed julian_isoparser based on indications that its
 #   performance was unacceptably slow. New ISO routines parse the strings
 #   without resorting to pyparsing, and also support array-like arguments. Also
 #   added routine tai_from_iso().
+#
+# 1/11/12 (MRS) - Added the new leap second for July 1, 2012.
 ################################################################################
 
 import numpy as np
@@ -82,7 +84,8 @@ SPICE_LSK_DICT = {
                  31, dt.date(1997,7,1),
                  32, dt.date(1999,1,1),
                  33, dt.date(2006,1,1),
-                 34, dt.date(2009,1,1))}
+                 34, dt.date(2009,1,1),
+                 35, dt.date(2012,7,1))}
 
 # Define the static variables needed for TAI-ET conversions
 global DELTET_T_A, DELTET_K, DELTET_EB, DELTET_M0, DELTET_M1
