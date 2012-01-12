@@ -13,6 +13,10 @@
 #                               - fixed parsing of vectors that were not getting
 #                                 all 3 values
 #                               - implemented unit tests
+#
+# Revised 1/11/12 (MRS) - Added PdsTable methods dicts_by_row() and
+#                         dicts_by_key(). The former is used by
+#                         instrument.cassini.iss.
 ################################################################################
 import numpy as np
 import os
@@ -232,8 +236,36 @@ class PdsTable(object):
 # Please modify the code so that it can handle the case of multiple items,
 # using a Numpy 2-D array instead of a 1-D array to hold the values in the
 # column.
-#
-# Also needs some good unit testing.
+
+    def dicts_by_row(self):
+        """Returns a list of dictionaries, one for each row in the table, and
+        with each dictionaory containing all of the column values in that
+        particular row."""
+
+        # For each row...
+        dicts = []
+        for row in range(self.info.rows):
+
+            # Create and append the dictionary
+            dict = {}
+            for key in self.column_dict.keys():
+                dict[key] = self.column_dict[key][row]
+
+            dicts.append(dict)
+
+        return dicts
+
+    @staticmethod
+    def dicts_by_key(dicts, key):
+        """Transforms the results of dicts_by_row into a dictonary of
+        dictionaries, where each row of the dictionary is keyed by the value
+        in the specified column."""
+
+        big_dict = {}
+        for dict in dicts:
+            big_dict[dict[key]] = dict
+
+        return big_dict
 
 ########################################
 # UNIT TESTS
@@ -285,6 +317,17 @@ class Test_PdsTable(unittest.TestCase):
         start_time_test_set = np.array([247807905.392, 247807907.372,
                                         247807938.832, 247807939.132])
         self.assertTrue(np.all(start_time_test_set == test_start_times[0:4]))
+
+        # Test dicts_by_row()
+        rowdict = test_table_secs.dicts_by_row()
+        for i in range(4):
+            self.assertEqual(rowdict[i]["START_TIME"], start_time_test_set[i])
+
+        # Test dicts_by_key()
+        keydict = PdsTable.dicts_by_key(rowdict, "FILE_NAME")
+        for i in range(4):
+            key = file_name_test_set[i]
+            self.assertEqual(keydict[key]["START_TIME"], start_time_test_set[i])
 
 if __name__ == '__main__':
     unittest.main()
