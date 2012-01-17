@@ -17,6 +17,8 @@
 # Revised 1/11/12 (MRS) - Added PdsTable methods dicts_by_row() and
 #                         dicts_by_key(). The former is used by
 #                         instrument.cassini.iss.
+# Revised 1/17/12 (BSW) - Fixed ordering of values when PdsTable __init__ has
+#                         more than one column indicated in the time_format_list
 ################################################################################
 import numpy as np
 import os
@@ -208,8 +210,13 @@ class PdsTable(object):
         file.close()
 
         # convert any times that need to be converted from strings
-        time_string_cols = [time_strings[i:i+row] for i in
-                            range(0, len(time_strings), row)]
+        time_string_cols = []
+        k = 0
+        for i in range(len(time_format_list)):
+            string_col = [time_strings[j] for j in range(k, len(time_strings),
+                                                         len(time_format_list))]
+            time_string_cols.append(string_col)
+            k += 1
         time_c = 0
         for c in range(self.info.columns):
             if self.column_list[c] == None: continue
@@ -219,8 +226,7 @@ class PdsTable(object):
                 data_type = column_info.data_type
                 if "TIME" in data_type or "DATE" in data_type:
                     if column_info.name in time_format_list:
-                        (day,sec) = julian.day_sec_from_iso(np.array(time_string_cols[time_c]))
-                        tai = julian.tai_from_day(day) + sec
+                        tai = julian.tai_from_iso(np.array(time_string_cols[time_c]))
                         self.column_list[c] = tai
                         self.column_dict[column_info.name] = tai
                         time_c += 1
