@@ -35,6 +35,10 @@
 #   added routine tai_from_iso().
 #
 # 1/11/12 (MRS) - Added the new leap second for July 1, 2012.
+#
+# 1/17/12 (BSW) - subtracted 12 hours from tdb on tdb_from_tai (and added 12
+#   hours for the reverse in tai_from_tdb) to deal with J2000 starting from
+#   noon on 1/1/2000, not midnight.
 ################################################################################
 
 import numpy as np
@@ -654,6 +658,9 @@ class Test_Time_of_Day(unittest.TestCase):
 #                0     1
 # 
 # where t is the number of ephemeris seconds past J2000.
+#
+# in the end, subtract 12 hours as J2000 starts at noon on 1/1/2000, not
+# midnight
 ################################################################################
 
 def tdb_from_tai(tai, iters=2):
@@ -681,7 +688,7 @@ def tdb_from_tai(tai, iters=2):
         e = m + DELTET_EB * np.sin(m)
         x = DELTET_T_A + DELTET_K * np.sin(e)
 
-    return x + tai
+    return x + tai - 43200.
 
 ########################################
 
@@ -689,6 +696,7 @@ def tai_from_tdb(tdb):
     """Converts from TDB to TAI. Operates on either a single scalar or an
     arbitrary array of values. An exact solution(); no iteration required."""
 
+    tdb += 43200.   # add 12 hours as tdb is respect to noon on 1/1/2000
     if np.shape(tdb) != (): tdb = np.asfarray(tdb)
 
     #   tai = tdb - DELTA - K sin(E)
