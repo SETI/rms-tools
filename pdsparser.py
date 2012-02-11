@@ -20,7 +20,7 @@
 # GROUPs enclose their contents.
 # 
 # Comments are attached to the item before them unless this is impossible (such
-# as due to intevening punctuation); then they are attached to the item after.
+# as due to intervening punctuation); then they are attached to the item after.
 # 
 # Every PdsItem has indices in the string to where the information begins and
 # ends, as well as a pointer to the string.
@@ -1279,10 +1279,13 @@ class PdsLabel():
     def from_file(filename):
         """Loads and parses a PDS label."""
 
-        global PARSE_NODES
+        lines = pdsparser.load_file(filename)
+        return pdsparser.from_string(lines)
 
-        this = PdsLabel()
-        this.filename = filename
+    @staticmethod
+    def load_file(filename):
+        """Loads a PDS label, returning a list of strings, one for each line.
+        """
 
         # Open file for read; could be binary
         file = open(filename, "rb")
@@ -1309,18 +1312,32 @@ class PdsLabel():
         # Close the file
         file.close()
 
-        # Concatenate the lines with newlines in between and at end
-        this.string = "\n".join(lines) + "\n"
+        return lines
+
+    @staticmethod
+    def from_string(string):
+        """Parses a string or list of strings containing the contents of a PDS
+        label."""
+
+        global PARSE_NODES
+
+        this = PdsLabel()
+        this.filename = None
+
+        # If this is a list, concatenate the lines into a string
+        if type(string) == type([]):
+            string = "\n".join(string) + "\n"
 
         # Initialize the object status in the parsed label
         PdsNode.init_current_node()
 
         # Parse the label
-        this.label = PDS_LABEL.parseString(this.string).asList()
+        this.label = PDS_LABEL.parseString(string).asList()
         this.root = PARSE_NODES[0]
 
         return this
 
+    @staticmethod
     def FromFile(filename):
         """Deprecated alternative name for from_file()"""
 
@@ -1343,6 +1360,7 @@ def test2():
 def test():
 
     result = PdsLabel.FromFile("test.lbl")
+
 #    result.PrintLabel()
     print result.nodename
 
