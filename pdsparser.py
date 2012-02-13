@@ -83,13 +83,10 @@ class PdsNode(object):
     def formatted_list(self, indent):
 
         # If this is root, out-dent and just print the children
-        if (self.keyword  == None and
-            self.pdsvalue == None and
+        if (self.keyword is None and self.pdsvalue is None and
             self.name == "ROOT"):
-
-            indent -= 1
-            result = []
-
+                indent -= 1
+                result = []
         else:
             # Print the keyword, indented properly
             result = indent * ["  "] + [str(self.keyword)]
@@ -1279,8 +1276,8 @@ class PdsLabel():
     def from_file(filename):
         """Loads and parses a PDS label."""
 
-        lines = pdsparser.load_file(filename)
-        return pdsparser.from_string(lines)
+        lines = PdsLabel.load_file(filename)
+        return PdsLabel.from_string(lines)
 
     @staticmethod
     def load_file(filename):
