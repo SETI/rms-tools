@@ -186,7 +186,7 @@ class PdsTable(object):
         row = 0
         for record_string in file:
             for c in range(self.info.columns):
-                if self.column_list[c] == None: continue
+                if self.column_list[c] is None: continue
 
                 substring = record_string[k0[c]:k1[c]]
                 column_info = self.info.column_info_list[c]
@@ -219,7 +219,7 @@ class PdsTable(object):
             k += 1
         time_c = 0
         for c in range(self.info.columns):
-            if self.column_list[c] == None: continue
+            if self.column_list[c] is None: continue
 
             column_info = self.info.column_info_list[c]
             if column_info.items == 1:
