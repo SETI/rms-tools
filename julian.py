@@ -1907,7 +1907,7 @@ def _sec_from_dict(dict, day=None, leapseconds=True, validate=True):
 
     sec = h * 3600 + m * 60 + s
 
-    if validate and (day != None):
+    if validate and (day is not None):
         if sec >= seconds_on_day(day, leapseconds):
             raise ValueError("Seconds value out of range on day " +
                              ymd_format_from_day(day) + ": " + str(sec))
