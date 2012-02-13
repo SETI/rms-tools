@@ -455,7 +455,7 @@ class VicarImage():
             # Test this pattern
             k = self.table[i][0]
             test = pattern.match(k)
-            if test == None: continue
+            if test is None: continue
 
             # If it matches the entire keyword...
             if test.end() == len(k):
@@ -499,7 +499,7 @@ class VicarImage():
             # Test this pattern
             k = self.table[i][0]
             test = pattern.match(k)
-            if test == None: continue
+            if test is None: continue
 
             # If it matches the entire keyword...
             if test.end() == len(k):
@@ -601,7 +601,7 @@ class VicarImage():
         # True enables the deletion of immutable keywords.
 
         # If stop value is unspecified, just delete one keyword
-        if stop == None: stop = index + 1
+        if stop is None: stop = index + 1
 
         # Convert negative indices to positive and get the count
         if index < 0: index = len(self.table) + index
@@ -649,7 +649,7 @@ class VicarImage():
         # True enables the copying of immutable keywords.
 
         # If stop value is unspecified, just copy one keyword
-        if stop == None: stop = index + 1
+        if stop is None: stop = index + 1
 
         # Convert negative indices to positive and get the count
         if index < 0: index = len(self.table) + index
@@ -799,7 +799,7 @@ class VicarImage():
         if i >= 0: return self.table[i][1]
 
         # Return the default if available
-        if default != None: return default
+        if default is not None: return default
 
         # Otherwise raise the normal exception
         i = self.keyword_index(keyword, occurrence, start)
