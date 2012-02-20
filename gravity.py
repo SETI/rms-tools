@@ -12,6 +12,9 @@
 #   - Fixed errors that made poor initial guesses in solve_a(). Reduced default
 #     number of iterations to 5.
 #   - Added unit tests giving array arguments to solve_a().
+#
+# Revised February 18, 2012 (MRS)
+#   - Added gravity fields of more bodies as class constants.
 ################################################################################
 import numpy as np
 import unittest
@@ -330,16 +333,116 @@ class Gravity():
 
 # Planetary gravity fields defined...
 
+# From http://ssd.jpl.nasa.gov/?planet_phys_par
 G_MKS = 6.67428e-11     # m^3 kg^-1 s^-2
 G_CGS = 6.67428e-08     # cm^3 g^-1 s^-2
 
-JUPITER = Gravity(126686535., [14696.43e-06, -587.14e-06, 34.25e-06], 71492. )
-SATURN  = Gravity( 37931208., [16290.71e-06, -935.83e-06, 86.14e-06], 60330. )
-URANUS  = Gravity(  5793964., [ 3341.29e-06,  -30.44e-06           ], 26200. )
-NEPTUNE = Gravity(  6835100., [ 3408.43e-06,  -33.40e-06           ], 25225. )
-PLUTO_ONLY   = Gravity(870.3, [], 1151.)
-PLUTO_CHARON = Gravity(870.3 + 101.4, [], 1151.)
-# from http://arxiv.org/abs/0712.1261
+G_PER_KG = G_MKS / 1.e9
+G_PER_G  = G_CGS / 1.e15
+
+# From http://ssd.jpl.nasa.gov/?planet_phys_par
+SUN = Gravity(132712440018., [], 695500.)
+
+# From http://ssd.jpl.nasa.gov/?planet_phys_par
+MERCURY = Gravity(0.330104e24 * G_PER_KG, [], 2439.7 )
+VENUS   = Gravity( 4.86732e24 * G_PER_KG, [], 6051.8 )
+EARTH   = Gravity( 5.97219e24 * G_PER_KG, [], 6378.14)
+MARS    = Gravity(0.641693e24 * G_PER_KG, [], 3396.19)
+
+# From http://ssd.jpl.nasa.gov/?gravity_fields_op
+JUPITER = Gravity(126686535., [14696.43e-06, -587.14e-06, 34.25e-06], 71492.)
+SATURN  = Gravity( 37931208., [16290.71e-06, -935.83e-06, 86.14e-06], 60330.)
+URANUS  = Gravity(  5793964., [ 3341.29e-06,  -30.44e-06           ], 26200.)
+NEPTUNE = Gravity(  6835100., [ 3408.43e-06,  -33.40e-06           ], 25225.)
+
+# From http://arxiv.org/abs/0712.1261
+PLUTO_ONLY = Gravity(870.3, [], 1151.)
+
+# From http://ssd.jpl.nasa.gov/?sat_phys_par
+MOON      = Gravity(4902.801, [], 1737.5)
+
+IO        = Gravity(5959.916, [], 1821.6)
+EUROPA    = Gravity(3202.739, [], 1560.8)
+GANYMEDE  = Gravity(9887.834, [], 2631.2)
+CALLISTO  = Gravity(7179.289, [], 2410.3)
+
+MIMAS     = Gravity(   2.5026, [],  198.20)
+ENCELADUS = Gravity(   7.2027, [],  252.10)
+TETHYS    = Gravity(  41.2067, [],  533.00)
+DIONE     = Gravity(  73.1146, [],  561.70)
+RHEA      = Gravity( 153.9426, [],  764.30)
+TITAN     = Gravity(8978.1382, [], 2574.73)
+HYPERION  = Gravity(   0.3727, [],  135.00)
+IAPETUS   = Gravity( 120.5038, [],  735.60)
+PHOEBE    = Gravity(   0.5532, [],  106.50)
+
+MIRANDA   = Gravity(   4.4, [], 235.8)
+ARIEL     = Gravity(  86.4, [], 578.9)
+UMBRIEL   = Gravity(  81.5, [], 584.7)
+TITANIA   = Gravity( 228.2, [], 788.9)
+OBERON    = Gravity( 192.4, [], 761.4)
+
+TRITON    = Gravity(1427.6, [], 1353.4)
+NEREID    = Gravity(  2.06, [],  170.)
+
+CHARON    = Gravity(103.2, [], 603.6)
+
+# Sets with relatively large mass ratios
+SUN_JUPITER = Gravity(SUN.gm + JUPITER.gm, [], SUN.rp)
+
+JUPITER_GALS = Gravity(JUPITER.gm + IO.gm + EUROPA.gm + GANYMEDE.gm +
+                       CALLISTO.gm, JUPITER.jn, JUPITER.rp)
+
+SATURN_TITAN = Gravity(SATURN.gm + TITAN.gm, SATURN.jn, SATURN.rp)
+
+PLUTO_CHARON = Gravity(PLUTO_ONLY.gm + CHARON.gm, [], PLUTO_ONLY.rp)
+
+LOOKUP = {
+    "SUN": SUN,
+    "MERCURY": MERCURY,
+    "VENUS": VENUS,
+    "EARTH": EARTH,
+    "MARS": MARS,
+    "JUPITER": JUPITER,
+    "SATURN": SATURN,
+    "URANUS": URANUS,
+    "NEPTUNE": NEPTUNE,
+    "PLUTO_ONLY": PLUTO_ONLY,
+    "PLUTO": PLUTO_ONLY,
+    "MOON": MOON,
+    "IO": IO,
+    "EUROPA": EUROPA,
+    "GANYMEDE": GANYMEDE,
+    "CALLISTO": CALLISTO,
+    "MIMAS": MIMAS,
+    "ENCELADUS": ENCELADUS,
+    "TETHYS": TETHYS,
+    "DIONE": DIONE,
+    "RHEA": RHEA,
+    "TITAN": TITAN,
+    "HYPERION": HYPERION,
+    "IAPETUS": IAPETUS,
+    "PHOEBE": PHOEBE,
+    "MIRANDA": MIRANDA,
+    "ARIEL": ARIEL,
+    "UMBRIEL": UMBRIEL,
+    "TITANIA": TITANIA,
+    "OBERON": OBERON,
+    "TRITON": TRITON,
+    "NEREID": NEREID,
+    "CHARON": CHARON,
+    "SUN_JUPITER": SUN_JUPITER,
+    "JUPITER_GALS": JUPITER_GALS,
+    "SATURN_TITAN": SATURN_TITAN,
+    "PLUTO_CHARON": PLUTO_CHARON,
+    "SOLAR SYSTEM BARYCENTER": SUN_JUPITER,
+    "SSB": SUN_JUPITER,
+    "JUPITER BARYCENTER": JUPITER_GALS,
+    "SATURN BARYCENTER": SATURN_TITAN,
+    "URANUS BARYCENTER": URANUS,
+    "NEPTUNE BARYCENTER": NEPTUNE,
+    "PLUTO BARYCENTER": PLUTO_CHARON
+}
 
 ########################################
 # UNIT TESTS
