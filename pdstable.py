@@ -66,12 +66,15 @@ class PdsColumnInfo(object):
 class PdsTableInfo(object):
     """The PdsTableInfo class holds the attributes of a PDS-labeled table."""
 
-    def __init__(self, label_file_path):
+    def __init__(self, label_file_path, label_file_list=None):
         """Loads a PDS table based on its associated label file."""
 
         # Parse the label
         self.label_file_path = label_file_path
-        self.label = pdsparser.PdsLabel.from_file(label_file_path)
+        if label_file_list is None:
+            self.label = pdsparser.PdsLabel.from_file(label_file_path)
+        else:
+            self.label = pdsparser.PdsLabel.from_string(label_file_list)
 
         # Get the basic file info...
         assert self.label["RECORD_TYPE"].value == "FIXED_LENGTH"
@@ -129,7 +132,7 @@ class PdsTable(object):
         (7) Time fields are represented as character strings at this stage.
     """
 
-    def __init__(self, label_file_path, time_format_list=[]):
+    def __init__(self, label_file_path, time_format_list=[], label_file_list=None):
         """Constructor for a PdsTable object given the path to the detached
         label file.
 
@@ -139,7 +142,7 @@ class PdsTable(object):
         """
 
         # Parse the label
-        self.info = PdsTableInfo(label_file_path)
+        self.info = PdsTableInfo(label_file_path, label_file_list)
 
         self.column_list = []
         self.column_dict = {}
@@ -198,6 +201,9 @@ class PdsTable(object):
                             time_strings.append(substring.strip())
                         else:
                             self.column_list[c][row] = substring.strip()
+                    elif "CHAR" not in data_type and "NULL" in substring:
+                        substring = "-999"
+                        self.column_list[c][row] = substring
                     else:
                         self.column_list[c][row] = substring.strip()
                 else:
