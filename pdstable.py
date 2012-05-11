@@ -205,7 +205,17 @@ class PdsTable(object):
                         substring = "-999"
                         self.column_list[c][row] = substring
                     else:
-                        self.column_list[c][row] = substring.strip()
+                        #self.column_list[c][row] = substring.strip()
+                        stripped_substring = substring.strip()
+                        try:
+                            self.column_list[c][row] = stripped_substring
+                        except IndexError:
+                            print "IndexError: key,row: ", key, row
+                            self.info.rows = row
+                        except ValueError:
+                            self.column_list[c][row] = 0.
+                            print "corrupt data for row, c = ", row, c
+                            print "column name = ", self.info.column_info_list[c].name
                 else:
                     offset = 0
                     for i in range(column_info.items):
@@ -277,7 +287,12 @@ class PdsTable(object):
             # Create and append the dictionary
             dict = {}
             for key in self.column_dict.keys():
-                dict[key] = self.column_dict[key][row]
+                try:
+                    dict[key] = self.column_dict[key][row]
+                except IndexError:
+                    print "IndexError: key,row: ", key, row
+                    self.info.rows = row
+                    return dicts
 
             dicts.append(dict)
 
