@@ -291,45 +291,65 @@ class Gravity():
     # Useful alternative names...
     def n(self, a):
         """Returns the mean motion at semimajor axis a. Identical to omega(a).
-            """
+        """
 
         return self.omega(a)
 
     def dmean_dt(self, a):
         """Returns the mean motion at semimajor axis a. Identical to omega(a).
-            """
+        """
 
         return self.omega(a)
 
     def dperi_dt(self, a):
         """Returns the pericenter precession rate at semimajor axis a. Identical
-            to combo(a, (1,-1,0))."""
+        to combo(a, (1,-1,0)).
+        """
 
         return self.combo(a, (1,-1,0))
 
     def dnode_dt(self, a):
         """Returns the nodal regression rate (negative) at semimajor axis a.
-            Identical to combo(a, (1,0,-1))."""
+        Identical to combo(a, (1,0,-1)).
+        """
 
         return self.combo(a, (1,0,-1))
 
     def d_dmean_dt_da(self, a):
         """Returns the radial derivative of the mean motion at semimajor axis a. 
-            Identical to domega_da(a)."""
+        Identical to domega_da(a).
+        """
 
         return self.domega_da(a)
 
     def d_dperi_dt_da(self, a):
         """Returns the radial derivative of the pericenter precession rate at
-            semimajor axis a. Identical to dcombo_da(a, (1,-1,0))."""
+        semimajor axis a. Identical to dcombo_da(a, (1,-1,0)).
+        """
 
         return self.dcombo_da(a, (1,-1,0))
 
     def d_dnode_dt_da(self, a):
         """Returns the radial derivative of the nodal regression rate (negative)
-            at semimajor axis a. Identical to dcombo_da(a, (1,0,-1))."""
+        at semimajor axis a. Identical to dcombo_da(a, (1,0,-1)).
+        """
 
         return self.dcombo_da(a, (1,0,-1))
+
+    def olr_pattern(self, n, m, p=1):
+        """Returns the pattern speed of the m:m+p outer Lindblad resonance,
+        given the mean motion n of the perturber.
+        """
+
+        a = self.solve_a(n, (1,0,0))
+        return (n + self.kappa(a) * p/m)
+
+    def ilr_pattern(self, n, m, p=1):
+        """Returns the pattern speed of the m:m-p inner Lindblad resonance,
+        given the mean motion n of the perturber.
+        """
+
+        return olr_pattern(self, n, m, -p)
 
 # Planetary gravity fields defined...
 
