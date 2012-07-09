@@ -77,7 +77,8 @@ class PdsTableInfo(object):
             self.label = pdsparser.PdsLabel.from_string(label_file_list)
 
         # Get the basic file info...
-        assert self.label["RECORD_TYPE"].value == "FIXED_LENGTH"
+        #print "self.label[RECORD_TYPE] = ", self.label["RECORD_TYPE"].value
+        #assert self.label["RECORD_TYPE"].value == "FIXED_LENGTH"
 
         # Find the pointer to the table file
         # Confirm that the value is a PdsSimplePointer
@@ -309,6 +310,177 @@ class PdsTable(object):
             big_dict[dict[key]] = dict
 
         return big_dict
+
+class PdsTableRow(object):
+    """Same as PdsTable except this holds only one row's worth of data - faster
+        for loading when only need one row.
+        
+        The PdsTable class holds the contents of a PDS-labeled table. It is
+        represented by a list of Numpy arrays, one for each column.
+        
+        Current limitations:
+        (1) ASCII tables only, no binary formats.
+        (2) Detached PDS labels only.
+        (3) Only one data file per label.
+        (4) No row or record offsets in the label's pointer to the table file.
+        (5) STRUCTURE fields in the label are not supported.
+        (6) Columns containing multiple items are not loaded. MUST BE FIXED.
+        (7) Time fields are represented as character strings at this stage.
+        """
+    
+    def __init__(self, label_file_path, row, time_format_list=[], label_file_list=None):
+        """Constructor for a PdsTable object given the path to the detached
+            label file.
+            
+            Input:
+            label_file_path     the path to the PDS label of the table file.
+            time_format_list    list of time columns to be stored as floats.
+            """
+        
+        # Parse the label
+        self.info = PdsTableInfo(label_file_path, label_file_list)
+        self.info.rows = 1
+        
+        self.column_list = []
+        self.column_dict = {}
+        k0 = []                 # start_byte in record for each column
+        k1 = []                 # end_byte in record for each column
+        
+        # Construct the empty buffers for the table data
+        for column_info in self.info.column_info_list:
+            data_type = column_info.data_type
+            
+            if "INT" in data_type:
+                dtype = "int"
+            elif "REAL" in data_type:
+                dtype = "float"
+            elif "TIME" in data_type or "DATE" in data_type:
+                if column_info.name in time_format_list:
+                    dtype = "float"
+                else:
+                    dtype = "S" + str(column_info.bytes)
+            elif "CHAR" in data_type:
+                dtype = "S" + str(column_info.bytes)
+            else:
+                raise IOError("unsupported data type: " + data_type)
+            
+            if dtype is None:
+                buffer = None
+            elif column_info.items != 1:
+                buffer = np.empty((self.info.rows,column_info.items),
+                                  dtype=dtype)
+            else:
+                buffer = np.empty((self.info.rows,), dtype=dtype)
+            
+            self.column_list.append(buffer)
+            self.column_dict[column_info.name] = buffer
+            
+            k0.append(column_info.start_byte - 1)
+            k1.append(column_info.start_byte + column_info.bytes - 1)
+        
+        # Load the table data into the buffers
+        file = open(self.info.table_file_path, "r")
+        
+        #times that will be converted to seconds
+        time_strings = []
+        
+        for i, record_string in enumerate(file):
+            if i == row:
+                for c in range(self.info.columns):
+                    if self.column_list[c] is None: continue
+                    
+                    substring = record_string[k0[c]:k1[c]]
+                    column_info = self.info.column_info_list[c]
+                    if column_info.items == 1:
+                        data_type = column_info.data_type
+                        if "TIME" in data_type or "DATE" in data_type:
+                            if column_info.name in time_format_list:
+                                time_strings.append(substring.strip())
+                            else:
+                                self.column_list[c][0] = substring.strip()
+                        elif "CHAR" not in data_type and "NULL" in substring:
+                            substring = "-999"
+                            self.column_list[c][0] = substring
+                        else:
+                            #self.column_list[c][0] = substring.strip()
+                            stripped_substring = substring.strip()
+                            try:
+                                self.column_list[c][0] = stripped_substring
+                            except IndexError:
+                                print "IndexError: key,row: ", key, row
+                                self.info.rows = 1
+                            except ValueError:
+                                self.column_list[c][0] = 0.
+                                print "corrupt data for row, c = ", row, c
+                                print "column name = ", self.info.column_info_list[c].name
+                    else:
+                        offset = 0
+                        for i in range(column_info.items):
+                            end = offset + column_info.item_bytes
+                            self.column_list[c][0][i] = substring[offset:end]
+                            offset += column_info.item_offset
+            elif i > row:
+                break
+        
+        file.close()
+        
+        # convert any times that need to be converted from strings
+        time_string_cols = []
+        k = 0
+        for i in range(len(time_format_list)):
+            string_col = [time_strings[j] for j in range(k, len(time_strings),
+                                                         len(time_format_list))]
+            time_string_cols.append(string_col)
+            k += 1
+        time_c = 0
+        for c in range(self.info.columns):
+            if self.column_list[c] is None: continue
+            
+            column_info = self.info.column_info_list[c]
+            if column_info.items == 1:
+                data_type = column_info.data_type
+                if "TIME" in data_type or "DATE" in data_type:
+                    if column_info.name in time_format_list:
+                        tai = julian.tai_from_iso(np.array(time_string_cols[time_c]))
+                        self.column_list[c] = tai
+                        self.column_dict[column_info.name] = tai
+                        time_c += 1
+    
+    def columns_between(self, min, max, category_index):
+        column_info = self.info.column_info_list[category_index]
+        ndx_arr = np.array()
+        if column_info.items == 1:
+            dtype = column_dict[column_info.name].dtype()
+            if dtype is float:
+                column = self.column_list[category_index]
+                for ndx in range(len(column)):
+                    x = collumn[ndx]
+                    if x >= min and x <= max:
+                        ndx_arr.append(ndx)
+        return ndx_arr
+
+    def dicts_by_row(self):
+        """Returns a list of dictionaries, one for each row in the table, and
+            with each dictionaory containing all of the column values in that
+            particular row."""
+        
+        # For each row...
+        dicts = []
+        for row in range(self.info.rows):
+            
+            # Create and append the dictionary
+            dict = {}
+            for key in self.column_dict.keys():
+                try:
+                    dict[key] = self.column_dict[key][row]
+                except IndexError:
+                    print "IndexError: key,row: ", key, row
+                    self.info.rows = row
+                    return dicts
+            
+            dicts.append(dict)
+        
+        return dicts
 
 ########################################
 # UNIT TESTS
