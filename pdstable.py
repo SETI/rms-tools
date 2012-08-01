@@ -19,6 +19,9 @@
 #                         instrument.cassini.iss.
 # Revised 1/17/12 (BSW) - Fixed ordering of values when PdsTable __init__ has
 #                         more than one column indicated in the time_format_list
+# 6/14/12 MRS - Added column selections in PdsTable() to reduce memory usage;
+#   added a callback option to PdsTable() for repairing the values in a table
+#   prior to other processing.
 ################################################################################
 
 import numpy as np
@@ -32,53 +35,79 @@ class PdsColumnInfo(object):
     """The PdsColumnInfo class holds the attributes of one column in a PDS
     label."""
 
-    def __init__(self, node, index):
+    def __init__(self, node, column_no):
         """Constructor for a PdsColumn.
 
         Input:
             node        the pdsparser.PdsNode object defining the column.
-            index       the index number of this column, starting at zero.
+            column_no   the index number of this column, starting at zero.
         """
 
-        self.name = node["NAME"].value
-        self.data_type = node["DATA_TYPE"].value
-        self.start_byte = node["START_BYTE"].value
-        self.bytes = node["BYTES"].value
-        self.index = index
+        dict = node.as_python_value()
+        self.name = dict["NAME"]
+        self.colno = column_no
+
+        data_type = dict["DATA_TYPE"]
+        start_byte = dict["START_BYTE"]
+        bytes = dict["BYTES"]
 
         # Handle the optional case of multiple items per column
         self.items = 1
-        self.item_bytes = self.bytes
-        self.item_offset = self.bytes
+        item_bytes = bytes
+        item_offset = bytes
 
         try:
-            self.items = node["ITEMS"].value
-            self.item_bytes = node["ITEM_BYTES"].value
+            self.items = dict["ITEMS"]
+            item_bytes = dict["ITEM_BYTES"]
 
-            # The default value of the offset is the item_bytes
-            # This makes sure it gets defined if ITEM_OFFSET is missing
-            self.item_offset = self.item_bytes
-            self.item_offset = node["ITEM_OFFSET"].value
+            item_offset = item_bytes        # Filled in in case next line fails
+            item_offset = dict["ITEM_OFFSET"]
+        except KeyError: pass
 
-        except KeyError:
-            pass
+        # Define dtype0 to isolate each column in a record
+        # The empty string is needed here even though it seems pointless
+        self.dtype0 = ("S" + str(bytes), start_byte - 1)
+
+        # Define dtype1 as a list of dtypes needed to isolate each item
+        if self.items == 1:
+            self.dtype1 = None
+        else:
+            self.dtype1 = {}
+            byte0 = -item_offset
+            for i in range(self.items):
+                byte0 += item_offset
+                self.dtype1["item_" + str(i)] = ("S" + str(item_bytes), byte0)
+
+        # Define dtype2 to interpret the field based on its PDS data type
+        if "INTEGER" in data_type:
+            self.dtype2 = "int"
+        elif "REAL" in data_type:
+            self.dtype2 = "float"
+        elif "TIME" in data_type or "DATE" in data_type or "CHAR" in data_type:
+            self.dtype2 = None
+        else:
+            raise IOError("unsupported data type: " + data_type)
 
 class PdsTableInfo(object):
     """The PdsTableInfo class holds the attributes of a PDS-labeled table."""
 
-    def __init__(self, label_file_path, label_file_list=None):
-        """Loads a PDS table based on its associated label file."""
+    def __init__(self, label_file_path, label_list=None):
+        """Loads a PDS table based on its associated label file.
+
+        Input:
+            label_file      either a string containing the full path to a PDS
+                            label file, or a list containing the all the records
+                            of a PDS label.
+        """
 
         # Parse the label
-        self.label_file_path = label_file_path
-        if label_file_list is None:
+        if label_list is None:
             self.label = pdsparser.PdsLabel.from_file(label_file_path)
         else:
-            self.label = pdsparser.PdsLabel.from_string(label_file_list)
+            self.label = pdsparser.PdsLabel.from_string(label_list)
 
         # Get the basic file info...
-        #print "self.label[RECORD_TYPE] = ", self.label["RECORD_TYPE"].value
-        #assert self.label["RECORD_TYPE"].value == "FIXED_LENGTH"
+        assert self.label["RECORD_TYPE"].value == "FIXED_LENGTH"
 
         # Find the pointer to the table file
         # Confirm that the value is a PdsSimplePointer
@@ -90,7 +119,7 @@ class PdsTableInfo(object):
                 self.table_file_name = node.pdsvalue.value
 
         if self.table_file_name is None:
-            raise IOerror("PDS pointer to data file was not found in label")
+            raise IOerror("Pointer to a data file was not found in PDS label")
 
         # Locate the root of the table object
         table_node = self.label[pointer_name]
@@ -105,6 +134,7 @@ class PdsTableInfo(object):
         # Save the key info about each column in a list and a dictionary
         self.column_info_list = []
         self.column_info_dict = {}
+        self.dtype0 = {}            # Also construct the dtype0 dictionary
 
         counter = 0
         for node in table_node:
@@ -114,6 +144,8 @@ class PdsTableInfo(object):
 
                 self.column_info_list.append(pdscol)
                 self.column_info_dict[pdscol.name] = pdscol
+
+                self.dtype0[pdscol.name] = pdscol.dtype0
 
         # Fill in the complete table file name
         self.table_file_path = os.path.join(os.path.dirname(label_file_path),
@@ -133,136 +165,122 @@ class PdsTable(object):
         (7) Time fields are represented as character strings at this stage.
     """
 
-    def __init__(self, label_file_path, time_format_list=[], label_file_list=None):
-        """Constructor for a PdsTable object given the path to the detached
-        label file.
+    def __init__(self, label_file, times=[], columns=[], nostrip=[],
+                       callbacks={}):
+        """Constructor for a PdsTable object.
 
         Input:
-            label_file_path     the path to the PDS label of the table file.
-            time_format_list    list of time columns to be stored as floats.
+            label_file      the path to the PDS label of the table file, or else
+                            the contents of the label as a list of strings.
+            columns         an optional list of the names of the columns to
+                            return. If the list is empty, then every column is
+                            returned.
+            times           an optional list of the names of time columns to be
+                            stored as floats in units of seconds TAI rather than
+                            as strings.
+            nostrip         an optional list of the names of string columns that
+                            are not to be stripped of surrounding whitespace.
+            callbacks       an optional dictionary that returns a callback
+                            function given the name of a column. If a callback
+                            is provided for any column, then the function is
+                            called on the string value of that column before it
+                            is parsed. This can be used to update known syntax
+                            errors in a particular table.
         """
 
         # Parse the label
-        self.info = PdsTableInfo(label_file_path, label_file_list)
+        self.info = PdsTableInfo(label_file)
 
-        self.column_list = []
-        self.column_dict = {}
-        k0 = []                 # start_byte in record for each column
-        k1 = []                 # end_byte in record for each column
+        # Select the columns
+        if len(columns) == 0:
+            keys = [info.name for info in self.info.column_info_list]
+        else:
+            keys = columns
 
-        # Construct the empty buffers for the table data
-        for column_info in self.info.column_info_list:
-            data_type = column_info.data_type
-
-            if "INT" in data_type:
-                dtype = "int"
-            elif "REAL" in data_type:
-                dtype = "float"
-            elif "TIME" in data_type or "DATE" in data_type:
-                if column_info.name in time_format_list:
-                    dtype = "float"
-                else:
-                    dtype = "S" + str(column_info.bytes)
-            elif "CHAR" in data_type:
-                dtype = "S" + str(column_info.bytes)
-            else:
-                raise IOError("unsupported data type: " + data_type)
-
-            if dtype is None:
-                buffer = None
-            elif column_info.items != 1:
-                buffer = np.empty((self.info.rows,column_info.items),
-                                  dtype=dtype)
-            else:
-                buffer = np.empty((self.info.rows,), dtype=dtype)
-
-            self.column_list.append(buffer)
-            self.column_dict[column_info.name] = buffer
-
-            k0.append(column_info.start_byte - 1)
-            k1.append(column_info.start_byte + column_info.bytes - 1)
-
-        # Load the table data into the buffers
+        # Load the table data
         file = open(self.info.table_file_path, "r")
-
-        #times that will be converted to seconds
-        time_strings = []
-
-        row = 0
-        for record_string in file:
-            for c in range(self.info.columns):
-                if self.column_list[c] is None: continue
-
-                substring = record_string[k0[c]:k1[c]]
-                column_info = self.info.column_info_list[c]
-                if column_info.items == 1:
-                    data_type = column_info.data_type
-                    if "TIME" in data_type or "DATE" in data_type:
-                        if column_info.name in time_format_list:
-                            time_strings.append(substring.strip())
-                        else:
-                            self.column_list[c][row] = substring.strip()
-                    elif "CHAR" not in data_type and "NULL" in substring:
-                        substring = "-999"
-                        self.column_list[c][row] = substring
-                    else:
-                        #self.column_list[c][row] = substring.strip()
-                        stripped_substring = substring.strip()
-                        try:
-                            self.column_list[c][row] = stripped_substring
-                        except IndexError:
-                            print "IndexError: key,row: ", key, row
-                            self.info.rows = row
-                        except ValueError:
-                            self.column_list[c][row] = 0.
-                            print "corrupt data for row, c = ", row, c
-                            print "column name = ", self.info.column_info_list[c].name
-                else:
-                    offset = 0
-                    for i in range(column_info.items):
-                        end = offset + column_info.item_bytes
-                        self.column_list[c][row][i] = substring[offset:end]
-                        offset += column_info.item_offset
-            row += 1
-
+        lines = file.readlines()
         file.close()
 
-        # convert any times that need to be converted from strings
-        time_string_cols = []
-        k = 0
-        for i in range(len(time_format_list)):
-            string_col = [time_strings[j] for j in range(k, len(time_strings),
-                                                         len(time_format_list))]
-            time_string_cols.append(string_col)
-            k += 1
-        time_c = 0
-        for c in range(self.info.columns):
-            if self.column_list[c] is None: continue
+        table = np.array(lines, dtype=self.info.dtype0)
 
-            column_info = self.info.column_info_list[c]
-            if column_info.items == 1:
-                data_type = column_info.data_type
-                if "TIME" in data_type or "DATE" in data_type:
-                    if column_info.name in time_format_list:
-                        tai = julian.tai_from_iso(np.array(time_string_cols[time_c]))
-                        self.column_list[c] = tai
-                        self.column_dict[column_info.name] = tai
-                        time_c += 1
+        # Extract the substring arrays and save in a dictionary and list...
+        self.column_list = []
+        self.column_dict = {}
 
-    def columns_between(self, min, max, category_index):
-        column_info = self.info.column_info_list[category_index]
-        ndx_arr = np.array()
-        if column_info.items == 1:
-            dtype = column_dict[column_info.name].dtype()
-            if dtype is float:
-                column = self.column_list[category_index]
-                for ndx in range(len(column)):
-                    x = collumn[ndx]
-                    if x >= min and x <= max:
-                        ndx_arr.append(ndx)
-        return ndx_arr
-                
-                
+        for key in keys:
+            column_info = self.info.column_info_dict[key]
+            column = table[key]
+
+            # For multiple items...
+            if column_info.items > 1:
+
+                # Replace the column substring with a list of sub-substrings
+                column.dtype = np.dtype(column_info.dtype1)
+
+                items = []
+                for i in range(column_info.items):
+                    item = column["item_" + str(i)]
+                    items.append(item)
+
+                # Apply the callback function if necessary for each tem
+                if key in callbacks.keys():
+                    old_items = items
+                    items = []
+                    callback = callbacks[key]
+                    for item in old_items:
+                      rows = []
+                      for row in item:
+                        rows.append(callback(str(row)))
+                      rows = np.array(rows)
+                      items.append(np.array(rows))
+
+                # Strip strings...
+                if column_info.dtype2 is None and key not in nostrip:
+                    old_items = items
+                    items = []
+                    for item in old_items:
+                      rows = []
+                      for row in item:
+                        rows.append(str(row).strip())
+                      rows = np.array(rows)
+                    items.append(np.array(rows))
+
+                # ...or convert other data types
+                else:
+                    old_items = items
+                    items = []
+                    for item in old_items:
+                        items.append(item.astype(column_info.dtype2))
+
+                column = np.array(items).swapaxes(0,1)
+
+            # Apply the callback function if necessary
+            else:
+                if key in callbacks.keys():
+                    callback = callbacks[key]
+                    rows = []
+                    for row in column:
+                        rows.append(callback(str(row)))
+                    column = np.array(rows)
+
+                # Strip strings...
+                if column_info.dtype2 is None and key not in nostrip:
+                    rows = []
+                    for row in column:
+                        rows.append(str(row).strip())
+                    column = np.array(rows)
+
+                # ...or convert other data types
+                else:
+                    column = column.astype(column_info.dtype2)
+
+                # Convert time columns if necessary
+                if key in times:
+                    column = julian.tai_from_iso(column)
+
+            self.column_list.append(column)
+            self.column_dict[key] = column
 
 # To test...
 #   test = pdstable.PdsTable("./test_data/cassini/ISS/index.lbl")
@@ -288,198 +306,10 @@ class PdsTable(object):
             # Create and append the dictionary
             dict = {}
             for key in self.column_dict.keys():
-                try:
-                    dict[key] = self.column_dict[key][row]
-                except IndexError:
-                    print "IndexError: key,row: ", key, row
-                    self.info.rows = row
-                    return dicts
+                dict[key] = self.column_dict[key][row]
 
             dicts.append(dict)
 
-        return dicts
-
-    @staticmethod
-    def dicts_by_key(dicts, key):
-        """Transforms the results of dicts_by_row into a dictonary of
-        dictionaries, where each row of the dictionary is keyed by the value
-        in the specified column."""
-
-        big_dict = {}
-        for dict in dicts:
-            big_dict[dict[key]] = dict
-
-        return big_dict
-
-class PdsTableRow(object):
-    """Same as PdsTable except this holds only one row's worth of data - faster
-        for loading when only need one row.
-        
-        The PdsTable class holds the contents of a PDS-labeled table. It is
-        represented by a list of Numpy arrays, one for each column.
-        
-        Current limitations:
-        (1) ASCII tables only, no binary formats.
-        (2) Detached PDS labels only.
-        (3) Only one data file per label.
-        (4) No row or record offsets in the label's pointer to the table file.
-        (5) STRUCTURE fields in the label are not supported.
-        (6) Columns containing multiple items are not loaded. MUST BE FIXED.
-        (7) Time fields are represented as character strings at this stage.
-        """
-    
-    def __init__(self, label_file_path, row, time_format_list=[], label_file_list=None):
-        """Constructor for a PdsTable object given the path to the detached
-            label file.
-            
-            Input:
-            label_file_path     the path to the PDS label of the table file.
-            time_format_list    list of time columns to be stored as floats.
-            """
-        
-        # Parse the label
-        self.info = PdsTableInfo(label_file_path, label_file_list)
-        self.info.rows = 1
-        
-        self.column_list = []
-        self.column_dict = {}
-        k0 = []                 # start_byte in record for each column
-        k1 = []                 # end_byte in record for each column
-        
-        # Construct the empty buffers for the table data
-        for column_info in self.info.column_info_list:
-            data_type = column_info.data_type
-            
-            if "INT" in data_type:
-                dtype = "int"
-            elif "REAL" in data_type:
-                dtype = "float"
-            elif "TIME" in data_type or "DATE" in data_type:
-                if column_info.name in time_format_list:
-                    dtype = "float"
-                else:
-                    dtype = "S" + str(column_info.bytes)
-            elif "CHAR" in data_type:
-                dtype = "S" + str(column_info.bytes)
-            else:
-                raise IOError("unsupported data type: " + data_type)
-            
-            if dtype is None:
-                buffer = None
-            elif column_info.items != 1:
-                buffer = np.empty((self.info.rows,column_info.items),
-                                  dtype=dtype)
-            else:
-                buffer = np.empty((self.info.rows,), dtype=dtype)
-            
-            self.column_list.append(buffer)
-            self.column_dict[column_info.name] = buffer
-            
-            k0.append(column_info.start_byte - 1)
-            k1.append(column_info.start_byte + column_info.bytes - 1)
-        
-        # Load the table data into the buffers
-        file = open(self.info.table_file_path, "r")
-        
-        #times that will be converted to seconds
-        time_strings = []
-        
-        for i, record_string in enumerate(file):
-            if i == row:
-                for c in range(self.info.columns):
-                    if self.column_list[c] is None: continue
-                    
-                    substring = record_string[k0[c]:k1[c]]
-                    column_info = self.info.column_info_list[c]
-                    if column_info.items == 1:
-                        data_type = column_info.data_type
-                        if "TIME" in data_type or "DATE" in data_type:
-                            if column_info.name in time_format_list:
-                                time_strings.append(substring.strip())
-                            else:
-                                self.column_list[c][0] = substring.strip()
-                        elif "CHAR" not in data_type and "NULL" in substring:
-                            substring = "-999"
-                            self.column_list[c][0] = substring
-                        else:
-                            #self.column_list[c][0] = substring.strip()
-                            stripped_substring = substring.strip()
-                            try:
-                                self.column_list[c][0] = stripped_substring
-                            except IndexError:
-                                print "IndexError: key,row: ", key, row
-                                self.info.rows = 1
-                            except ValueError:
-                                self.column_list[c][0] = 0.
-                                print "corrupt data for row, c = ", row, c
-                                print "column name = ", self.info.column_info_list[c].name
-                    else:
-                        offset = 0
-                        for i in range(column_info.items):
-                            end = offset + column_info.item_bytes
-                            self.column_list[c][0][i] = substring[offset:end]
-                            offset += column_info.item_offset
-            elif i > row:
-                break
-        
-        file.close()
-        
-        # convert any times that need to be converted from strings
-        time_string_cols = []
-        k = 0
-        for i in range(len(time_format_list)):
-            string_col = [time_strings[j] for j in range(k, len(time_strings),
-                                                         len(time_format_list))]
-            time_string_cols.append(string_col)
-            k += 1
-        time_c = 0
-        for c in range(self.info.columns):
-            if self.column_list[c] is None: continue
-            
-            column_info = self.info.column_info_list[c]
-            if column_info.items == 1:
-                data_type = column_info.data_type
-                if "TIME" in data_type or "DATE" in data_type:
-                    if column_info.name in time_format_list:
-                        tai = julian.tai_from_iso(np.array(time_string_cols[time_c]))
-                        self.column_list[c] = tai
-                        self.column_dict[column_info.name] = tai
-                        time_c += 1
-    
-    def columns_between(self, min, max, category_index):
-        column_info = self.info.column_info_list[category_index]
-        ndx_arr = np.array()
-        if column_info.items == 1:
-            dtype = column_dict[column_info.name].dtype()
-            if dtype is float:
-                column = self.column_list[category_index]
-                for ndx in range(len(column)):
-                    x = collumn[ndx]
-                    if x >= min and x <= max:
-                        ndx_arr.append(ndx)
-        return ndx_arr
-
-    def dicts_by_row(self):
-        """Returns a list of dictionaries, one for each row in the table, and
-            with each dictionaory containing all of the column values in that
-            particular row."""
-        
-        # For each row...
-        dicts = []
-        for row in range(self.info.rows):
-            
-            # Create and append the dictionary
-            dict = {}
-            for key in self.column_dict.keys():
-                try:
-                    dict[key] = self.column_dict[key][row]
-                except IndexError:
-                    print "IndexError: key,row: ", key, row
-                    self.info.rows = row
-                    return dicts
-            
-            dicts.append(dict)
-        
         return dicts
 
 ########################################
@@ -537,12 +367,6 @@ class Test_PdsTable(unittest.TestCase):
         rowdict = test_table_secs.dicts_by_row()
         for i in range(4):
             self.assertEqual(rowdict[i]["START_TIME"], start_time_test_set[i])
-
-        # Test dicts_by_key()
-        keydict = PdsTable.dicts_by_key(rowdict, "FILE_NAME")
-        for i in range(4):
-            key = file_name_test_set[i]
-            self.assertEqual(keydict[key]["START_TIME"], start_time_test_set[i])
 
 if __name__ == '__main__':
     unittest.main()
