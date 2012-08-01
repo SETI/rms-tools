@@ -5,6 +5,9 @@
 # Classes and methods to read, write and parse PDS labels.
 #
 # Mark R. Showalter, SETI Institute, January 2011
+#
+# 6/16/12 MRS - Added new methods as_dict() and as_python_value() to convert
+#   label contents to standard Python types; fixed a minor bug in PdsReal.
 ################################################################################
 # Printing of 2-D sequences has not yet been tested.
 # Tracking of comments has been stripped away.
@@ -65,8 +68,8 @@ class PdsNode(object):
     def __init__(self, parent=None):
         self.parent = parent        # The parent of this node.
         self.children = []          # If it's an object, the child nodes.
-        self.dict = {}              # A dictionary of the keyword, object and
-                                    # group names.
+        self.dict = {}              # A dictionary keyed by the keyword, object
+                                    # and group names.
 
         self.name = ""              # Name of keywords; values for OBJECTs or
                                     # GROUPs.
@@ -201,6 +204,26 @@ class PdsNode(object):
         PARSE_NODES[0].name = "ROOT"
         PARSE_NODES[0].type = "ROOT"
 
+    def as_python_value(self):
+        """Returns the value of this node as a standard python class of int,
+        float, string, list, or dict. A dict is used to hold the contents of an
+        OBJECT or GROUP."""
+
+        if self.children == []: return self.pdsvalue.as_python_value()
+
+        dict = {}
+        for child in self.children:
+            key = child.name
+            if key in ("END_OBJECT", "END_GROUP", "END"): continue
+
+            # Key columns by the name rather than the non-unique "COLUMN"
+            if child.name == "COLUMN" and "NAME" in child.dict.keys():
+                key = child.dict["NAME"].pdsvalue.value
+
+            dict[key] = child.as_python_value()
+
+        return dict
+
 ################################################################################
 # PdsItem
 ################################################################################
@@ -266,6 +289,14 @@ class PdsValue(PdsItem):
     def __int__(self): return int(self.value)
     def __float__(self): return float(self.value)
 
+    def as_python_value(self):
+        """Returns the value of this item as a standard python class of int,
+        float, string, or list."""
+
+        # Default behavior is to return the value field. This is overridden by
+        # PdsVector().
+        return self.value
+
 class PdsScalar(PdsValue):
     """The generic class for any single value that can appear on the right side
     of an equal sign in a PDS label."""
@@ -294,8 +325,7 @@ class PdsInteger(PdsNumber):
     # Interpret parser tokens
     @staticmethod
     def parse(s, l, tokens):
-        struct = PdsInteger.from_int(int(tokens[0]))
-        return struct
+        return PdsInteger.from_int(int(tokens[0]))
 
     # Create an object
     @staticmethod
@@ -461,21 +491,24 @@ class PdsReal(PdsNumber):
 
         struct.value = float(tokens[0])
         struct.decimal = dec.Decimal(tokens[0])
+        struct.string = tokens[0]
         return struct
 
     @staticmethod
     def from_value(value=0., format=""):
         """Returns a PdsReal given a double or decimal."""
 
-        struct = PdsDouble()
-        struct.value = double(value)
+        struct = PdsReal()
+        struct.value = float(value)
 
-        if type(value) == type(dec.Decimal("0.")):
+        if type(value) == dec.Decimal:
             struct.decimal = value
             struct.string  = repr(value)
         else:
-            struct.string = format%value
+            struct.string = format % value
             struct.decimal = dec.Decimal(struct.string)
+
+        return struct
 
 #-----------------------------------------------------------------------
 REAL_NUMBER.setParseAction(PdsReal.parse)
@@ -933,6 +966,17 @@ class PdsVector(PdsValue):
 
     def __len__(self): return len(self.value)
 
+    def as_python_value(self):
+        """Overrides the default PdsNode method to ensure that the elements of
+        the vector also get translated to standard Python types.
+        """
+
+        list = []
+        for item in self.value:
+            list.append(item.as_python_value())
+
+        return list
+
 ################################################################################
 # PdsSet
 ################################################################################
@@ -1271,6 +1315,16 @@ class PdsLabel():
     def __getitem__(self, key): return self.root[key]
 
     def __len__(self): return len(self.root)
+
+    def as_dict(self):
+        """Returns the contents of the label as a standard Python dictionary
+        containing standard Python types of int, float, string, list, etc. It
+        uses a Python dictionary recursively to represent the contents of an
+        object. Note that COLUMN objects are indexed by the NAME field that they
+        contain, whereas other objects are indexed by the value on the right
+        side of the equal sign in the label."""
+
+        return self.root.as_python_value()
 
     @staticmethod
     def from_file(filename):
