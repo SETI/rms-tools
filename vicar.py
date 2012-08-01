@@ -20,6 +20,10 @@
 #
 # Mark R. Showalter, SETI Institute, June 2009
 # December 2011: Functions renamed to conform to our preferred style.
+#
+# 6/9/12 MRS - prevented an error that arises when EOL == 1 but no extension
+#   header is present.
+# 6/14/12 MRS - added as_dict() method.
 ################################################################################
 
 import numpy as np
@@ -193,6 +197,7 @@ class VicarImage():
         # Read the beginning of the VICAR file to get the label size
         file.seek(0)
         header = file.read(40)
+
         if header[0:8] != "LBLSIZE=":
             raise VicarError("Missing LBLSIZE keyword, file: " + filename)
 
@@ -233,8 +238,13 @@ class VicarImage():
             offset = (vicar_LBLSIZE + vicar_RECSIZE * vicar_NLB
                                     + vicar_RECSIZE * vicar_N2 * vicar_N3)
             file.seek(offset)
-
             temp = file.read(40)
+
+            # Sometime EOL = 1 but the file has no extension
+            if len(temp) == 0:
+                vicar_EOL = 0
+
+        if vicar_EOL == 1:
             if temp[0:8] != "LBLSIZE=":
                 raise VicarError("Missing LBLSIZE keyword in extension, file: "
                                  + filename)
@@ -364,7 +374,7 @@ class VicarImage():
         file.write(self.get_header())
         
         # Write the array
-        self.data.to_file(file, sep="")
+        self.data.tofile(file, sep="")
 
         # Close file
         file.close()
@@ -373,7 +383,7 @@ class VicarImage():
 
     def ToFile(self, filename):
         """Deprecated, alternative name for to_file()"""
-        return to_file(self, filename)
+        return self.to_file(filename)
 
     ############################################################################
     # Public Methods for manipulating VICAR (keyword,value) pairs
@@ -936,6 +946,23 @@ class VicarImage():
 
         # Finally, return the joined strings
         return "".join(result)
+
+    def as_dict(self):
+        """Returns a dictionary object containing the contents of the VICAR
+        header. Note that information about the order of the fields is lost,
+        and duplicated keywords just take on their last value.
+        """
+
+        dict = {}
+        for item in self.table:
+            if type(item[1]) == dec.Decimal:
+                value = float(item[1])
+            else:
+                value = item[1]
+
+            dict[item[0]] = value
+
+        return dict
 
     def FindKeyword(self, keyword=".*", occurrence=0, start=0):
         """Deprecated, alternative name for find_keyword()"""
