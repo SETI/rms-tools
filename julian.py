@@ -1394,7 +1394,7 @@ def day_from_iso(strings, validate=True):
     fast. It also works for lists or arrays of arbitrary shape, provided every
     item uses the same format. Note that syntax is no longer checked in detail.
 
-    If validate=True, the syntax and year/month/day values are checked more
+    If validate=True, then the syntax and year/month/day values are checked more
     carefully.
     """
 
@@ -1478,7 +1478,7 @@ def sec_from_iso(strings, validate=True):
     item uses the same format. By default, the syntax is no longer checked in
     detail.
 
-    If validate=True, then the  syntax and hour/minute/second values are checked
+    If validate=True, then the syntax and hour/minute/second values are checked
     more carefully.
     """
 
