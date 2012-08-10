@@ -273,7 +273,10 @@ class PdsTable(object):
 
                 # ...or convert other data types
                 else:
-                    column = column.astype(column_info.dtype2)
+                    try:
+                        column = column.astype(column_info.dtype2)
+                    except ValueError:
+                        column.fill(1.)
 
                 # Convert time columns if necessary
                 if key in times:
