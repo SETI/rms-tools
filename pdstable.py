@@ -22,6 +22,8 @@
 # 6/14/12 MRS - Added column selections in PdsTable() to reduce memory usage;
 #   added a callback option to PdsTable() for repairing the values in a table
 #   prior to other processing.
+# 8/20/12 MRS - A warning now is raised when a column of a table contains one or
+#   more badly-formatted entries. The column values are left in string format.
 ################################################################################
 
 import numpy as np
@@ -30,6 +32,7 @@ import pdsparser
 import julian
 import datetime as dt
 import unittest
+import warnings
 
 class PdsColumnInfo(object):
     """The PdsColumnInfo class holds the attributes of one column in a PDS
@@ -265,18 +268,21 @@ class PdsTable(object):
                     column = np.array(rows)
 
                 # Strip strings...
-                if column_info.dtype2 is None and key not in nostrip:
-                    rows = []
-                    for row in column:
-                        rows.append(str(row).strip())
-                    column = np.array(rows)
+                if column_info.dtype2 is None:
+                    if key not in nostrip:
+                        rows = []
+                        for row in column:
+                            rows.append(str(row).strip())
+                        column = np.array(rows)
 
                 # ...or convert other data types
                 else:
                     try:
                         column = column.astype(column_info.dtype2)
                     except ValueError:
-                        column.fill(1.)
+                        warnings.warn("Illegal " + column_info.dtype2 +
+                                      " format in column " + column_info.name +
+                                      "; values were not converted to numeric")
 
                 # Convert time columns if necessary
                 if key in times:
