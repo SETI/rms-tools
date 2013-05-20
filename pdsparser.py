@@ -8,6 +8,9 @@
 #
 # 6/16/12 MRS - Added new methods as_dict() and as_python_value() to convert
 #   label contents to standard Python types; fixed a minor bug in PdsReal.
+#
+# 4/2/13 MRS - Revised the handling of PDS pointer objects by as_dict(), such
+#   that they return a tuple containing all the information required.
 ################################################################################
 # Printing of 2-D sequences has not yet been tested.
 # Tracking of comments has been stripped away.
@@ -294,7 +297,7 @@ class PdsValue(PdsItem):
         float, string, or list."""
 
         # Default behavior is to return the value field. This is overridden by
-        # PdsVector().
+        # PdsVector and PdsPointer.
         return self.value
 
 class PdsScalar(PdsValue):
@@ -1116,55 +1119,12 @@ class PdsSimplePointer(PdsPointer):
 #-----------------------------------------------------------------------
 SIMPLE_POINTER.setParseAction(PdsSimplePointer.parse)
 ################################################################################
-# PdsOffsetPointer
+# PdsLocalPointer
 ################################################################################
 BYTE_UNIT       = Literal("<BYTES>") | Literal("<bytes>")
 ROW_OFFSET      = Combine(UNSIGNED_INT)
 BYTE_OFFSET     = ROW_OFFSET + ZeroOrMore(EOL) + BYTE_UNIT
 
-BYTE_UNIT.setParseAction(PdsUnitExpr.parse)
-ROW_OFFSET.setParseAction(PdsInteger.parse)
-BYTE_OFFSET.setParseAction(PdsNumberWithUnits.parse)
-#-----------------------------------------------------------------------
-OFFSET_POINTER  = (LPAREN                       + ZeroOrMore(EOL)
-                +  SIMPLE_POINTER               + ZeroOrMore(EOL)
-                +  Suppress(",")                + ZeroOrMore(EOL)
-                +  (BYTE_OFFSET | ROW_OFFSET)   + ZeroOrMore(EOL)
-                +  RPAREN)
-OFFSET_POINTER.setName("OFFSET_POINTER")
-#-----------------------------------------------------------------------
-
-class PdsOffsetPointer(PdsPointer):
-
-    def __init__(self):
-        PdsValue.__init__(self, "", OFFSET_POINTER)
-        self.offset = 0                 # numeric offset in rows or bytes
-        self.unit = "ROWS"              # Unit of offset
-        self.pdspointer = None          # Associated PdsSimplePointer
-        self.pdsnumber = None           # Associated offset, perhaps with units
-
-    def __str__(self):
-        return "(" + str(self.pdspointer) + ", " + str(self.pdsnumber) + ")"
-
-    @staticmethod
-    def parse(s, l, tokens):
-
-        struct = PdsOffsetPointer()
-        struct.pdspointer = tokens[0]
-        struct.pdsnumber = tokens[1]
-
-        struct.value = tokens[0].value
-        struct.offset = tokens[1].value
-
-        if isinstance(tokens[1], PdsNumberWithUnits): struct.unit = "BYTES"
-
-        return struct
-
-#-----------------------------------------------------------------------
-OFFSET_POINTER.setParseAction(PdsOffsetPointer.parse)
-################################################################################
-# PdsLocalPointer
-################################################################################
 LOCAL_POINTER   = BYTE_OFFSET | ROW_OFFSET
 LOCAL_POINTER.setName("LOCAL_POINTER")
 #-----------------------------------------------------------------------
@@ -1173,24 +1133,76 @@ class PdsLocalPointer(PdsPointer):
 
     def __init__(self):
         PdsValue.__init__(self, "", LOCAL_POINTER)
-        self.offset = 0                 # numeric offset in rows or bytes
-        self.unit = "ROWS"              # Unit of offset
-        self.pdsnumber = None           # Associated offset, perhaps with units
+        self.filename = ""              # file name
+        self.value = 0                  # numeric offset in rows or bytes
+        self.unit = "RECORDS"           # Unit of offset
 
     def __str__(self):
-        return str(self.pdsnumber)
+        if self.unit == "RECORDS":
+            return str(self.value)
+        else:
+            return str(self.value) + " <BYTES>"
 
     @staticmethod
     def parse(s, l, tokens):
         struct = PdsLocalPointer()
-        struct.pdsnumber = tokens[0]
-        struct.value = tokens[0].value
-        if isinstance(tokens[0], PdsNumberWithUnits): self.unit = "BYTES"
+        struct.value = int(tokens[0])
+        if len(tokens) > 1: struct.unit = "BYTES"
 
         return struct
 
+    def as_python_value(self):
+        """Overrides the default PdsNode method to return the offset and units
+        as a tuple.
+        """
+
+        return (self.value, self.unit)
+
 #-----------------------------------------------------------------------
-#LOCAL_POINTER.setParseAction(PdsLocalPointer.parse)
+LOCAL_POINTER.setParseAction(PdsLocalPointer.parse)
+################################################################################
+# PdsOffsetPointer
+################################################################################
+OFFSET_POINTER  = (LPAREN                       + ZeroOrMore(EOL)
+                +  SIMPLE_POINTER               + ZeroOrMore(EOL)
+                +  Suppress(",")                + ZeroOrMore(EOL)
+                +  LOCAL_POINTER                + ZeroOrMore(EOL)
+                +  RPAREN)
+OFFSET_POINTER.setName("OFFSET_POINTER")
+#-----------------------------------------------------------------------
+
+class PdsOffsetPointer(PdsPointer):
+
+    def __init__(self):
+        PdsValue.__init__(self, "", OFFSET_POINTER)
+        self.value = ""                 # file name
+        self.offset = 0                 # numeric offset in rows or bytes
+        self.unit = "RECORDS"           # Unit of offset
+
+    def __str__(self):
+        if self.unit == "RECORDS":
+            return "(" + self.value + ", " + str(self.offset) + ")"
+        else:
+            return "(" + self.value + ", " + str(self.offset) + " <BYTES>)"
+
+    @staticmethod
+    def parse(s, l, tokens):
+        struct = PdsOffsetPointer()
+        struct.value  = tokens[0]
+        struct.offset = tokens[1].value
+        struct.unit   = tokens[1].unit
+
+        return struct
+
+    def as_python_value(self):
+        """Overrides the default PdsNode method to return the file name,
+        offset and units as a tuple.
+        """
+
+        return (self.value, self.offset, self.unit)
+
+#-----------------------------------------------------------------------
+OFFSET_POINTER.setParseAction(PdsOffsetPointer.parse)
 #-----------------------------------------------------------------------
 POINTER_VALUE   = SIMPLE_POINTER | OFFSET_POINTER | LOCAL_POINTER
 POINTER_VALUE.setName("POINTER_VALUE")
