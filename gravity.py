@@ -371,12 +371,14 @@ MARS    = Gravity(0.641693e24 * G_PER_KG, [], 3396.19)
 
 # From http://ssd.jpl.nasa.gov/?gravity_fields_op
 JUPITER = Gravity(126686535., [14696.43e-06, -587.14e-06, 34.25e-06], 71492.)
-SATURN  = Gravity( 37931208., [16290.71e-06, -935.83e-06, 86.14e-06], 60330.)
+#SATURN  = Gravity( 37931208.,  [16290.71e-06, -935.83e-06, 86.14e-06], 60330.)
+SATURN  = Gravity( 37931207.7, [16290.71e-06, -936.83e-06, 86.14e-06, -10.e-06], 60330.)
 URANUS  = Gravity(  5793964., [ 3341.29e-06,  -30.44e-06           ], 26200.)
 NEPTUNE = Gravity(  6835100., [ 3408.43e-06,  -33.40e-06           ], 25225.)
 
 # From http://arxiv.org/abs/0712.1261
 PLUTO_ONLY = Gravity(870.3, [], 1151.)
+PLUTO = PLUTO_ONLY
 
 # From http://ssd.jpl.nasa.gov/?sat_phys_par
 MOON      = Gravity(4902.801, [], 1737.5)
