@@ -24,6 +24,8 @@
 # 6/9/12 MRS - prevented an error that arises when EOL == 1 but no extension
 #   header is present.
 # 6/14/12 MRS - added as_dict() method.
+# 1/1/13 MRS - repaired bug where the extension header would not be parsed if
+#   the initial header ended in ASCII null characters.
 ################################################################################
 
 import numpy as np
@@ -206,7 +208,7 @@ class VicarImage():
 
         # Read the leading VICAR header
         file.seek(0)
-        header = file.read(vicar_LBLSIZE)
+        header = file.read(vicar_LBLSIZE).rstrip("\0")
 
         # Interpret the header
         this._load_table(header)
