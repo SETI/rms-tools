@@ -29,7 +29,7 @@ class Gravity():
     def __init__(self, gm, jlist=[], radius=1.):
         """The constructor for a Gravity object.
 
-            Input:
+        Input:
             gm          The body's GM in units of km^3/s^2
             jlist       optional list of even gravity harmonics: [jJ2, J4, ...].
             radius      body radius for associated J-values.
@@ -71,7 +71,7 @@ class Gravity():
     @staticmethod
     def _jseries(coefficients, ratio2):
         """Internal method to evaluate a series of the form:
-            coefficients[0] * ratio2 + coefficients[1] * ratio2^2 ..."""
+        coefficients[0] * ratio2 + coefficients[1] * ratio2^2 ..."""
 
         return ratio2 * np.polyval(coefficients[::-1], ratio2)
 
@@ -85,7 +85,7 @@ class Gravity():
 
     def kappa(self, a):
         """Returns the radial oscillation frequency (radians/s) at semimajor
-            axis a."""
+        axis a."""
 
         a2 = a * a
         kappa2 = self.gm/(a*a2) * (1. +
@@ -94,7 +94,7 @@ class Gravity():
 
     def nu(self, a):
         """Returns the vertical oscillation frequency (radians/s) at semimajor
-            axis a."""
+        axis a."""
 
         a2 = a * a
         nu2 = self.gm/(a*a2) * (1. +
@@ -103,7 +103,7 @@ class Gravity():
 
     def domega_da(self, a):
         """Returns the radial derivative of the mean motion (radians/s/km) at
-            semimajor axis a."""
+        semimajor axis a."""
 
         a2 = a * a
         domega2 = self.gm/(a2*a2) * (-3. +
@@ -112,7 +112,7 @@ class Gravity():
 
     def dkappa_da(self, a):
         """Returns the radial derivative of the radial oscillation frequency
-            (radians/s/km) at semimajor axis a."""
+        (radians/s/km) at semimajor axis a."""
 
         a2 = a * a
         dkappa2 = self.gm/(a2*a2) * (-3. +
@@ -121,7 +121,7 @@ class Gravity():
 
     def dnu_da(self, a):
         """Returns the radial derivative of the vertical oscillation frequency
-            (radians/s/km) at semimajor axis a."""
+        (radians/s/km) at semimajor axis a."""
 
         a2 = a * a
         dnu2 = self.gm/(a2*a2) * (-3. +
@@ -130,8 +130,8 @@ class Gravity():
 
     def combo(self, a, factors):
         """Returns a frequency combination, based on given coefficients for
-            omega, kappa and nu. Full numeric precision is preserved in the limit
-            of first- or second-order cancellation of the coefficients."""
+        omega, kappa and nu. Full numeric precision is preserved in the limit
+        of first- or second-order cancellation of the coefficients."""
 
         a2 = a * a
         ratio2 = self.r2 / a2
@@ -228,9 +228,9 @@ class Gravity():
 
     def dcombo_da(self, a, factors):
         """Returns the radial derivative of a frequency combination, based on
-            given coefficients for omega, kappa and nu. Unlike method combo(), this
-            one does not guarantee full precision if the coefficients cancel to
-            first or second order."""
+        given coefficients for omega, kappa and nu. Unlike method combo(), this
+        one does not guarantee full precision if the coefficients cancel to
+        first or second order."""
 
         sum_values = 0.
 
@@ -240,10 +240,10 @@ class Gravity():
 
         return sum_values
 
-    def solve_a(self, freq, factors, iters=5):
+    def solve_a(self, freq, factors=(1,0,0), iters=5):
         """Solves for the semimajor axis at which the frequency is equal to the
-            given combination of factors on omega, kappa and nu. Solution is via
-            Newton's method."""
+        given combination of factors on omega, kappa and nu. Solution is via
+        Newton's method."""
 
         # Find an initial guess
         sum_factors = np.sum(factors)
@@ -419,6 +419,17 @@ SATURN_TITAN = Gravity(SATURN.gm + TITAN.gm, SATURN.jn, SATURN.rp)
 
 PLUTO_CHARON = Gravity(PLUTO_ONLY.gm + CHARON.gm, [], PLUTO_ONLY.rp)
 
+PLUTO_A  = 2035.                    # km
+CHARON_A = 19573. - 2035.           # km
+ratio2 = (PLUTO_A / CHARON_A)**2
+gm1 = PLUTO_ONLY.gm
+gm2 = CHARON.gm
+PLUTO_CHARON_AS_RINGS = Gravity(gm1 + gm2,
+        [ 1/2.    * (gm1 * ratio2    + gm2) / (gm1 + gm2),
+         -3/8.    * (gm1 * ratio2**2 + gm2) / (gm1 + gm2),
+          5/16.   * (gm1 * ratio2**3 + gm2) / (gm1 + gm2),
+         -35/128. * (gm1 * ratio2**4 + gm2) / (gm1 + gm2),
+          63/256. * (gm1 * ratio2**5 + gm2) / (gm1 + gm2)], CHARON_A)
 LOOKUP = {
     "SUN": SUN,
     "MERCURY": MERCURY,
