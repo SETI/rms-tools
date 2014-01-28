@@ -4,21 +4,28 @@
 #
 # Classes and methods to read, write and parse PDS labels.
 #
-# Mark R. Showalter, SETI Institute, January 2011
+# Mark R. Showalter, SETI Institute, November 2013
+#
+# 1/10 MRS - Original version
 #
 # 6/16/12 MRS - Added new methods as_dict() and as_python_value() to convert
 #   label contents to standard Python types; fixed a minor bug in PdsReal.
 #
 # 4/2/13 MRS - Revised the handling of PDS pointer objects by as_dict(), such
 #   that they return a tuple containing all the information required.
+#
+# 11/22/13 MRS - Added classes PdsSetPointer and PdsSequencePointer (and
+#   superclass PdsVectorPointer) to allow for a pointer to multiple file neames.
+#   This is used widely in DOCUMENT objects comprising multiple files. Surprise!
+#
+# Note: Test method is hopelessly out of date.
 ################################################################################
-# Printing of 2-D sequences has not yet been tested.
 # Tracking of comments has been stripped away.
 # Tracking of substring locations has been stripped away for simplicity.
 # This will need a lot of work if we eventually want to do more general writing
 # of labels, but it implements the complete grammar for reading.
 #
-# Old notes follow...
+# Mark's notes from earlier draft version...
 #
 # Structure generated supports basic dictionary-type indexing.
 # 
@@ -1188,7 +1195,7 @@ class PdsOffsetPointer(PdsPointer):
     @staticmethod
     def parse(s, l, tokens):
         struct = PdsOffsetPointer()
-        struct.value  = tokens[0]
+        struct.value  = tokens[0].value
         struct.offset = tokens[1].value
         struct.unit   = tokens[1].unit
 
@@ -1203,8 +1210,108 @@ class PdsOffsetPointer(PdsPointer):
 
 #-----------------------------------------------------------------------
 OFFSET_POINTER.setParseAction(PdsOffsetPointer.parse)
+################################################################################
+# PdsVectorPointer
+################################################################################
+
+class PdsVectorPointer(PdsPointer):
+    """A superclass of PdsSetPointer and PdsSequencePointer."""
+
+    def __str__(self):
+        list = [self.delim[0]]
+        for v in self.value:
+            list += [str(v), ", "]
+        list[-1] = self.delim[-1]    # Replace final comma with a delimiter
+        return "".join(list)
+
+    def __repr__(self):
+        list = [self.delim[0]]
+        for v in self.value:
+            list += [repr(v), ", "]
+        list[-1] = self.delim[-1]    # Replace final comma with a delimiter
+        return "".join(list)
+
+    def __getitem__(self, key): return self.value[key]
+
+    def __len__(self): return len(self.value)
+
+    def as_python_value(self):
+        """Overrides the default PdsNode method to ensure that the elements of
+        the vector also get translated to standard Python types.
+        """
+
+        list = []
+        for item in self.value:
+            list.append(item.as_python_value())
+
+        return list
+
+################################################################################
+# PdsSetPointer
+################################################################################
+LBRACE          = Suppress(Literal("{"))
+RBRACE          = Suppress(Literal("}"))
+SET_POINTER     = (LBRACE                   + ZeroOrMore(EOL)
+                +  SIMPLE_POINTER           + ZeroOrMore(EOL)
+                +  ZeroOrMore(Suppress(Literal(","))
+                                            + ZeroOrMore(EOL)
+                                            + SIMPLE_POINTER
+                                            + ZeroOrMore(EOL))
+                +  RBRACE)
+SET_POINTER.setName("SET_POINTER")
 #-----------------------------------------------------------------------
-POINTER_VALUE   = SIMPLE_POINTER | OFFSET_POINTER | LOCAL_POINTER
+
+class PdsSetPointer(PdsVectorPointer):
+    """A set of simple pointers in curly braces {}."""
+
+    def __init__(self):
+        PdsValue.__init__(self, [], SET_POINTER)
+        self.delim = "{}"
+
+    # Interpret parser tokens
+    @staticmethod
+    def parse(s, l, tokens):
+        struct = PdsSetPointer()
+        struct.value = list(tokens)
+        return struct
+
+#-----------------------------------------------------------------------
+SET_POINTER.setParseAction(PdsSetPointer.parse)
+#-----------------------------------------------------------------------
+################################################################################
+# PdsSequencePointer
+################################################################################
+LPAREN          = Suppress(Literal("("))
+RPAREN          = Suppress(Literal(")"))
+SEQUENCE_POINTER= (LPAREN                   + ZeroOrMore(EOL)
+                +  SIMPLE_POINTER           + ZeroOrMore(EOL)
+                +  ZeroOrMore(Suppress(Literal(","))
+                                            + ZeroOrMore(EOL)
+                                            + SIMPLE_POINTER
+                                            + ZeroOrMore(EOL))
+                +  RPAREN)
+SEQUENCE_POINTER.setName("SEQUENCE_POINTER")
+#-----------------------------------------------------------------------
+
+class PdsSequencePointer(PdsVectorPointer):
+    """A set of simple pointers in parentheses ()."""
+
+    def __init__(self):
+        PdsValue.__init__(self, [], SEQUENCE_POINTER)
+        self.delim = "()"
+
+    # Interpret parser tokens
+    @staticmethod
+    def parse(s, l, tokens):
+        struct = PdsSequencePointer()
+        struct.value = list(tokens)
+        return struct
+
+#-----------------------------------------------------------------------
+SEQUENCE_POINTER.setParseAction(PdsSequencePointer.parse)
+#-----------------------------------------------------------------------
+POINTER_VALUE = (SIMPLE_POINTER | OFFSET_POINTER | LOCAL_POINTER | SET_POINTER
+                                | SEQUENCE_POINTER)
 POINTER_VALUE.setName("POINTER_VALUE")
 ################################################################################
 ################################################################################
