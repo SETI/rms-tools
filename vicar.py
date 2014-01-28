@@ -1,20 +1,8 @@
 #!/usr/bin/python
 ################################################################################
-# vicar.py
-#
-# Classes and methods to read and write VICAR image files.
-#
-# The toolkit has the following limitations:
-#    (1) TYPE must be "IMAGE".
-#    (2) The library cannot read or write files containing VAX reals.
-#    (3) On input, the prefix bytes must be a multiple of the pixel size.
-#    (4) On input, the suffix bytes must be a multiple of the pixel size.
-#    (5) On output, the files cannot contain binary headers.
-#    (6) On output, files cannot contain prefix bytes.
-#    (7) On output, the files must use "BSQ" (band-sequential) organization.
+# vicar.py -- classes and methods to read and write VICAR image files.
 #
 # class VicarImage: Used to encapsulate a VICAR image.
-#
 # class VicarError: The exception raised by errors related to the format or
 #                   content of a VICAR file.
 #
@@ -26,6 +14,9 @@
 # 6/14/12 MRS - added as_dict() method.
 # 1/1/13 MRS - repaired bug where the extension header would not be parsed if
 #   the initial header ended in ASCII null characters.
+# 8/23/13 MRS - added support for returning binary headers, prefix bytes,
+#   the raw VICAR header, and the raw VICAR extension header, from input files.
+# 9/19/13 MRS - added method get_values().
 ################################################################################
 
 import numpy as np
@@ -38,6 +29,58 @@ import decimal as dec
 ################################################################################
 
 class VicarImage():
+    """This class defines the contents of a VICAR data file. It supports methods
+    for reading and writing files and for accessing header information.
+
+    The following attributes provide the contents of the data file:
+        header              complete VICAR header (including extension if
+                            present) as a text string. Trailing null characters
+                            have been removed.
+        raw_header          the VICAR header exactly as it appeared in the file.
+        extension_header    the VICAR extension header exactly as it appeared in
+                            the file, or an empty string if not present.
+        data_2d             the data as a 2-D array. If it is actually a 3-D
+                            array, the leading two axes (bands and lines) are
+                            merged into one. The data type and byte order of
+                            the source file is preserved.
+        data_3d             the data as a 3-D array. If it is actually a 2-D
+                            array, the leading axis is 1. ALWAYS returned in
+                            band-sequential format, with axes (bands, lines,
+                            samples). The data type and byte order of the source
+                            file is preserved.
+        prefix_2d           the row prefix bytes, using the same data type and
+                            the same leading axis as data_2d. If the file does
+                            not contain prefix bytes, the size of the array is
+                            zero.
+        prefix_3d           the row prefix bytes, using the same data type and
+                            the same leading axes as data_3d. If the file does
+                            not contain prefix bytes, the size of the array is
+                            zero.
+        binary_header       the binary header array, using the same data type
+                            as the data arrays.
+
+    Key functions:
+        from_file()         load the contents of a VICAR file and return a
+                            VicarImage object.
+        to_file()           save an object to a new VICAR file; note that only a
+                            limited subset of the VICAR standard is supported.
+        as_dict()           returns the contents of the VICAR header as a
+                            standard Python dictionary.
+        set_array()         set the data array of a new VicarImage object, or
+                            replace the array of one that already exists.
+
+    Restrictions:
+        - The TYPE must always be "IMAGE".
+        - The library cannot read or write files containing VAX reals.
+        - The number of prefix bytes must be a multiple of the array element
+          size.
+        - The NumPy dtype of the binary header array will be the same as that
+          of data array, regardless of header values.
+        - Files written by to_file() cannot contain binary headers.
+        - Files written by to_file() cannot contain prefix bytes.
+        - Files written by to_file() must use "BSQ" (band-sequential)
+          organization.
+    """
 
     # A dictionary to translate from VICAR FORMAT values to equivalent Python
     # dtypes.
@@ -139,7 +182,8 @@ class VicarImage():
         """
  
         # This contains the data as a numpy ndarray
-        self.data  = None
+        self.data_2d = None
+        self.data_3d = None
 
         # This table contains VICAR (keyword,value) pairs in the order they
         # appear in the header. It is initialized with all the required keywords
@@ -208,27 +252,29 @@ class VicarImage():
 
         # Read the leading VICAR header
         file.seek(0)
-        header = file.read(vicar_LBLSIZE).rstrip("\0")
+        this.raw_header = file.read(vicar_LBLSIZE)
+
+        this.header = this.raw_header.rstrip("\0")
 
         # Interpret the header
-        this._load_table(header)
+        this._load_table(this.header)
 
         # Extract the basic VICAR file properties that we need
-        vicar_FORMAT  = this.get_value("FORMAT" )
-        vicar_TYPE    = this.get_value("TYPE"   )
-        vicar_EOL     = this.get_value("EOL"    )
-        vicar_RECSIZE = this.get_value("RECSIZE")
-        vicar_ORG     = this.get_value("ORG"    , default="BSQ")
-        vicar_NL      = this.get_value("NL"     )
-        vicar_NS      = this.get_value("NS"     )     
-        vicar_NB      = this.get_value("NB"     , default=1    )
-        vicar_N1      = this.get_value("N1"     )
-        vicar_N2      = this.get_value("N2"     )
-        vicar_N3      = this.get_value("N3"     )
-        vicar_NBB     = this.get_value("NBB"    , default=0    )
-        vicar_NLB     = this.get_value("NLB"    , default=0    )
-        vicar_INTFMT  = this.get_value("INTFMT" , default="LOW")
-        vicar_REALFMT = this.get_value("REALFMT", default="VAX")
+        vicar_FORMAT   = this.get_value("FORMAT" )
+        vicar_TYPE     = this.get_value("TYPE"   )
+        vicar_EOL      = this.get_value("EOL"    )
+        vicar_RECSIZE  = this.get_value("RECSIZE")
+        vicar_ORG      = this.get_value("ORG"    , default="BSQ")
+        vicar_NL       = this.get_value("NL"     )
+        vicar_NS       = this.get_value("NS"     )     
+        vicar_NB       = this.get_value("NB"     , default=1    )
+        vicar_N1       = this.get_value("N1"     )
+        vicar_N2       = this.get_value("N2"     )
+        vicar_N3       = this.get_value("N3"     )
+        vicar_NBB      = this.get_value("NBB"    , default=0    )
+        vicar_NLB      = this.get_value("NLB"    , default=0    )
+        vicar_INTFMT   = this.get_value("INTFMT" , default="LOW")
+        vicar_REALFMT  = this.get_value("REALFMT", default="VAX")
 
         # Interpret image properties
         if vicar_TYPE != "IMAGE":
@@ -236,6 +282,7 @@ class VicarImage():
                              + filename)
 
         # Append the extension header, if present, and re-load the table
+        this.extension_header = ""
         if vicar_EOL == 1:
             offset = (vicar_LBLSIZE + vicar_RECSIZE * vicar_NLB
                                     + vicar_RECSIZE * vicar_N2 * vicar_N3)
@@ -255,11 +302,10 @@ class VicarImage():
             extsize = int(temp[8:iblank])
 
             file.seek(offset)
-            extension = file.read(extsize)
+            this.extension_header = file.read(extsize)
 
-            header = header + extension[iblank:]
-
-            this._load_table(header)
+            this.header += this.extension_header[iblank:].rstrip("\0")
+            this._load_table(this.header)
 
         # Look up the numpy dtype corresponding to the VICAR FORMAT
         dtypename = VicarImage.FORMAT_DICT[vicar_FORMAT]
@@ -298,28 +344,41 @@ class VicarImage():
         vector = np.fromfile(file, dtype=dtype, sep="", count=-1)
 
         # Reshape into file records
-        samples = vicar_RECSIZE / itemsize
-        records = vector.size / samples
+        samples = vicar_RECSIZE // itemsize
+        recs = vector.size // samples
+        records = vector.reshape((recs, samples))
 
-        records = vector.reshape((records, samples))
+        # Slice out the binary header
+        vicar_recs = vicar_LBLSIZE // vicar_RECSIZE
+        this.binary_header = records[vicar_recs : vicar_recs + vicar_NLB]
+        # Note that we assume BINTFMT == INTFMT. This is not checked.
 
-        # Slice out the image data
-        toprecs = vicar_LBLSIZE / vicar_RECSIZE + vicar_NLB
-        leftpix = vicar_NBB / itemsize
+        top_recs = vicar_recs + vicar_NLB
+        left_pix = vicar_NBB // itemsize
 
-        slice = records[toprecs : toprecs + vicar_N2 * vicar_N3,
-                        leftpix : leftpix + vicar_N1]
+        data_recs = vicar_N2 * vicar_N3
+        this.prefix_2d = records[top_recs : top_recs + data_recs,
+                                          : left_pix]
+
+        this.data_2d = records[top_recs : top_recs + data_recs,
+                               left_pix : left_pix + vicar_N1]
 
         # Reshape to separate the bands
-        slice3d = slice.reshape((vicar_N3, vicar_N2, vicar_N1))
+        this.data_3d = this.data_2d.reshape((vicar_N3, vicar_N2, vicar_N1))
+        this.prefix_3d = this.prefix_2d.reshape((vicar_N3, vicar_N2,
+                                                 this.prefix_2d.shape[-1]))
 
-        # Re-position the band axis as first
-        if   vicar_ORG == "BIP": this.data = slice3d.rollaxis(2,0)
-        elif vicar_ORG == "BIL": this.data = slice3d.rollaxis(1,0)
-        else:                    this.data = slice3d
+        # Re-position the band axis as first. The returned array is always
+        # ordered (bands, lines, samples).
+        if vicar_ORG == "BIP":
+            this.data_3d = this.data_3d.rollaxis(2,0)
+            this.prefix_3d = this.prefix_3d.rollaxis(2,0)
+
+        elif vicar_ORG == "BIL":
+            this.data_3d = this.data_3d.rollaxis(1,0)
+            this.prefix_3d = this.prefix_3d.rollaxis(1,0)
 
         file.close()
-
         return this
 
     @staticmethod
@@ -369,7 +428,7 @@ class VicarImage():
 
         # Revise some VICAR header parameters if necessary
         if self.is_from_file:
-            self.set_array(self.data)
+            self.set_array(self.data_3d)
             self.is_from_file = False
 
         # Write the header
@@ -816,6 +875,26 @@ class VicarImage():
         # Otherwise raise the normal exception
         i = self.keyword_index(keyword, occurrence, start)
 
+    def get_values(self, keyword=".*"):
+        """Returns a list of values of a keyword in the VICAR header.
+
+        Inputs:
+            keyword         A regular expression to match the VICAR keyword(s).
+                            Case is ignored.
+
+        Return:             A list of the values of the matching keywords. The
+                            value type is that given in the header: integer,
+                            float, decimal, string, or tuple.
+        """
+
+        results = []
+        i = -1           # start at the beginning
+        while True:
+            i = self.find_keyword(keyword, occurrence=0, start=i+1)
+            if i < 0: return results
+
+            results.append(self.table[i][1])
+
     def set_value(self, keyword, value, occurrence=0, start=0, ignore=False,
                                                               override=False):
         """Replaces the value of a keyword in the VICAR header, or inserts the
@@ -952,7 +1031,9 @@ class VicarImage():
     def as_dict(self):
         """Returns a dictionary object containing the contents of the VICAR
         header. Note that information about the order of the fields is lost,
-        and duplicated keywords just take on their last value.
+        and duplicated keywords just take on their last value. Decimal values
+        are converted to floats, and so they might no longer match their header
+        values exactly.
         """
 
         dict = {}
@@ -1025,14 +1106,16 @@ class VicarImage():
     ############################################################################
 
     def get_3d_array(self):
-        """Returns the image data as a 3-D ndarray."""
+        """Returns the image data as a 3-D ndarray. Deprecated; just access
+        attribute data_3d."""
 
-        return self.data
+        return self.data_3d
 
     def get_2d_array(self):
-        """Returns the first band of the image as a 2-D ndarray."""
+        """Returns the first band of the image as a 2-D ndarray. Deprecated;
+        just access attribute data_2d."""
 
-        return self.data[0,:,:]
+        return self.data_2d
 
     def set_array(self, array):
         """Replaces the array data in a VicarImage. It also updates all the
@@ -1042,13 +1125,20 @@ class VicarImage():
             array           The numpy ndarray to replace.
         """
 
-        self.data = array
+        # Get the shape and convert to a 2-D or 3-D, as needed
+        shape = array.shape
+        if len(array.shape == 2):
+            shape = (1,) + shape
+            self.data_2d = array
+            self.data_3d = array.reshape(shape)
 
-        # Get the shape and convert to a 3-D array if necessary
-        shape = self.data.shape
-        if len(shape) == 2:
-            self.data = array.reshape(1, shape[0], shape[1])
-            shape = self.data.shape
+        elif len(array.shape == 3):
+            self.data_2d = array.reshape((array.shape[0] * array.shape[1],
+                                          array.shape[2]))
+            self.data_3d = array
+
+        else:
+            raise VicarError("Only 2-D and 3-D arrays are supported.")
 
         (vicar_NB, vicar_NL, vicar_NS) = shape
         (vicar_N3, vicar_N2, vicar_N1) = shape
@@ -1209,56 +1299,56 @@ class VicarError(Exception):
     # Nothing else is needed
 
 ################################################################################
-# Test program
+# Test program -- no longer supported
 ################################################################################
 
-def test():
-        filename = sys.argv[1]
-        vic = VicarImage.from_file(filename)
-
-        print vic.get_value("LBLSIZE")
-        print vic.get_value("FORMAT")
-        print vic.get_value("DAT_TIM",occurrence=0)
-        print vic.get_value("DAT_TIM",occurrence=1)
-        print vic.get_value("FOOBAR",default=55)
-        print vic.get_value(".*",default=55)
-
-#       print "set RECSIZE..."
-#       vic.set_value("RecsizE", 999)
-
-        print "set HOST..."
-        vic.set_value("HOST", "Foobar")
-
-#       print "delete HOST..."
-#       vic.delete_keyword("Host")
-
-        a = vic.get_2d_array()
-        print a
-        print a.shape, a.min(), a.max()
-
-        a = vic.get_3d_array()
-        print a
-        print a.ndim, a.shape, a.min(), a.max()
-
-#        print vic.get_header()
-#        print len(vic.get_header())
-#
-#        vic.to_file("to_file.img")
-#
-#        print vic.get_header()
-#        print len(vic.get_header())
-#
-#        vic.delete_by_index(0,0,ignore=True)
-
-        print vic.get_header()
-        print len(vic.get_header())
-
-        test = VicarImage.from_array(a)
-        print test.get_header().strip()
-
-        vic.copy_by_index(test, 0, 0, ignore=True)
-        print test.get_header().strip()
-
-# Execute the main test progam if this is not imported
-if __name__ == "__main__": test()
-
+# def test():
+#         filename = sys.argv[1]
+#         vic = VicarImage.from_file(filename)
+# 
+#         print vic.get_value("LBLSIZE")
+#         print vic.get_value("FORMAT")
+#         print vic.get_value("DAT_TIM",occurrence=0)
+#         print vic.get_value("DAT_TIM",occurrence=1)
+#         print vic.get_value("FOOBAR",default=55)
+#         print vic.get_value(".*",default=55)
+# 
+# #       print "set RECSIZE..."
+# #       vic.set_value("RecsizE", 999)
+# 
+#         print "set HOST..."
+#         vic.set_value("HOST", "Foobar")
+# 
+# #       print "delete HOST..."
+# #       vic.delete_keyword("Host")
+# 
+#         a = vic.get_2d_array()
+#         print a
+#         print a.shape, a.min(), a.max()
+# 
+#         a = vic.get_3d_array()
+#         print a
+#         print a.ndim, a.shape, a.min(), a.max()
+# 
+# #        print vic.get_header()
+# #        print len(vic.get_header())
+# #
+# #        vic.to_file("to_file.img")
+# #
+# #        print vic.get_header()
+# #        print len(vic.get_header())
+# #
+# #        vic.delete_by_index(0,0,ignore=True)
+# 
+#         print vic.get_header()
+#         print len(vic.get_header())
+# 
+#         test = VicarImage.from_array(a)
+#         print test.get_header().strip()
+# 
+#         vic.copy_by_index(test, 0, 0, ignore=True)
+#         print test.get_header().strip()
+# 
+# # Execute the main test progam if this is not imported
+# if __name__ == "__main__": test()
+# 
