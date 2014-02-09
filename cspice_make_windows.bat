@@ -30,7 +30,7 @@
 :: For Windows 64-bit, type:
 ::    setenv /x64
 ::
-:: Then execute this batch file.
+:: Then execute this batch file: .\cspice_make_windows.bat
 ::
 :: To test the installation, the following should display the CSPICE
 :: toolkit version string:
