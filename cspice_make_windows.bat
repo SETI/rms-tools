@@ -58,6 +58,7 @@ cl /LD /I%PYTHON_PATH%/include /I%PYTHON_PATH%/Lib/site-packages/numpy/core/incl
 del _cspice.pyd
 ren cspice_wrap.dll _cspice.pyd
 
+del cspice_wrap.c
 del cspice_wrap.dll
 del cspice_wrap.exp
 del cspice_wrap.lib
