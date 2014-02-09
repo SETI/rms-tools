@@ -1,0 +1,6 @@
+*~
+*.pyc
+_cspice.pyd
+cspice/
+cspice-w32/
+cspice-w64/
