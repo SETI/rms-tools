@@ -1511,7 +1511,7 @@ class PdsLabel():
     def FromFile(filename):
         """Deprecated alternative name for from_file()"""
 
-        return from_file(filename)
+        return PdsLabel.from_file(filename)
 
 ################################################################################
 # Test program
