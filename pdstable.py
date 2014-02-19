@@ -227,7 +227,7 @@ class PdsTable(object):
                     items.append(item)
 
                 # Apply the callback function if necessary for each tem
-                if key in callbacks.keys():
+                if callbacks.has_key(key):
                     old_items = items
                     items = []
                     callback = callbacks[key]
@@ -260,7 +260,7 @@ class PdsTable(object):
 
             # Apply the callback function if necessary
             else:
-                if key in callbacks.keys():
+                if callbacks.has_key(key):
                     callback = callbacks[key]
                     rows = []
                     for row in column:
