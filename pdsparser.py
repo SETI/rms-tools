@@ -227,7 +227,7 @@ class PdsNode(object):
             if key in ("END_OBJECT", "END_GROUP", "END"): continue
 
             # Key columns by the name rather than the non-unique "COLUMN"
-            if child.name == "COLUMN" and "NAME" in child.dict.keys():
+            if child.name == "COLUMN" and child.dict.has_key("NAME"):
                 key = child.dict["NAME"].pdsvalue.value
 
             dict[key] = child.as_python_value()
