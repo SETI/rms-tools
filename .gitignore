@@ -1,6 +1,9 @@
 *~
 *.pyc
-_cspice.pyd
-cspice/
+.project
+.pydevproject
+/cspice/cspice/
+cspice/_cspice.so
+cspice/_cspice.pyd
 cspice-w32/
 cspice-w64/

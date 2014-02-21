@@ -10,11 +10,13 @@
 #
 # For OSX 32-bit, download the CSPICE toolkit from:
 #    http://naif.jpl.nasa.gov/naif/toolkit_C_MacIntel_OSX_AppleC_32bit.html
-# and uncompress and untar it in this directory.
+# and uncompress and untar it in this directory. This will create a new
+# subdirectory pds-tools/cspice/cspice.
 #
 # For OSX 64-bit, download the CSPICE toolkit from:
 #    http://naif.jpl.nasa.gov/naif/toolkit_C_MacIntel_OSX_AppleC_64bit.html
-# and uncompress and untar it in this directory.
+# and uncompress and untar it in this directory. This will create a new
+# subdirectory pds-tools/cspice/cspice.
 #
 # Execute this shell script: ./cspice_make_osx.sh
 #
@@ -34,6 +36,9 @@ PYTHON_PKGS=/usr/local/lib/python2.7/site-packages
 rm -f cspice.py cspice_wrap.c cspice_wrap.o
 
 swig -python cspice.i
+
+rm -f __init__.py
+mv cspice.py __init__.py
 
 gcc -c cspice_wrap.c -I$PYTHON_INCLUDE \
     -I$PYTHON_PKGS/numpy/core/include -Icspice/src/cspice

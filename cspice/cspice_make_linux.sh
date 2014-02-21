@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Create cspice.py and _cspice.pyd for Ubuntu Linux
+# Create cspice.py and _cspice.so for Ubuntu Linux
 #
 # This script depends on the python-dev and swig packages:
 #    apt-get install python-dev
@@ -11,16 +11,19 @@
 #
 # For Linux 32-bit, download the CSPICE toolkit from:
 #    http://naif.jpl.nasa.gov/naif/toolkit_C_PC_Linux_GCC_32bit.html
-# and uncompress and untar it in this directory.
+# and uncompress and untar it in this directory. This will create a new
+# subdirectory pds-tools/cspice/cspice.
 #
 # For Linux 64-bit, download the CSPICE toolkit from:
 #    http://naif.jpl.nasa.gov/naif/toolkit_C_PC_Linux_GCC_64bit.html
-# and uncompress and untar it in this directory.
+# and uncompress and untar it in this directory. This will create a new
+# subdirectory pds-tools/cspice/cspice.
 #
 # Execute this shell script: ./cspice_make_linux.sh
 #
 # To test the installation, the following should display the CSPICE
-# toolkit version string:
+# toolkit version string. Run python in the top-level pds-tools directory
+# or make sure pds-tools is in your PYTHONPATH.
 #
 #    $ python
 #    >>> import cspice
@@ -35,6 +38,9 @@ PYTHON_PKGS=/usr/local/lib/python2.7/site-packages
 rm -f cspice.py cspice_wrap.c cspice_wrap.o
 
 swig -python cspice.i
+
+rm -f __init__.py
+mv cspice.py __init__.py
 
 gcc -c cspice_wrap.c -fPIC -I$PYTHON_INCLUDE \
     -I$PYTHON_PKGS/numpy/core/include -Icspice/src/cspice

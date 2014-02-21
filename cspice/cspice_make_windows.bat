@@ -15,11 +15,13 @@
 ::
 :: For Windows 32-bit, download the CSPICE toolkit from:
 ::    http://naif.jpl.nasa.gov/naif/toolkit_C_PC_Windows_VisualC_32bit.html
-:: and unzip it in this directory.
+:: and unzip it in this (pds-tools/cspice) directory. This will create a new
+:: subdirectory pds-tools/cspice/cspice.
 ::
 :: For Windows 64-bit, download the CSPICE toolkit from:
 ::    http://naif.jpl.nasa.gov/naif/toolkit_C_PC_Windows_VisualC_64bit.html
-:: and unzip it in this directory.
+:: and unzip it in this (pds-tools/cspice) directory. This will create a new
+:: subdirectory pds-tools/cspice/cspice.
 ::
 :: Create a Visual Studio command line window by selecting
 ::    All Programs > Microsoft Windows SDK v7.1 > 
@@ -33,7 +35,8 @@
 :: Then execute this batch file: .\cspice_make_windows.bat
 ::
 :: To test the installation, the following should display the CSPICE
-:: toolkit version string:
+:: toolkit version string. Run python in the top-level pds-tools directory
+:: or make sure pds-tools is in your PYTHONPATH.
 ::
 ::    > python
 ::    >>> import cspice
@@ -42,7 +45,7 @@
 :: *** NOTE ***
 :: Adjust the following variable to point at your top-level Python directory:
 
-set PYTHON_PATH=c:/Python27
+set PYTHON_PATH=c:/Python27-64
 
 del cspice.py
 del cspice_wrap.c
@@ -57,6 +60,8 @@ cl /LD /I%PYTHON_PATH%/include /I%PYTHON_PATH%/Lib/site-packages/numpy/core/incl
 
 del _cspice.pyd
 ren cspice_wrap.dll _cspice.pyd
+del __init__.py
+ren cspice.py __init__.py
 
 del cspice_wrap.c
 del cspice_wrap.dll
