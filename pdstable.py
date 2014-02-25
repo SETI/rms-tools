@@ -28,6 +28,7 @@
 
 import numpy as np
 import os
+import os.path
 import pdsparser
 import julian
 import datetime as dt
@@ -332,7 +333,7 @@ class Test_PdsTable(unittest.TestCase):
     def test_table_parse(self):
         
         # Testing different values parsed correctly...
-        test_table_basic = PdsTable("./test_data/cassini/ISS/index.lbl")
+        test_table_basic = PdsTable(os.path.join(os.environ["OOPS_TEST_DATA"], "cassini/ISS/index.lbl"))
         #test strings
         test_file_names = test_table_basic.column_dict['FILE_NAME']
         file_name_test_set = np.array(['N1573186009_1.IMG',
@@ -364,7 +365,7 @@ class Test_PdsTable(unittest.TestCase):
         self.assertTrue(np.all(start_time_str_test_set ==
                                test_start_time_strs[0:4]))
 
-        test_table_secs = PdsTable("./test_data/cassini/ISS/index.lbl",
+        test_table_secs = PdsTable(os.path.join(os.environ["OOPS_TEST_DATA"], "cassini/ISS/index.lbl"),
                                    ['START_TIME'])
         #test times as seconds (floats)
         test_start_times = test_table_secs.column_dict['START_TIME']

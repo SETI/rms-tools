@@ -1304,6 +1304,8 @@ class Test_FromFile(unittest.TestCase):
 
   def runTest(self):
 
+    import os.path
+    
     # Test DefaultBodies()
     dict = default_bodies(clear=True)
     self.assertEqual(dict["BODY"][618], dict["BODY"]["PAN"])
@@ -1350,7 +1352,7 @@ class Test_FromFile(unittest.TestCase):
     self.assertEqual(dict["FRAME"][618]["CENTER"],     618)
 
     # Test FromFile() by attempting to parse every text kernel
-    prefix = "test_data/SPICE/"
+    prefix = os.path.join(os.environ["OOPS_TEST_DATA"], "SPICE")
     filenames = ["cas_iss_v10.ti",
                  "cas_rocks_v18.tf",
                  "cas_status_v04.tf",
@@ -1374,7 +1376,7 @@ class Test_FromFile(unittest.TestCase):
 
     for file in filenames:
         print file
-        d = from_file(prefix + file)
+        d = from_file(os.path.join(prefix, file))
 
 ################################################################################
 # Perform unit testing if executed from the command line
