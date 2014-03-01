@@ -1,4 +1,4 @@
-:: Create cspice.py and _cspice.pyd for Windows
+:: Create __init__.py and _cspice.pyd for Windows
 ::
 :: This batch file depends on the Microsoft Visual Studio C++
 :: compiler being installed. It can be found (for free) as part of the
@@ -6,7 +6,7 @@
 ::    http://msdn.microsoft.com/en-us/windowsserver/bb980924.aspx
 ::
 :: You must also have an appropriate (32-bit or 64-bit) version of Python
-:: installed.
+:: installed along with swig.
 ::
 :: NOTE: In the following, the choice of 32-bit or 64-bit depends solely
 :: on the version of Python you have installed. For example, you can create

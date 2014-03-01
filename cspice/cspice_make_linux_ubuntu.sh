@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Create cspice.py and _cspice.so for Ubuntu Linux
+# Create __init__.py and _cspice.so for Ubuntu Linux
 #
 # This script depends on the python-dev and swig packages:
 #    apt-get install python-dev
@@ -19,7 +19,7 @@
 # and uncompress and untar it in this directory. This will create a new
 # subdirectory pds-tools/cspice/cspice.
 #
-# Execute this shell script: ./cspice_make_linux.sh
+# Execute this shell script: ./cspice_make_linux_ubuntu.sh
 #
 # To test the installation, the following should display the CSPICE
 # toolkit version string. Run python in the top-level pds-tools directory
