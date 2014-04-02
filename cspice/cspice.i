@@ -6574,6 +6574,150 @@ extern void srfxpt_c (
         int *OUT_BOOLEAN );
 
 /***********************************************************************
+* $Procedure   STCF01 (STAR catalog type 1, find stars in RA-DEC box)
+*
+* -Abstract
+*
+* Search through a type 1 star catalog and return the number of
+* stars within a specified RA - DEC rectangle.
+*
+* Original F2C arguments:
+*   int stcf01_(char *catnam, doublereal *westra, doublereal *
+*				eastra, doublereal *sthdec, doublereal *nthdec, integer *nstars, 
+*				ftnlen catnam_len)
+*
+* New arguments with wrapper:
+*   int my_stcf01_c(char *catnam, double westra, double eastra,
+*					double sthdec, double nthdec,
+*					int *nstars) 
+*
+* -Brief_I/O
+*
+* Variable  I/O  Description
+* --------  ---  --------------------------------------------------
+* CATNAM      I   Catalog table name.
+* WESTRA      I   Western most right ascension in radians.
+* EASTRA      I   Eastern most right ascension in radians.
+* STHDEC      I   Southern most declination in radians.
+* NTHDEC      I   Northern most declination in radians.
+* NSTARS      O   Number of stars found.
+***********************************************************************/
+
+%rename (stcf01) my_stcf01_c;
+
+%apply (char *CONST_STRING) {char *catnam};
+%apply (int *OUTPUT) {int *nstars};
+%apply (void RETURN_VOID) {void my_stcf01_c};
+
+/* Helper function to reorder arguments */
+%inline %{
+    void my_stcf01_c(char *catnam, double westra, double eastra,
+ 					 double sthdec, double nthdec,
+ 					 int *nstars) {
+		stcf01_(catnam, &westra, &eastra, &sthdec, &nthdec, nstars,
+				strlen(catnam));
+    }
+%}
+
+/***********************************************************************
+* $Procedure   STCG01 ( STAR catalog type 1, get star data )
+*
+* -Abstract
+*
+* Get data for a single star from a SPICE type 1 star catalog.
+*
+* Original F2C arguments:
+*   int stcg01_(integer *index, doublereal *ra, doublereal *dec, 
+*				doublereal *rasig, doublereal *decsig, integer *catnum,
+*				char *sptype, doublereal *vmag, ftnlen sptype_len)
+*
+* New arguments with wrapper:
+*   int my_stcg01_c(int index, double *ra, double *dec, 
+*					double *rasig, double *decsig, int *catnum,
+*					char *sptype, doublel *vmag)
+*
+* -Brief_I/O
+*
+* Variable  I/O  Description
+* --------  ---  --------------------------------------------------
+* INDEX       I   Star index.
+* RA          O   Right ascension in radians.
+* DEC         O   Declination in radians.
+* RAS         O   Right ascension uncertainty in radians.
+* DECS        O   Declination uncertainty in radians.
+* CATNUM      O   Catalog number.
+* SPTYPE      O   Spectral type.
+* VMAG        O   Visual magnitude.
+***********************************************************************/
+
+%rename (stcg01) my_stcg01_c;
+
+%apply (double *OUTPUT) {double *ra};
+%apply (double *OUTPUT) {double *dec};
+%apply (double *OUTPUT) {double *rasig};
+%apply (double *OUTPUT) {double *decsig};
+%apply (int *OUTPUT) {int *catnum};
+%apply (char OUT_STRING[ANY]) {char sptype[20]};
+%apply (double *OUTPUT) {double *vmag};
+%apply (void RETURN_VOID) {void my_stcg01_c};
+
+/* Helper function to reorder arguments */
+%inline %{
+   void my_stcg01_c(int index, double *ra, double *dec, 
+					double *rasig, double *decsig, int *catnum,
+					char sptype[20], double *vmag) {
+		char *s;
+		index += 1;
+		stcg01_(&index, ra, dec, rasig, decsig, catnum, sptype,
+				vmag, 20);
+		s = sptype+19;
+		while (s >= sptype && *s == ' ') s--; /* Convert FORTRAN->C string */
+		s[1] = '\0';
+    }
+%}
+
+/***********************************************************************
+* $Procedure   STCL01 ( STAR catalog type 1, load catalog file )
+*
+* -Abstract
+*
+* Load SPICE type 1 star catalog and return the catalog's
+* table name.
+*
+* Original F2C arguments:
+*   int stcl01_(char *catfnm, char *tabnam, integer *handle, 
+*	  		    ftnlen catfnm_len, ftnlen tabnam_len)
+*
+* New arguments with wrapper:
+*   int my_stcl01_c(char *catfnm, char *tabnam, integer *handle)
+*
+* -Brief_I/O
+*
+* Variable  I/O  Description
+* --------  ---  --------------------------------------------------
+* CATFNM      I   Catalog file name.
+* TABNAM      O   Catalog table name.
+* HANDLE      O   Catalog file handle.
+***********************************************************************/
+
+%rename (stcl01) my_stcl01_c;
+
+%apply (char OUT_STRING[ANY]) {char tabnam[256]};
+%apply (int *OUTPUT) {int *handle};
+%apply (void RETURN_VOID) {void my_stcl01_c};
+
+/* Helper function to convert strings and reorder arguments */
+%inline %{
+    void my_stcl01_c(char *catfnm, char tabnam[256], int *handle) {
+        char *s;
+		stcl01_(catfnm, tabnam, handle, strlen(catfnm), 256);
+		s = tabnam+255;
+		while (s >= tabnam && *s == ' ') s--; /* Convert FORTRAN->C string */
+		s[1] = '\0';
+    }
+%}
+
+/***********************************************************************
 * -Procedure stelab_c     ( Stellar Aberration )
 *
 * -Abstract
