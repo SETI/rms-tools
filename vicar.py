@@ -435,7 +435,7 @@ class VicarImage():
         file.write(self.get_header())
         
         # Write the array
-        self.data.tofile(file, sep="")
+        self.data_3d.tofile(file, sep="")
 
         # Close file
         file.close()
@@ -1127,12 +1127,12 @@ class VicarImage():
 
         # Get the shape and convert to a 2-D or 3-D, as needed
         shape = array.shape
-        if len(array.shape == 2):
+        if len(array.shape) == 2:
             shape = (1,) + shape
             self.data_2d = array
             self.data_3d = array.reshape(shape)
 
-        elif len(array.shape == 3):
+        elif len(array.shape) == 3:
             self.data_2d = array.reshape((array.shape[0] * array.shape[1],
                                           array.shape[2]))
             self.data_3d = array
