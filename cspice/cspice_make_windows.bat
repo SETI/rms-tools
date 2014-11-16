@@ -45,7 +45,7 @@
 :: *** NOTE ***
 :: Adjust the following variable to point at your top-level Python directory:
 
-set PYTHON_PATH=c:/Python27-64
+set PYTHON_PATH=C:/Progra~1/Enthought/Canopy/App/appdata/canopy-1.3.0.1715.win-x86_64
 
 del cspice.py
 del cspice_wrap.c

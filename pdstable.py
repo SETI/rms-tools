@@ -306,7 +306,7 @@ class PdsTable(object):
 
     def dicts_by_row(self):
         """Returns a list of dictionaries, one for each row in the table, and
-        with each dictionaory containing all of the column values in that
+        with each dictionary containing all of the column values in that
         particular row."""
 
         # For each row...
