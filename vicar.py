@@ -964,7 +964,7 @@ class VicarImage():
             typestr = str(type(value))
 
             # Integer
-            if "int" in typestr: return str(value)
+            if "int" in typestr or "long" in typestr: return str(value)
 
             # Float
             if "float" in typestr: return repr(value)
