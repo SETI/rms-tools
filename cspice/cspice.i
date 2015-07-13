@@ -6755,6 +6755,43 @@ extern void stelab_c (
         double appobj[3] );
 
 /***********************************************************************
+* -Procedure stlabx_     ( Stellar aberration, transmission case )
+*
+* -Abstract
+*
+* Correct the position of a target for the stellar aberration 
+* effect on radiation transmitted from a specified observer to 
+* the target.  
+*
+* void stlabx_ (
+*       ConstSpiceDouble   pobj[3],
+*       ConstSpiceDouble   vobs[3],
+*       SpiceDouble        corpos[3] ) 
+*
+* -Brief_I/O
+*
+* VARIABLE  I/O  DESCRIPTION 
+* --------  ---  -------------------------------------------------- 
+* pobj       I   Position of an object with respect to the 
+* observer. 
+* vobs       I   Velocity of the observer with respect to the 
+* Solar System barycenter. 
+* corpos     O   Corrected position of the object. 
+***********************************************************************/
+
+%rename (stlabx) stlabx_;
+
+%apply (double  IN_ARRAY1[ANY]) {double pobj  [3]};
+%apply (double  IN_ARRAY1[ANY]) {double vobs  [3]};
+%apply (double OUT_ARRAY1[ANY]) {double corpos[3]};
+%apply (void RETURN_VOID) {void stlabx_c};
+
+extern void stlabx_ (
+        double pobj  [3],
+        double vobs  [3],
+        double corpos[3] );
+
+/***********************************************************************
 * -Procedure stpool_c ( String from pool )
 *
 * -Abstract
