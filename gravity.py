@@ -379,12 +379,19 @@ VENUS   = Gravity( 4.86732e24 * G_PER_KG, [], 6051.8 )
 EARTH   = Gravity( 5.97219e24 * G_PER_KG, [], 6378.14)
 MARS    = Gravity(0.641693e24 * G_PER_KG, [], 3396.19)
 
-# From http://ssd.jpl.nasa.gov/?gravity_fields_op
-JUPITER = Gravity(126686535., [14696.43e-06, -587.14e-06, 34.25e-06], 71492.)
+# Earlier values from http://ssd.jpl.nasa.gov/?gravity_fields_op
+JUPITER_V1 = Gravity(126686535., [14696.43e-06, -587.14e-06, 34.25e-06], 71492.)
 #SATURN  = Gravity( 37931208.,  [16290.71e-06, -935.83e-06, 86.14e-06], 60330.)
-SATURN  = Gravity( 37931207.7, [16290.71e-06, -936.83e-06, 86.14e-06, -10.e-06], 60330.)
-URANUS  = Gravity(  5793964., [ 3341.29e-06,  -30.44e-06           ], 26200.)
-NEPTUNE = Gravity(  6835100., [ 3408.43e-06,  -33.40e-06           ], 25225.)
+SATURN_V1  = Gravity( 37931207.7, [16290.71e-06, -936.83e-06, 86.14e-06, -10.e-06], 60330.)
+URANUS_V1  = Gravity(  5793964., [ 3341.29e-06,  -30.44e-06           ], 26200.)
+NEPTUNE_V1 = Gravity(  6835100., [ 3408.43e-06,  -33.40e-06           ], 25225.)
+
+# Updated September 15, 2015 from http://ssd.jpl.nasa.gov/?gravity_fields_op
+JUPITER = Gravity(126686536.1, [14695.62e-06, -591.31e-06, 20.78e-06], 71492.)
+SATURN  = Gravity( 37931208. , [16290.71e-06, -935.83e-06, 86.14e-06,
+                                                            -10.e-06], 60330.)
+URANUS  = Gravity(  5793951.3, [ 3510.68e-06,  -34.17e-06           ], 25559.)
+NEPTUNE = Gravity(  6835100. , [ 3408.43e-06,  -33.40e-06           ], 25225.)
 
 # From http://arxiv.org/abs/0712.1261
 PLUTO_ONLY = Gravity(869.6, [], 1151.)
