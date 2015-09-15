@@ -89,7 +89,8 @@ SPICE_LSK_DICT = {
                  32, dt.date(1999,1,1),
                  33, dt.date(2006,1,1),
                  34, dt.date(2009,1,1),
-                 35, dt.date(2012,7,1))}
+                 35, dt.date(2012,7,1),
+                 36, dt.date(2015,7,1))}
 
 # Define the static variables needed for TAI-ET conversions
 global DELTET_T_A, DELTET_K, DELTET_EB, DELTET_M0, DELTET_M1
@@ -1304,7 +1305,7 @@ def ymdhms_format_from_tai(tai, sep="T", digits=None, suffix="",
 
 def ydhms_format_from_tai(tai, sep="T", digits=None, suffix="",
                           buffer=None):
-    """Returns a date and time in ISO format 'yyyy-dddThh:mm:ss....'. given
+    """Returns a date and time in ISO format 'yyyy-dddThh:mm:ss....' given
     seconds TAI. Works for both scalars and arrays.
 
     Input:
@@ -1323,6 +1324,24 @@ def ydhms_format_from_tai(tai, sep="T", digits=None, suffix="",
     (day, sec) = day_sec_from_tai(tai)
     return _yxdhms_format_from_day_sec(day, sec, False, sep, digits, suffix,
                                        buffer)
+
+def iso_from_tai(tai, digits=None, ymd=True, suffix=""):
+    """Return a date and time in ISO format given seconds tai.
+
+    Input:
+        tai         number of elapsed seconds from TAI January 1, 2000.
+        digits      the number of digits to include after the decimal point; use
+                    a negative value or None for for seconds to be rounded to
+                    integer.
+        ymd         True for year-month-day format; False for year plus
+                    day-of-year format.
+        suffix      "Z" to include the Zulu time zone indicator.
+    """
+
+    if ymd:
+      return ymdhms_format_from_tai(tai, sep="T", digits=digits, suffix=suffix)
+    else:
+      return ydhms_format_from_tai(tai, sep="T", digits=digits, suffix=suffix)
 
 ########################################
 # UNIT TESTS

@@ -825,6 +825,10 @@ def stelab(*args):
   """stelab(double [3] pobj, double [3] vobs)"""
   return _cspice.stelab(*args)
 
+def stlabx(*args):
+  """stlabx(double [3] pobj, double [3] vobs)"""
+  return _cspice.stlabx(*args)
+
 def stpool(*args):
   """stpool(char * CONST_STRING, int nth, char * CONST_STRING)"""
   return _cspice.stpool(*args)

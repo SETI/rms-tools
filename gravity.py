@@ -15,6 +15,16 @@
 #
 # Revised February 18, 2012 (MRS)
 #   - Added gravity fields of more bodies as class constants.
+#
+# Revised July 30, 2013 (MRS)
+#   - Added a new constant PLUTO_CHARON_AS_RINGS that properly describes the
+#     time-averaged gravity field up to J10.
+#   - Added a default value of (1,0,0) for the factors in solve_a().
+#
+# Revised May 3, 2014 (MRS)
+#   - Updated Pluto system gravity based on Brozovic et al. 2014.
+#   - Redefined PLUTO_CHARON as PLUTO_CHARON_OLD
+#   - Redefined PLUTO_CHARON_AS_RINGS as PLUTO_CHARON
 ################################################################################
 import numpy as np
 import unittest
@@ -369,15 +379,22 @@ VENUS   = Gravity( 4.86732e24 * G_PER_KG, [], 6051.8 )
 EARTH   = Gravity( 5.97219e24 * G_PER_KG, [], 6378.14)
 MARS    = Gravity(0.641693e24 * G_PER_KG, [], 3396.19)
 
-# From http://ssd.jpl.nasa.gov/?gravity_fields_op
-JUPITER = Gravity(126686535., [14696.43e-06, -587.14e-06, 34.25e-06], 71492.)
+# Earlier values from http://ssd.jpl.nasa.gov/?gravity_fields_op
+JUPITER_V1 = Gravity(126686535., [14696.43e-06, -587.14e-06, 34.25e-06], 71492.)
 #SATURN  = Gravity( 37931208.,  [16290.71e-06, -935.83e-06, 86.14e-06], 60330.)
-SATURN  = Gravity( 37931207.7, [16290.71e-06, -936.83e-06, 86.14e-06, -10.e-06], 60330.)
-URANUS  = Gravity(  5793964., [ 3341.29e-06,  -30.44e-06           ], 26200.)
-NEPTUNE = Gravity(  6835100., [ 3408.43e-06,  -33.40e-06           ], 25225.)
+SATURN_V1  = Gravity( 37931207.7, [16290.71e-06, -936.83e-06, 86.14e-06, -10.e-06], 60330.)
+URANUS_V1  = Gravity(  5793964., [ 3341.29e-06,  -30.44e-06           ], 26200.)
+NEPTUNE_V1 = Gravity(  6835100., [ 3408.43e-06,  -33.40e-06           ], 25225.)
+
+# Updated September 15, 2015 from http://ssd.jpl.nasa.gov/?gravity_fields_op
+JUPITER = Gravity(126686536.1, [14695.62e-06, -591.31e-06, 20.78e-06], 71492.)
+SATURN  = Gravity( 37931208. , [16290.71e-06, -935.83e-06, 86.14e-06,
+                                                            -10.e-06], 60330.)
+URANUS  = Gravity(  5793951.3, [ 3510.68e-06,  -34.17e-06           ], 25559.)
+NEPTUNE = Gravity(  6835100. , [ 3408.43e-06,  -33.40e-06           ], 25225.)
 
 # From http://arxiv.org/abs/0712.1261
-PLUTO_ONLY = Gravity(870.3, [], 1151.)
+PLUTO_ONLY = Gravity(869.6, [], 1151.)
 PLUTO = PLUTO_ONLY
 
 # From http://ssd.jpl.nasa.gov/?sat_phys_par
@@ -407,7 +424,7 @@ OBERON    = Gravity( 192.4, [], 761.4)
 TRITON    = Gravity(1427.6, [], 1353.4)
 NEREID    = Gravity(  2.06, [],  170.)
 
-CHARON    = Gravity(103.2, [], 603.6)
+CHARON    = Gravity(105.9, [], 603.6)
 
 # Sets with relatively large mass ratios
 SUN_JUPITER = Gravity(SUN.gm + JUPITER.gm, [], SUN.rp)
@@ -417,10 +434,33 @@ JUPITER_GALS = Gravity(JUPITER.gm + IO.gm + EUROPA.gm + GANYMEDE.gm +
 
 SATURN_TITAN = Gravity(SATURN.gm + TITAN.gm, SATURN.jn, SATURN.rp)
 
-PLUTO_CHARON = Gravity(PLUTO_ONLY.gm + CHARON.gm, [], PLUTO_ONLY.rp)
+PLUTO_CHARON_OLD = Gravity(PLUTO_ONLY.gm + CHARON.gm, [], PLUTO_ONLY.rp)
 
-PLUTO_A  = 2035.                    # km
-CHARON_A = 19573. - 2035.           # km
+################################################################################
+# Revised Pluto-Charon gravity
+#
+# Outside a ring of radius R, the gravity moments are -P2n(0).
+#   J2 = 1/2; J4 = -3/8; J6 = 5/16; J8 = -35/128; J10 = 63/256
+# We can stop there.
+#
+# The gravity potential in the equatorial plane for one body is:
+#   phi(r) = -GM/r (1 - SUM[ J2n (R/r)^(2n) P_2n(0) ]
+#          = -GM/r + (J2 GM R^2 P_2(0)) / r^3
+#                  + (J4 GM R^4 P_4(0)) / r^5 + ...
+#
+# For two bodies with GM1, GM2, R1, R2, but the same J2n series...
+#
+#   phi(r) = -(GM1 + GM2) / r
+#          +  (GM1 R1^2 + GM2 R2^2) (J2 P_2(0)) / r^3
+#          +  (GM1 R1^4 + GM2 R2^4) (J4 P_4(0)) / r^5 ...
+#
+# Scaling everything to GM = GM1 + GM2; R = R2:
+#   J2' = J2 (GM1 (R1/R2)^2 + GM2) / (GM1 + GM2)
+#   J4' = J4 (GM1 (R1/R2)^4 + GM2) / (GM1 + GM2)
+# etc.
+
+PLUTO_A  = 19596. * CHARON.gm / (PLUTO.gm + CHARON.gm)
+CHARON_A = 19596. - PLUTO_A
 ratio2 = (PLUTO_A / CHARON_A)**2
 gm1 = PLUTO_ONLY.gm
 gm2 = CHARON.gm
@@ -430,6 +470,9 @@ PLUTO_CHARON_AS_RINGS = Gravity(gm1 + gm2,
           5/16.   * (gm1 * ratio2**3 + gm2) / (gm1 + gm2),
          -35/128. * (gm1 * ratio2**4 + gm2) / (gm1 + gm2),
           63/256. * (gm1 * ratio2**5 + gm2) / (gm1 + gm2)], CHARON_A)
+PLUTO_CHARON = PLUTO_CHARON_AS_RINGS
+################################################################################
+
 LOOKUP = {
     "SUN": SUN,
     "MERCURY": MERCURY,
