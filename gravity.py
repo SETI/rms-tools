@@ -346,20 +346,21 @@ class Gravity():
 
         return self.dcombo_da(a, (1,0,-1))
 
-    def olr_pattern(self, n, m, p=1):
-        """Returns the pattern speed of the m:m+p outer Lindblad resonance,
+    def ilr_pattern(self, n, m, p=1):
+        """Returns the pattern speed of the m:m-p inner Lindblad resonance,
         given the mean motion n of the perturber.
         """
 
         a = self.solve_a(n, (1,0,0))
         return (n + self.kappa(a) * p/m)
 
-    def ilr_pattern(self, n, m, p=1):
-        """Returns the pattern speed of the m:m-p inner Lindblad resonance,
+    def olr_pattern(self, n, m, p=1):
+        """Returns the pattern speed of the m:m+p outer Lindblad resonance,
         given the mean motion n of the perturber.
         """
 
-        return olr_pattern(self, n, m, -p)
+        a = self.solve_a(n, (1,0,0))
+        return (n - self.kappa(a) * p/(m+p))
 
 # Planetary gravity fields defined...
 
