@@ -206,7 +206,7 @@ def main():
 
     group.add_option("--hscale", dest="hscale",
         action="store", type="float", nargs=1,
-        help="percentage by which to scale the iwdth of the image; use with "  +
+        help="percentage by which to scale the width of the image; use with "  +
              "--wscale to scale the width and height by different amounts.")
 
     # --frame
@@ -858,7 +858,7 @@ def ImagesToPics(filenames, directory=None,
     ############################################################################
 
     #  Fill in default file extension if necessary
-    if extension == None:
+    if extension is None:
         if twobytes: extension = "tiff"
         else:        extension = "jpg"
 
@@ -976,7 +976,7 @@ def ImagesToPics(filenames, directory=None,
 
         # Apply rotation if necessary
         array2d = RotateArray(array2d, this_display_upward, rotate)
-        if mask != None: mask = RotateArray(mask, this_display_upward, rotate)
+        if mask is not None: mask = RotateArray(mask, this_display_upward, rotate)
 
         # Apply colormap
         arrayRGB = ApplyColormap(array2d, these_limits, colormap, mask,
@@ -1087,7 +1087,7 @@ def ReadImageArray(filename, object=None):
 
         array3d = None
 
-        if object != None:
+        if object is not None:
             try:
                 object = int(object)
             except ValueError:
@@ -1097,10 +1097,10 @@ def ReadImageArray(filename, object=None):
         else:
             for i in range(len(fitsfile)):
                 array3d = fitsfile[i].data
-                if array3d == None: continue
+                if array3d is None: continue
                 if len(array3d.shape) in (2,3): break
 
-        if array3d == None: raise IOError("Image array not found in FITS file")
+        if array3d is None: raise IOError("Image array not found in FITS file")
 
         if len(array3d.shape) == 2: 
             array3d = array3d.reshape((1,) + array3d.shape)
@@ -1347,7 +1347,7 @@ def GetLimits(array2d, limits=None, percentiles=(0.,100.),
     array_max = trimmed.max()
 
     # Identify the valid extremes of the image
-    if limits == None:
+    if limits is None:
         if is_int: limits = (array_min - 0.5, array_max + 0.5)
         else:      limits = (array_min,       array_max)
 
@@ -1640,7 +1640,7 @@ def ApplyColormap(array2d, limits, colormap=None, mask=None,
                 highlights[i][0] != highlights[i][2]): is_gray = False
 
     # An invalid color must be defined, defaults to black
-    if highlights[2] == None:
+    if highlights[2] is None:
         highlights[2] = np.zeros((3), 'float')
 
     # Interpret the colormap
@@ -1680,7 +1680,7 @@ def ApplyColormap(array2d, limits, colormap=None, mask=None,
     scaled = scaled.clip(0, mapcolors-1)
 
     # Apply the lookup table if necessary
-    if colormap != None:
+    if colormap is not None:
 
         # Extract the index and fractional bit of every pixel
         (indices, fracs) = divmod(scaled, 1.)
@@ -1700,12 +1700,12 @@ def ApplyColormap(array2d, limits, colormap=None, mask=None,
     for c in range(channels):
         slice = result[:,:,c]
 
-        if highlights[0] != None:
+        if highlights[0] is not None:
             slice[array2d < limits[0]] = highlights[0][c]
-        if highlights[1] != None:
+        if highlights[1] is not None:
             slice[array2d > limits[1]] = highlights[1][c]
 
-        if mask != None:
+        if mask is not None:
             slice[mask] = highlights[2][c]
 
     return result
@@ -1765,32 +1765,35 @@ def GetOutputSize(array, size=None, scale=(100.,100.), frame=None):
     new_height = old_height
 
     # Apply the size dimensions if any
-    if size:
-        if type(size) != type(()) and type(size) != type([]):
+    if size is not None:
+        if type(size) not in (list, tuple):
             size = (size, size)
 
         new_width  = size[0]
         new_height = size[1]
 
     # Apply the scale factor if any
-    if scale:
-        if type(scale) != type(()) and type(scale) != type([]):
+    if scale is not None:
+        if type(scale) not in (list, tuple):
             scale = (scale, scale)
 
         new_width  *= scale[0] / 100.
         new_height *= scale[1] / 100.
 
     # Squeeze inside frame if necessary
-    if frame:
-        if type(frame) != type(()) and type(frame) != type([]):
+    if frame is not None:
+        if type(frame) not in (list, tuple):
             frame = (frame, frame)
+
+        new_width = int(new_width)
+        new_height = int(new_height)
 
         factor = min(float(frame[0]) / new_width,
                      float(frame[1]) / new_height)
 
         if factor < 1.:
-            new_width  = new_width  * factor
-            new_height = new_height * factor
+            new_width  *= factor
+            new_height *= factor
 
     new_width  = int(new_width  + 0.5)
     new_height = int(new_height + 0.5)
@@ -2070,8 +2073,8 @@ def ReadPIL(infile):
             array = None
             palette = None
 
-        if array != None:
-            if palette != None:
+        if array is not None:
+            if palette is not None:
                 return IOError("16-bit palette option is not supported")
 
             return ArrayToPIL(array, twobytes=True, rescale=False)
@@ -2106,8 +2109,8 @@ def ReadArray(infile, rescale):
             array = None
             palette = None
 
-    if array != None:
-        if palette != None:
+    if array is not None:
+        if palette is not None:
             return IOError("16-bit palette option is not supported")
 
         if rescale: array = array.astype("float") / 65535.
