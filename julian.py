@@ -39,6 +39,8 @@
 # 1/17/12 (BSW) - subtracted 12 hours from tdb on tdb_from_tai (and added 12
 #   hours for the reverse in tai_from_tdb) to deal with J2000 starting from
 #   noon on 1/1/2000, not midnight.
+#
+# 8/24/16 (MRS) - New leapsecond for 12/31/16.
 ################################################################################
 
 import numpy as np
@@ -90,7 +92,8 @@ SPICE_LSK_DICT = {
                  33, dt.date(2006,1,1),
                  34, dt.date(2009,1,1),
                  35, dt.date(2012,7,1),
-                 36, dt.date(2015,7,1))}
+                 36, dt.date(2015,7,1),
+                 37, dt.date(2017,1,1))}
 
 # Define the static variables needed for TAI-ET conversions
 global DELTET_T_A, DELTET_K, DELTET_EB, DELTET_M0, DELTET_M1
