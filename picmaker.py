@@ -342,7 +342,7 @@ def main():
                  "MAXIMUM_7", "maximum_7"),
         help="name of image processing filter to apply. Choices are: "         +
              "none, blur, contour, detail, edge_enahnce, edge_enhance_more, "  +
-             "emboss, find_edges, smooth, smooth_more, sharpen, median_3, "    +             
+             "emboss, find_edges, smooth, smooth_more, sharpen, median_3, "    +
              "median_5, median_7, minimum_3/5/7, and maximum_3/5/7.")
 
     # --zebra
@@ -1432,6 +1432,13 @@ VOYAGER_ISS_DICT = {
     "CH4_JS": (255, 60, 60),
 }
 
+NH_MVIC_DICT = {
+    "BLUE"  : (110,110,255),
+    "RED"   : (255,210,100),
+    "NIR"   : (255,130, 90),
+    "CH4"   : (255, 70, 70),
+}
+
 RGB_BY_NM = np.array([                      # [wavelength, r, g, b]
     [380., 200.500,  60.500, 255.999],      # uv
     [410., 200.500, 110.500, 255.999],      # violet
@@ -1459,7 +1466,7 @@ def TintedColormap(filter_info):
                             the tint is based on the filter name.
     """
 
-    global VOYAGER_ISS_DICT, RGB_BY_NM, RFUNC, GFUNC, BFUNC
+    global VOYAGER_ISS_DICT, NH_MVIC_DICT, RGB_BY_NM, RFUNC, GFUNC, BFUNC
 
     (inst_host, inst_id, filter_name) = filter_info
 
@@ -1548,6 +1555,12 @@ def TintedColormap(filter_info):
                 else                       : tint = (127,127,127)
 
                 return [(0,0,0), tint, (255,255,255)]
+            else:
+                return [(0,0,0), (255,255,255)]
+
+        if inst_host == 'NEW HORIZONS':
+            if inst_id == 'MVIC':
+                return [(0,0,0), NH_MVIC_DICT[filter_name], (255,255,255)]
             else:
                 return [(0,0,0), (255,255,255)]
 
