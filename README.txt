@@ -18,10 +18,9 @@ Mac OSX 64-bit
         COPY FROM      cspice/_cspice_osx_10.9_64bit_python275.so
         COPY TO        cspice/_cspice.so
 Windows 32-bit
-        COPY FROM      cspice/_cspice_win7_32bit_python275.pyd
-        COPY TO        cspice/_cspice.pyd
+	* No binaries provided - you need to build your own *
 Windows 64-bit
-        COPY FROM      cspice/_cspice_win7_64bit_python272.pyd
+        COPY FROM      cspice/_cspice_win7_64bit_python2_7_11.pyd
         COPY TO        cspice/_cspice.pyd
 
 TO COMPILE FOR               FOLLOW INSTRUCTIONS IN
