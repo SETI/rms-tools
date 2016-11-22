@@ -28,10 +28,12 @@
 ################################################################################
 import numpy as np
 import unittest
+import warnings
 
 # Useful unit conversions
 DPR = 180. / np.pi      # Converts radians to degrees
 DPD = DPR * 86400.      # Converts radians per second to degrees per day 
+TWOPI = 2. * np.pi
 
 class Gravity():
     """A class describing the gravity field of a planet."""
@@ -53,6 +55,7 @@ class Gravity():
         # Evaluate coefficients for frequencies
         n = 0
         pn_zero = 1.
+        potential_jn = []
         omega_jn = []
         kappa_jn = []
         nu_jn    = []
@@ -63,6 +66,8 @@ class Gravity():
             n += 2          # i == 0 corresponds to J2; i == 1 to J4; etc.
             pn_zero = -(n-1.)/n * pn_zero
 
+            potential_jn.append(pn_zero * jlist[i])
+
             omega_jn.append(      -(n+1) * pn_zero * jlist[i])
             kappa_jn.append( (n-1)*(n+1) * pn_zero * jlist[i])
             nu_jn.append(   -(n+1)*(n+1) * pn_zero * jlist[i])
@@ -70,6 +75,8 @@ class Gravity():
             domega_jn.append(-(n+3) * omega_jn[i])
             dkappa_jn.append(-(n+3) * kappa_jn[i])
             dnu_jn.append(   -(n+3) * nu_jn[i])
+
+        self.potential_jn = np.array(potential_jn)
 
         self.omega_jn  = np.array(omega_jn)
         self.kappa_jn  = np.array(kappa_jn)
@@ -84,6 +91,12 @@ class Gravity():
         coefficients[0] * ratio2 + coefficients[1] * ratio2^2 ..."""
 
         return ratio2 * np.polyval(coefficients[::-1], ratio2)
+
+    def potential(self, a):
+        """Returns the potential energy at radius a, in the equatorial plane."""
+
+        return -self.gm/a * (1. -
+                             Gravity._jseries(self.potential_jn, self.r2/a2))
 
     def omega(self, a):
         """Returns the mean motion (radians/s) at semimajor axis a."""
@@ -362,6 +375,437 @@ class Gravity():
         a = self.solve_a(n, (1,0,0))
         return (n - self.kappa(a) * p/(m+p))
 
+    def state_from_osc(self, elements, body_gm=0.):
+        """Return position and velocity based on osculating orbital elements:
+        (a, e, i, mean longitude, longitude of pericenter,
+         longitude of ascending node).
+
+        Routine adapted from SWIFT's orbel_el2xv.f by Rob French. Only works
+        well for e < 0.18.
+        """
+
+        gm = self.gm + body_gm
+
+        (a, e, inc, mean_lon, long_peri, long_node) = elements
+        a = np.asfarray(a)
+        e = np.asfarray(e)
+        inc = np.asfarray(inc)
+        mean_lon = np.asfarray(mean_lon)
+        long_peri = np.asfarray(long_peri)
+        long_node = np.asfarray(long_node)
+
+        mean_anomaly = mean_lon - long_peri
+
+        sp = np.sin(long_peri)
+        cp = np.cos(long_peri)
+        so = np.sin(long_node)
+        co = np.cos(long_node)
+        si = np.sin(inc)
+        ci = np.cos(inc)
+        d11 = cp*co - sp*so*ci
+        d12 = cp*so + sp*co*ci
+        d13 = sp*si
+        d21 = -sp*co - cp*so*ci
+        d22 = -sp*so + cp*co*ci
+        d23 = cp*si
+
+        sm = np.sin(mean_anomaly)
+        cm = np.cos(mean_anomaly)
+
+        x = mean_anomaly + e*sm*( 1. + e*( cm + e*( 1. - 1.5*sm*sm)))
+
+        sx = np.sin(x)
+        cx = np.cos(x)
+        es = e*sx
+        ec = e*cx
+        f = x - es  - mean_anomaly
+        fp = 1. - ec 
+        fpp = es 
+        fppp = ec 
+        dx = -f/fp
+        dx = -f/(fp + dx*fpp/2.)
+        dx = -f/(fp + dx*fpp/2. + dx*dx*fppp/6.)
+
+        cape = x + dx
+
+        scap = np.sin(cape)
+        ccap = np.cos(cape)
+        sqe = np.sqrt(1. -e*e)
+        sqgma = np.sqrt(gm*a)
+        xfac1 = a*(ccap - e)
+        xfac2 = a*sqe*scap
+        ri = 1./(a*(1. - e*ccap))
+        vfac1 = -ri * sqgma * scap
+        vfac2 = ri * sqgma * sqe * ccap
+
+        x =  d11*xfac1 + d21*xfac2
+        y =  d12*xfac1 + d22*xfac2
+        z =  d13*xfac1 + d23*xfac2
+        vx = d11*vfac1 + d21*vfac2
+        vy = d12*vfac1 + d22*vfac2
+        vz = d13*vfac1 + d23*vfac2
+
+        # Broadcast to a common shape and create vectors
+        (x,y,z,vx,vy,vz) = np.broadcast_arrays(x,y,z,vx,vy,vz)
+
+        pos = np.stack([x, y, z], axis=-1)
+        vel = np.stack([vx, vy, vz], axis=-1)
+
+        return (pos,vel)
+
+    def osc_from_state(self, pos, vel, body_gm=0.):
+        """Return osculating orbital elements based on position and velocity.
+
+        Routine adapted from SWIFT's orbel_vx2el.f by Rob French.
+        """
+
+        (pos, vel) = np.broadcast_arrays(pos, vel)
+        pos = np.asfarray(pos)
+        vel = np.asfarray(vel)
+
+        x = pos[...,0]
+        y = pos[...,1]
+        z = pos[...,2]
+
+        vx = vel[...,0]
+        vy = vel[...,1]
+        vz = vel[...,2]
+
+        tiny = 1e-300
+
+        # Warning: This only works with elliptical orbits!
+        gmsum = self.gm + body_gm
+    
+        # Compute the angular momentum H, and thereby the inclination INC.
+        hx = y*vz - z*vy
+        hy = z*vx - x*vz
+        hz = x*vy - y*vx
+        h2 = hx*hx + hy*hy + hz*hz
+        h  = np.sqrt(h2)
+        inc = np.arccos(hz/h)
+
+        # Compute longitude of ascending node long_node and the argument of
+        # latitude u.
+        fac = np.sqrt(hx**2 + hy**2)/h
+
+        long_node = np.where(fac < tiny, np.zeros(x.shape),
+                                         Gravity._pos_arctan2(hx,-hy))
+        tmp = np.arctan2(y, x)
+        tmp = np.where(np.abs(inc - np.pi) < 10.*tiny, -tmp, tmp)
+        tmp = tmp % TWOPI
+
+        sin_inc = np.sin(inc)
+        if np.shape(sin_inc) == ():             # Avoid possible divide-by-zero
+            if sin_inc == 0.: sin_inc = 1.
+        else:
+            sin_inc[sin_inc == 0.] = 1.
+
+        u = np.where(fac < tiny, tmp, Gravity._pos_arctan2(z/sin_inc, 
+                                                           x*np.cos(long_node) + 
+                                                           y*np.sin(long_node)))
+
+        #  Compute the radius R and velocity squared V2, and the dot
+        #  product RDOTV, the energy per unit mass ENERGY.
+        r = np.sqrt(x*x + y*y + z*z)
+        v2 = vx*vx + vy*vy + vz*vz
+        v = np.sqrt(v2)
+        vdotr = x*vx + y*vy + z*vz
+        energy = 0.5*v2 - gmsum/r
+
+        a = -0.5*gmsum/energy
+
+        fac = 1. - h2/(gmsum*a)
+        e = np.where(fac > tiny, np.minimum(np.sqrt(fac), 1.), 0.) # XXX
+        face = (a-r)/(a*e)
+        face = np.minimum(face, 1.)
+        face = np.maximum(face, -1.)
+        cape = np.arccos(face)
+        cape = np.where(vdotr < 0., 2.*np.pi-cape, cape)
+        cape = np.where(fac > tiny, cape, u)
+        cw = (np.cos(cape) - e)/(1. - e*np.cos(cape))
+        sw = np.sqrt(1. - e*e)*np.sin(cape)/(1. - e*np.cos(cape))
+        w = np.where(fac > 0., Gravity._pos_arctan2(sw,cw), u)
+
+        mean_anomaly = (cape - e*np.sin(cape)) % TWOPI
+        long_peri = (u - w) % TWOPI
+
+        mean_lon = (mean_anomaly + long_peri) % TWOPI
+
+        # Convert any shapeless arrays to scalars
+        elements = []
+        for element in (a, e, inc, mean_lon, long_peri, long_node):
+            if isinstance(element, np.ndarray) and element.shape == ():
+                elements.append(element[()])
+            else:
+                elements.append(element)
+
+        return tuple(elements)
+
+    # Take the geometric osculating elements and convert to X,Y,Z,VX,VY,VZ
+    # Returns x, y, z, vx, vy, vz
+    # From Renner & Sicardy (2006) EQ 2-13
+
+    def state_from_geom(self, elements, body_gm=0.):
+        """Return position and velocity based on geometric orbital elements:
+        (a, e, i, mean longitude, longitude of pericenter,
+         longitude of ascending node).
+
+        Adapted from Renner & Sicardy (2006) EQ 2-13 by Rob French.
+        """
+
+        (a, e, inc, mean_lon, long_peri, long_node) = elements
+        a = np.asfarray(a)
+        e = np.asfarray(e)
+        inc = np.asfarray(inc)
+        lam = np.asfarray(mean_lon)
+        long_peri = np.asfarray(long_peri)
+        long_node = np.asfarray(long_node)
+
+        mean_anomaly = lam - long_peri
+
+        (n, kappa, nu, eta2, chi2,
+         alpha1, alpha2, alphasq) = self._geom_to_freq(a, e, inc, body_gm)
+        kappa2 = kappa**2
+        n2 = n**2
+        nu2 = nu**2
+
+        # Convert to cylindrical
+        r = a*(1. - e*np.cos(lam-long_peri) + 
+               e**2*(3./2. * eta2/kappa2 - 1. -
+                      eta2/2./kappa2 * np.cos(2.*(lam-long_peri))) +
+               inc**2*(3./4.*chi2/kappa2 - 1. +
+                        chi2/4./alphasq * np.cos(2.*(lam-long_node))))
+
+        L = (lam + 2.*e*n/kappa*np.sin(lam-long_peri) + 
+             e**2*(3./4. + nu2/2./kappa2)*n/kappa * np.sin(2.*(lam-long_peri)) -
+             inc**2*chi2/4./alphasq*n/nu*np.sin(2.*(lam-long_node)))
+
+        z = a * inc * (np.sin(lam-long_node) + 
+                       e*chi2/2./kappa/alpha1*np.sin(2.*lam-long_peri-long_node) -
+                       e*3./2.*chi2/kappa/alpha2*np.sin(long_peri-long_node))
+
+        rdot = a * kappa * (e*np.sin(lam-long_peri) + 
+                            e**2*eta2/kappa2*np.sin(2.*(lam-long_peri)) -
+                            inc**2*chi2/2./alphasq*nu/kappa*
+                            np.sin(2.*(lam-long_node)))
+
+        Ldot = n*(1. + 2.*e*np.cos(lam-long_peri) +
+                  e**2 * (7./2. - 3.*eta2/kappa2 - kappa2/2./n2 + 
+                           (3./2.+eta2/kappa2)*np.cos(2.*(lam-long_peri))) +
+                  inc**2 * (2. - kappa2/2./n2 - 3./2.*chi2/kappa2 - 
+                             chi2/2./alphasq*np.cos(2.*(lam-long_node))))
+
+        vz = a*inc*nu*(np.cos(lam-long_node) + 
+                       e*chi2*(kappa+nu)/2./kappa/alpha1/nu *
+                       np.cos(2*lam-long_peri-long_node) +
+           e*3./2.*chi2*(kappa-nu)/kappa/alpha2/nu*np.cos(long_peri-long_node))
+
+        x = r*np.cos(L)
+        y = r*np.sin(L)
+        vx = rdot*np.cos(L) - r*Ldot*np.sin(L)
+        vy = rdot*np.sin(L) + r*Ldot*np.cos(L)
+
+        # Broadcast to a common shape and create vectors
+        (x,y,z,vx,vy,vz) = np.broadcast_arrays(x,y,z,vx,vy,vz)
+
+        pos = np.stack([x, y, z], axis=-1)
+        vel = np.stack([vx, vy, vz], axis=-1)
+
+        return (pos, vel)
+
+    # Given the state vector x,y,z,vx,vy,vz retrieve the geometric elements
+    # Returns: a, e, inc, long_peri, long_node, mean_anomaly
+    # From Renner and Sicardy (2006) EQ 22-47
+
+    def geom_from_state(self, pos, vel, body_gm=0., tol=1.e-6):
+        """Return geometric orbital elements based on position and velocity.
+
+        Routine adapted from SWIFT's orbel_vx2el.f by Rob French.
+        """
+
+        (pos, vel) = np.broadcast_arrays(pos, vel)
+        pos = np.asfarray(pos)
+        vel = np.asfarray(vel)
+
+        x = pos[...,0]
+        y = pos[...,1]
+        z = pos[...,2]
+
+        vx = vel[...,0]
+        vy = vel[...,1]
+        vz = vel[...,2]
+
+        # EQ 22-25
+        r = np.sqrt(x**2 + y**2)
+        L = Gravity._pos_arctan2(y, x)
+        rdot = vx*np.cos(L) + vy*np.sin(L)
+        Ldot = (vy*np.cos(L)-vx*np.sin(L))/r
+
+        # Initial conditions
+        a = r
+        e = 0.
+        inc = 0.
+        rc = 0.
+        Lc = 0.
+        zc = 0.
+        rdotc = 0.
+        Ldotc = 0.
+        zdotc = 0.
+
+        old_diffmax = 1.e38
+        old_diff = None
+        idx_to_use = np.where(x!=-1e38,True,False) # All True
+        announced = False
+        while True:
+            (n, kappa, nu, eta2, chi2, 
+             alpha1, alpha2, alphasq) = self._geom_to_freq(a, e, inc, body_gm)
+            ret = Gravity._freq_to_geom(r, L, z, rdot, Ldot, vz, rc, Lc, zc, rdotc, 
+                                   Ldotc, zdotc, n, kappa, nu, eta2, chi2,
+                                   alpha1, alpha2, alphasq)
+            old_a = a
+            (a, e, inc, long_peri, long_node, lam, 
+             rc, Lc, zc, rdotc, Ldotc, zdotc) = ret
+            diff = np.abs(a-old_a)
+            diffmax = np.max(diff[idx_to_use])
+            if diffmax < tol:
+                break
+            if diffmax > old_diffmax:
+                idx_to_use = np.where(diff > old_diff,False,True) & idx_to_use
+                if not idx_to_use.any(): break
+                if not announced:
+                    warnings.warn('geom_from_state() started diverging! ' +
+                                  'Tolerance met = %e' % diffmax)
+                    announced = True
+
+                diff_of_diff = diff - old_diff
+                bad_idx = diff_of_diff.argmax()
+                warnings.warn('Bad index ' + str(bad_idx) +
+                              '; X = ' + str(x[bad_idx]) +
+                              '; Y = ' + str(y[bad_idx]) +
+                              '; Z =' + str(z[bad_idx]) +
+                              '; VX = ' + str(vx[bad_idx]) +
+                              '; VY = ' + str(vy[bad_idx]) +
+                              '; VZ = ' + str(vz[bad_idx]))
+            old_diffmax = diffmax
+            old_diff = diff
+
+        return (a, e, inc, lam, long_peri, long_node)
+
+    ####################################
+    # Internal methods
+    ####################################
+
+    # Take the geometric osculating elements and create frequencies
+    # Returns n, kappa, nu, eta2, chi2, alpha1, alpha2, alphasq
+    # From Renner & Sicardy (2006)  EQ 14-21
+
+    def _geom_to_freq(self, a, e, inc, body_gm=0.):
+        gmsum = self.gm + body_gm
+        j2 = 0.
+        j4 = 0.
+        if len(self.jn) > 0:
+            j2 = self.jn[0] * self.r2/a**2
+        if len(self.jn) > 1:
+            j4 = self.jn[1] * self.r2**2/a**4
+
+        gm_a3 = gmsum / a**3
+        sqrt_gm_a3 = np.sqrt(gm_a3)
+
+        n = sqrt_gm_a3 * (1. + 3./4.*j2 - 15./16.*j4 -
+                               9./32.*j2**2 + 45./64.*j2*j4 +
+                               27./128.*j2**3 +
+                               3.*j2*e**2 - 12.*j2*inc**2)
+
+        kappa = sqrt_gm_a3 * (1. - 3./4.*j2 + 45./16.*j4 -
+                                   9./32.*j2**2 + 135./64.*j2*j4 -
+                                   27./128.*j2**3 - 9.*j2*inc**2)
+
+        nu = sqrt_gm_a3 * (1. + 9./4.*j2 - 75./16.*j4 -
+                                81./32.*j2**2 + 675./64.*j2*j4 +
+                                729./128.*j2**3 +
+                                6.*j2*e**2 - 51./4.*j2*inc**2)
+
+        eta2 = gm_a3 * (1. - 2.*j2 + 75./8.*j4)
+
+        chi2 = gm_a3 * (1. + 15./2.*j2 - 175./8.*j4)
+
+        alpha1 = 1./3. * (2.*nu + kappa)
+        alpha2 = 2.*nu - kappa
+        alphasq = alpha1 * alpha2
+
+        return (n, kappa, nu, eta2, chi2, alpha1, alpha2, alphasq)
+
+
+    # Take the frequencies and convert them to cylindrical coordinates
+    # Returns a, e, inc, long_peri, long_node, lam, rc, Lc, zc, rdotc, Ldotc, zdotc
+    # From Renner & Sicardy (2006) EQ 36-41
+
+    @staticmethod
+    def _freq_to_geom(r, L, z, rdot, Ldot, zdot, rc, Lc, zc, rdotc, Ldotc, 
+                      zdotc, n, kappa, nu, eta2, chi2, alpha1, alpha2, alphasq):
+        kappa2 = kappa**2
+        n2 = n**2
+
+        # EQ 42-47
+        a = (r-rc) / (1.-(Ldot-Ldotc-n)/(2.*n))
+
+        e = np.sqrt(((Ldot-Ldotc-n)/(2.*n))**2 + ((rdot-rdotc)/(a*kappa))**2)
+
+        inc = np.sqrt(((z-zc)/a)**2 + ((zdot-zdotc)/(a*nu))**2)
+
+        lam = L - Lc - 2.*n/kappa*(rdot-rdotc)/(a*kappa)
+
+        long_peri = (lam - Gravity._pos_arctan2(rdot-rdotc,
+                                                a*kappa*(1.-(r-rc)/a))) % TWOPI
+
+        long_node = (lam - Gravity._pos_arctan2(nu*(z-zc), zdot-zdotc)) % TWOPI
+
+        # EQ 36-41
+        rc = (a * e**2 * (3./2.*eta2/kappa2 - 1. - 
+                           eta2/2./kappa2*np.cos(2.*(lam-long_peri))) +
+              a * inc**2 * (3./4.*chi2/kappa2 - 1. + 
+                             chi2/4./alphasq*np.cos(2.*(lam-long_node))))
+
+        Lc = (e**2*(3./4. + eta2/2./kappa2)*n/kappa*np.sin(2.*(lam-long_peri)) - 
+              inc**2*chi2/4./alphasq*n/nu*np.sin(2.*(lam-long_node)))
+
+        zc = a*inc*e*(chi2/2./kappa/alpha1*np.sin(2*lam-long_peri-long_node) - 
+                      3./2.*chi2/kappa/alpha2*np.sin(long_peri-long_node))
+
+        rdotc = (a*e**2*eta2/kappa*np.sin(2.*(lam-long_peri)) - 
+                 a*inc**2*chi2/2./alphasq*nu*np.sin(2.*(lam-long_node)))
+
+        Ldotc = (e**2*n*(7./2. - 3.*eta2/kappa2 - kappa2/2./n2 + 
+                          (3./2. + eta2/kappa2)*np.cos(2.*(lam-long_peri))) +
+                 inc**2*n*(2. - kappa2/2./n2 - 3./2.*chi2/kappa2 - 
+                            chi2/2./alphasq*np.cos(2.*(lam-long_node))))
+
+        zdotc = a*inc*e*(chi2*(kappa+nu)/2./kappa/
+                            alpha1*np.cos(2*lam-long_peri-long_node) + 
+                 3./2.*chi2*(kappa-nu)/kappa/alpha2*np.cos(long_peri-long_node))
+
+        # EQ 30-35
+    #    r = a*(1. - e*np.cos(lam-long_peri)) + rc
+    #    
+    #    L = lam + 2*e*n/kappa*np.sin(lam-long_peri) + Lc
+    #    
+    #    z = a*inc*np.sin(lam-long_node) + zc
+    #    
+    #    rdot = a*e*kappa*np.sin(lam-long_peri) + rdotc
+    #    
+    #    Ldot = n*(1. + 2.*e*np.cos(lam-long_peri)) + Ldotc
+    #    
+    #    zdot = a*inc*nu*np.cos(lam-long_node) + zdotc
+
+        return (a, e, inc, long_peri, long_node, lam,
+                rc, Lc, zc, rdotc, Ldotc, zdotc)
+
+    # A nicer version of arctan2
+    @staticmethod
+    def _pos_arctan2(y, x):
+        return np.arctan2(y, x) % TWOPI 
+
+################################################################################
 # Planetary gravity fields defined...
 
 # From http://ssd.jpl.nasa.gov/?planet_phys_par
