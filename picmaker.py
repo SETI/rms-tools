@@ -269,6 +269,13 @@ def main():
              "to use for scaling the image; values outside this range are "    +
              "set to the 'below' and 'above' highlight colors.")
 
+    # --trim
+    group.add_option("--trim", dest="trim",
+        action="store", type="int", nargs=1, default=0,
+        help="number of pixels around the edge of the image to trim before "   +
+             "computing a histogram. Sometimes edge pixels have bad values "   +
+             "that could otherwise corrupt the scaling. Default is zero.")
+
     parser.add_option_group(group)
 
     ### Enhancement options
@@ -569,6 +576,7 @@ def main():
             'valid': options.valid,
             'limits': options.limits,
             'percentiles': options.percentiles,
+            'trim': options.trim,
 
             # enhancement options
             'colormap': options.colormap,
@@ -672,7 +680,7 @@ def FindCommonPath(directories):
     return longest[:last_slash]
 
 ################################################################################
-# Function to process all the files in a directory when not making a movie
+# Function to process all the files in a directory
 ################################################################################
 
 def ProcessImages(filenames, directory, movie, option_dicts):
@@ -714,8 +722,8 @@ def ProcessImages(filenames, directory, movie, option_dicts):
                         prev_pointer = option_dict['pointer']
 
                 # Convert image...
-                _ = ImagesToPics([filename], directory, reuse=reuse,
-                                 **option_dict)
+                results = ImagesToPics([filename], directory, reuse=reuse,
+                                       **option_dict)
 
 ################################################################################
 # Main method
@@ -727,7 +735,7 @@ def ImagesToPics(filenames, directory=None,
         bands=(0,1), lines=None, samples=None, obj=None, pointer=['IMAGE'],
         size=None, scale=(100.,100.), frame=None, wrap=False, overlap=0.,
             gap_size=1, gap_color='white', wfpc2=False,
-        valid=None, limits=None, percentiles=None,
+        valid=None, limits=None, percentiles=None, trim=0,
         colormap=None, below_color=None, above_color=None, invalid_color=None,
             gamma=1., tint=False,
         display_upward=False, display_downward=False, rotate=None,
@@ -846,6 +854,11 @@ def ImagesToPics(filenames, directory=None,
                         to fall above the upper limit. These values are based on
                         a histogram generated after the limits have been
                         applied. Default is (0,100).
+
+    trim                the number of pixels around the edge of the image to
+                        trim before computing a histogram. Sometimes edge pixels
+                        have bad values that could otherwise corrupt the
+                        scaling. Default is zero.
 
     colormap            an optional string containing two or more colors
                         separated by dashes. These define the sequence of colors
@@ -1047,7 +1060,7 @@ def ImagesToPics(filenames, directory=None,
 
                 # Get the histogram limits
                 these_limits = GetLimits(array2d, limits, percentiles,
-                                         assume_int=is_int)
+                                         assume_int=is_int, trim=trim)
 
                 # Apply rotation if necessary
                 temp_rotate = WFPC2_ROTATIONS[b]
