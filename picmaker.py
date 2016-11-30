@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#!/usr/bin/env python
 ################################################################################
 # picmaker.py
 #
@@ -31,6 +31,9 @@ from tabulation import Tabulation
 ################################################################################
 
 def main():
+
+  # Catch any error at return exit status 1
+  try:
 
     ############################################################################
     # Define the parser...
@@ -223,9 +226,15 @@ def main():
 
     # --overlap
     group.add_option("--overlap", dest="overlap",
-        action="store", type="float", nargs=1, default=0.,
+        action="store", type="float", nargs=1, default=None,
         help="percentage of overlap between the end of one wrapped section "   +
              "and the beginning of the next.")
+
+    # --overlaps
+    group.add_option("--overlaps", dest="overlaps",
+        action="store", type="float", nargs=2, default=None,
+        help="range of percentage of overlaps between the end of one "         +
+             "wrapped section and the beginning of the next.")
 
     # --gapsize
     group.add_option("--gapsize", dest="gap_size",
@@ -469,9 +478,6 @@ def main():
         if options.wfpc2 and options.bands is not None:
             raise ValueError("wfpc2 and bands options are incompatible")
 
-        if options.wfpc2 and options.rectangle is not None:
-            raise ValueError("wfpc2 and rectangle options are incompatible")
-
         if options.wfpc2 and options.movie:
             raise ValueError("wfpc2 and movie options are incompatible")
 
@@ -487,6 +493,17 @@ def main():
 
         if options.scale is not None and options.hscale is not None:
             raise ValueError("scale and hscale options are incompatible")
+
+        # frame vs. size
+        if options.frame is not None and options.size is not None:
+            raise ValueError("frame and size options are incompatible")
+
+        # overlap vs. overlaps
+        if options.overlap is not None and options.overlaps is not None:
+            raise ValueError("overlap and overlaps options are incompatible")
+
+        if options.overlap is not None:
+            options.overlaps = (options.overlap, options.overlap)
 
         # up, down
         if options.display_upward and options.display_downward:
@@ -543,6 +560,10 @@ def main():
         if options.alt_strip is not None:
             options.strip = [options.strip, options.alt_strip]
 
+        # Interpret overlaps
+        if options.overlap is not None:
+            options.overlaps = (options.overlap, options.overlap)
+
         option_dict = {
             # control parameters
             'clobber': clobber,
@@ -567,7 +588,7 @@ def main():
             'scale': options.scale,
             'frame': options.frame,
             'wrap': options.wrap,
-            'overlap': options.overlap,
+            'overlap': options.overlaps,
             'gap_size': options.gap_size,
             'gap_color': options.gap_color,
             'wfpc2': options.wfpc2,
@@ -656,7 +677,13 @@ def main():
 
             ProcessImages(filepaths, out_dir, movie, option_dicts)
 
+  except Exception:
+    sys.excepthook(*sys.exc_info())
+    sys.exit(1)
+
+################################################################################
 # A handy utility
+################################################################################
 
 def FindCommonPath(directories):
 
@@ -732,14 +759,14 @@ def ProcessImages(filenames, directory, movie, option_dicts):
 def ImagesToPics(filenames, directory=None,
         clobber=True, proceed=False,
         extension='jpg', suffix='', strip=[], quality=75, twobytes=False,
-        bands=(0,1), lines=None, samples=None, obj=None, pointer=['IMAGE'],
-        size=None, scale=(100.,100.), frame=None, wrap=False, overlap=0.,
+        bands=None, lines=None, samples=None, obj=None, pointer=['IMAGE'],
+        size=None, scale=(100.,100.), frame=None, wrap=False, overlap=(0.,0.),
             gap_size=1, gap_color='white', wfpc2=False,
         valid=None, limits=None, percentiles=None, trim=0,
         colormap=None, below_color=None, above_color=None, invalid_color=None,
             gamma=1., tint=False,
         display_upward=False, display_downward=False, rotate=None,
-        filter=None, zebra=False,
+        filter='NONE', zebra=False,
         reuse=None):
 
     """Converts an image file (VICAR, FITS or TIFF) to a picture file (JPEG,
@@ -779,7 +806,8 @@ def ImagesToPics(filenames, directory=None,
                         combine for the output file. The pixels in those bands
                         are averaged together. Values follow python indexing
                         conventions, so (0,2) will combine the first two bands,
-                        (which are indexed 0 and 1). Default is (0,1).
+                        (which are indexed 0 and 1). Default is None, which is
+                        equivalent to (0,1).
 
     lines               an optional tuple defining the range of lines to extract
                         for output. Default is to include all the lines.
@@ -818,11 +846,11 @@ def ImagesToPics(filenames, directory=None,
                         elongated. This can make more effective use of the
                         specified size or frame.
 
-    overlap             percentage of overlap between the end of one section and
-                        the beginning of the next. For example, 5% overlap means
-                        that the last 5% of pixels in one section of a wrapped
-                        image also appear as the first 5% of the pixels in the
-                        next section.
+    overlap             a tuple defining the range of allowed overlaps between
+                        the end of one wrapped section and the beginning of the
+                        next. For example, (5,10) means that between 5% and 10%
+                        of the last pixels in one section of a wrapped image
+                        will also appear at the beginning of the next section.
 
     gap_size            the size of the gap in pixels between the sections of a
                         wrapped image.
@@ -943,7 +971,21 @@ def ImagesToPics(filenames, directory=None,
     # Main code begins here
     ############################################################################
 
-    #  Fill in default file extension if necessary
+    # Check for incompatible options
+
+    if wfpc2 and bands is not None:
+        raise ValueError("wfpc2 and bands options are incompatible")
+
+    if wfpc2 and movie:
+        raise ValueError("wfpc2 and movie options are incompatible")
+
+    # frame vs. size
+    if frame is not None and size is not None:
+        raise ValueError("frame and size options are incompatible")
+
+    # Fill in defaults if necessary
+    if bands is None: bands = (0,1)
+
     if extension is None:
         if twobytes: extension = "tiff"
         else:        extension = "jpg"
@@ -1114,9 +1156,9 @@ def ImagesToPics(filenames, directory=None,
         arrayRGB = ApplyGamma(arrayRGB, gamma)
 
         # Determine the full output size neglecting any wrap to be applied
-        (new_size, wrapped_size, sections, overlap_size,
-         wrap_axis) = GetUnwrappedSize(arrayRGB, size, scale, frame, wrap,
-                                                 overlap, gap_size)
+        (unwrapped_size, wrapped_size, sections,
+         wrap_axis) = GetSize(arrayRGB.shape, size, scale, frame,
+                                              wrap, overlap, gap_size)
 
         # Convert to PIL image
         image = ArrayToPIL(arrayRGB, twobytes)
@@ -1125,12 +1167,12 @@ def ImagesToPics(filenames, directory=None,
         image = FilterImage(image, filter)
 
         # Resize PIL image
-        image = ResizeImage(image, new_size)
+        image = ResizeImage(image, unwrapped_size)
 
         # Wrap the PIL image if necessary
         if sections > 1:
-            image = WrapImage(image, wrapped_size, sections, overlap_size,
-                                     wrap_axis, gap_size, gap_color)
+            image = WrapImage(image, wrapped_size, sections, wrap_axis,
+                                     gap_size, gap_color)
 
         # Construct the output file name
         outfile = GetOutfile(infile, directory, strip, suffix, extension,
@@ -1911,14 +1953,15 @@ def ApplyGamma(array, gamma):
 # Determine unwrapped image dimensions
 ################################################################################
 
-def GetUnwrappedSize(array, size=None, scale=(100.,100.), frame=None,
-                     wrap=False, overlap=0., gap_size=1):
+def GetSize(array_shape, size=None, scale=(100.,100.), frame=None,
+                         wrap=False, overlap=(0.,0.), gap_size=1):
     """Returns the output image size (width, height) and wrap properties based
     on the shape of the array (neglecting bands, if any).
     
     Input:
-        array           the numpy array, which could be 2-D or 3-D. Index order
-                        is (lines, samples) or (lines, samples, bands).
+        array_shape     shape of the numpy array, which could be 2-D or 3-D.
+                        Index order is (lines, samples) or (lines, samples,
+                        bands).
         size            a new set of dimensions (width, height). Use a single
                         value for a square image, or None to preserve the given
                         array size.
@@ -1933,18 +1976,19 @@ def GetUnwrappedSize(array, size=None, scale=(100.,100.), frame=None,
                         each dimension; None implies no frame constraint.
         wrap            True to wrap the image in a way that maximizes detail
                         and minimizes distortion.
-        overlap         the percentage of pixels at the end of one section that
-                        should also appear at the beginning of the next.
+        overlap         a tuple defining the range of allowed overlaps between
+                        the end of one wrapped section and the beginning of the
+                        next. For example, (5,10) means that between 5% and 10%
+                        of the last pixels in one section of a wrapped image.
         gap_size        number of pixels to reserve as blank between any wrapped
                         sections of the array.
 
     Return:             a tuple (unwrapped_shape, wrapped_shape, sections,
                                                                  wrap_axis)
-        unwrapped_shape shape of the image array before wrapping.
-        wrapped_shape   shape of the image array after wrapping.
+        unwrapped_size  shape of the PIL image (w,h) before wrapping but after
+                        any re-scaling.
+        wrapped_size    shape of the PIL image (w,h) after wrapping.
         sections        number of sections to wrap.
-        overlap_size    number of pixels to duplicate at the beginning/end of
-                        each section.
         wrap_axis       0 to wrap horizontally, 1 to wrap vertically.
     """
 
@@ -1961,120 +2005,168 @@ def GetUnwrappedSize(array, size=None, scale=(100.,100.), frame=None,
         if type(frame) not in (list, tuple):
             frame = (frame, frame)
 
-    # Determine the output size based on size, scale and frame
-    (new_size,
-     quality, wrap_axis) = GetUnwrappedSize1(array.shape, size, scale, frame)
+    # Apply scale factor to shape
+    array_size = [array_shape[1], array_shape[0]]   # [width, height]
+    if scale is not None:
+        array_size[0] *= scale[0]/100.
+        array_size[1] *= scale[1]/100.
+
+    # Determine the output size based on size or frame
+    if size is not None:
+        (unwrapped_size, quality,
+         expand) = _GetSize_for_size(array_size, size, 0, 1., 1.)
+    elif frame is not None:
+        (unwrapped_size, expanded_size, quality,
+         expand) = _GetSize_for_frame(array_size, frame, 0, 1., 1.)
+    else:
+        unwrapped_size = [int(array_size[0] + 0.5), int(array_size[1] + 0.5)]
 
     # Without the wrapping option, we're done
-    if not wrap:
-        return (new_size, new_size, 1, 0, 0)
+    if not wrap or ((size is None) and (frame is None)):
+        return (unwrapped_size, unwrapped_size, 1, 0)
 
     best_quality = quality
     best_sections = 1
-    best_overlap = 0
-    best_size = new_size
+    best_axis = 0
+    best_unwrapped = unwrapped_size
+    best_wrapped = unwrapped_size
+    best_overlap = 0.
 
-    # Increment number of wrap sections until quality is maximized
-    for k in range(2, 101):
-        if size is None:
-            temp_size = None
+    quality_1x1 = quality
+
+    # Try horizontal, then vertical wrapping
+    for axis in (0,1):
+
+      # Increment number of wrap sections until quality starts to drop
+      for k in range(2, 101):
+
+        tweak = (k-1.) / k
+        expand_min = 1. + overlap[0]/100. * tweak
+        expand_max = 1. + overlap[1]/100. * tweak
+
+        # Adjust size and frame for axis, sections and gap
+        if size is not None:
+            temp_size = [size[0], size[1]]
+            temp_size[axis] *= k
+            temp_size[1-axis] -= (k-1) * gap_size
+            temp_size[1-axis] //= k
+
+            (unwrapped_size, quality,
+             expand) = _GetSize_for_size(array_size, temp_size, axis,
+                                                      expand_min, expand_max)
+            test_overlap = (expand - 1.) / tweak * 100.
+
+            wrapped_size = size
+
         else:
-            temp_size = [0, 0]
-            temp_size[wrap_axis] = size[wrap_axis] * k
-            temp_size[1-wrap_axis] = (size[1-wrap_axis] - (k-1)*gap_size) // k
+            temp_frame = [frame[0], frame[1]]
+            temp_frame[axis] *= k
+            temp_frame[1-axis] -= (k-1) * gap_size
+            temp_frame[1-axis] //= k
 
-        if frame is None:
-            temp_frame = None
-        else:
-            temp_frame = [0,0]
-            temp_frame[wrap_axis] = frame[wrap_axis] * k
-            temp_frame[1-wrap_axis] = (frame[1-wrap_axis] - (k-1)*gap_size) // k
+            (unwrapped_size, expanded_size, quality,
+             expand) = _GetSize_for_frame(array_size, temp_frame, axis,
+                                                      expand_min, expand_max)
+            test_overlap = (expand - 1.) / tweak * 100.
 
-        temp_shape = [array.shape[0], array.shape[1]]
-        if overlap > 0.:
-            section_axis_size = temp_shape[1 - wrap_axis] // k
-            overlap_size = int(section_axis_size * overlap/100. + 0.5)
-            temp_shape[1 - wrap_axis] += (k-1) * overlap_size
+            wrapped_size = [expanded_size[0], expanded_size[1]]
+            wrapped_size[axis] = (wrapped_size[axis] + (k-1)) // k
+            wrapped_size[1-axis] *= k
+            wrapped_size[1-axis] += (k-1) * gap_size
+            wrapped_size[0] = min(wrapped_size[0], frame[0])
+            wrapped_size[1] = min(wrapped_size[1], frame[1])
 
-        (temp_size, temp_quality,
-         temp_wrap) = GetUnwrappedSize1(temp_shape, temp_size, scale,
-                                        temp_frame)
-
-        if temp_quality <= best_quality:
+        if quality <= best_quality:
             break
 
-        best_quality = temp_quality
+        # If the improvement from 1x1 to 1x2 is marginal, stick with 1x1
+        if frame is not None and k == 2 and quality < quality_1x1 * 1.1:
+            continue
+
+        best_quality = quality
         best_sections = k
-        best_overlap = overlap_size
-        best_size = temp_size
+        best_axis = axis
+        best_unwrapped = unwrapped_size
+        best_wrapped = wrapped_size
+        best_overlap = test_overlap
 
-    if frame is None:
-        wrapped_size = size
+    quality = best_quality
+    sections = best_sections
+    axis = best_axis
+    unwrapped_size = best_unwrapped
+    wrapped_size = best_wrapped
+    test_overlap = best_overlap
+
+    return (unwrapped_size, wrapped_size, sections, axis)
+
+def _GetSize_for_size(array_size, size, axis, expand_min, expand_max):
+
+    scale = [size[0] / float(array_size[0]),
+             size[1] / float(array_size[1])]
+
+    scale_expmin = [scale[0], scale[1]]
+    scale_expmin[axis] /= expand_min
+
+    distortion_expmin = np.log(scale_expmin[1] / scale_expmin[0])
+
+    scale_expmax = [scale[0], scale[1]]
+    scale_expmax[axis] /= expand_max
+
+    distortion_expmax = np.log(scale_expmax[1] / scale_expmax[0])
+
+    if abs(distortion_expmin) <= abs(distortion_expmax):
+        expand = expand_min
+        distortion = abs(distortion_expmin)
     else:
-        wrapped_size = [0,0]
-        wrapped_size[wrap_axis] = frame[wrap_axis]
-        wrapped_size[1-wrap_axis] = \
-            best_sections * (best_size[1-wrap_axis] + gap_size) - gap_size
+        expand = expand_max
+        distortion = abs(distortion_expmax)
 
-    # Let the image stretch out to fill any wasted space, toleration the
-    # associated extra distortion
-    best_size[wrap_axis] = best_sections * (wrapped_size[wrap_axis] +
-                                            best_overlap) - best_overlap
+    if distortion_expmin * distortion_expmax < 0:
+        expand = scale[axis] / scale[1-axis]
+        distortion = 0.
 
-    return (best_size, wrapped_size, best_sections, best_overlap, wrap_axis)
+    quality = np.exp(-distortion)   # Quality peaks at unity for no distortion
 
-def GetUnwrappedSize1(array_shape, size=None, scale=(100.,100.), frame=None):
+    unwrapped_size = [size[0], size[1]]
+    unwrapped_size[axis] = int(unwrapped_size[axis]/expand + 0.5)
 
-    # Save the current dimensions
-    old_width  = array_shape[1]
-    old_height = array_shape[0]
+    return (unwrapped_size, quality, expand)
 
-    distortion_width = old_width    # for distortion calculations
-    distortion_height = old_height
+def _GetSize_for_frame(array_size, frame, axis, expand_min, expand_max):
 
-    new_width  = old_width
-    new_height = old_height
+    # Determine optimal size inside the frame, with minimal expansion
+    array_size_expmin = [array_size[0], array_size[1]]
+    array_size_expmin[axis] *= expand_min
 
-    # Apply the scale factor if any
-    if scale is not None:
-        new_width  *= scale[0] / 100.
-        new_height *= scale[1] / 100.
+    scalings = [frame[0] / float(array_size_expmin[0]),
+                frame[1] / float(array_size_expmin[1])]
 
-        distortion_width = new_width    # specified scale factors do not
-        distortion_height = new_height  # count toward distortion
+    scale = min(scalings[0], scalings[1])
 
-    # Apply the size dimensions if any
-    if size is not None:
-        new_width  = size[0]
-        new_height = size[1]
+    optimal_size_float = [scale * array_size_expmin[0],
+                          scale * array_size_expmin[1]]
 
-    # Squeeze inside frame if necessary
-    occupancy = 1.
-    wrap_axis = 0
-    if frame is not None:
-        width_factor = float(frame[0]) / float(new_width)
-        height_factor = float(frame[1]) / float(new_height)
+    optimal_size = [min(int(optimal_size_float[0] + 0.5), frame[0]),
+                    min(int(optimal_size_float[1] + 0.5), frame[1])]
 
-        if width_factor < height_factor:
-            new_width = frame[0]
-            new_height = int(width_factor * new_height + 0.5)
-            new_height = min(max(1, new_height), frame[1])
-            wrap_axis = 0       # wrap along width axis
-        else:
-            new_height = frame[1]
-            new_width = int(height_factor * new_width + 0.5)
-            new_width = min(max(1, new_width), frame[0])
-            wrap_axis = 1       # wrap along height axis
+    quality = optimal_size[0] * optimal_size[1] / float(frame[0] * frame[1])
+        # quality is the fractional filling factor
 
-        occupancy = float(new_width * new_height) / float(frame[0] * frame[1])
+    # Determine size of image before expansion
+    unwrapped_size_float = [scale * array_size[0], scale * array_size[1]]
 
-    width_scale = new_width / distortion_width
-    height_scale = new_height / distortion_height
-    distortion = max(width_scale, height_scale) / min(width_scale, height_scale)
+    unwrapped_size = [optimal_size[0], optimal_size[1]]
+    unwrapped_size[axis] = int(unwrapped_size_float[axis] + 0.5)
 
-    quality = occupancy / distortion
+    # Expand overlap if possible for better filling
+    expanded_size = [optimal_size[0], optimal_size[1]]
 
-    return ([new_width, new_height], quality, wrap_axis)
+    expanded_length = unwrapped_size_float[axis] * expand_max
+    expanded_size[axis] = min(int(expanded_length + 0.5), frame[axis])
+
+    expand = expanded_size[axis]/scale / float(array_size[axis])
+
+    return (unwrapped_size, expanded_size, quality, expand)
 
 ################################################################################
 # Convert an array to a PIL image (or list of RGB images).
@@ -2305,8 +2397,7 @@ def _ResizeOneImage(image, new_size):
 # Wrap a PIL image
 ################################################################################
 
-def WrapImage(image, wrapped_size, sections, wrap_axis, overlap_size, gap_size,
-                     gap_color):
+def WrapImage(image, wrapped_size, sections, wrap_axis, gap_size, gap_color):
     """Wraps a PIL image.
 
     Input:
@@ -2314,8 +2405,6 @@ def WrapImage(image, wrapped_size, sections, wrap_axis, overlap_size, gap_size,
         wrapped_size    (width,height) of the final wrapped images.
         sections        number of sections to wrap.
         wrap_axis       0 to wrap horizontally; 1 to wrap vertically.
-        overlap_size    the number of extra pixels to include at the end of each
-                        wrapped section except the last.
         gap_size        width of gap in pixels between each section of the
                         wrapped image.
         gap_color       color to use in the gap, specified as an X11 name or an
@@ -2362,38 +2451,44 @@ def WrapImage(image, wrapped_size, sections, wrap_axis, overlap_size, gap_size,
 
     # Insert the sections using horizontal wrapping
     if wrap_axis == 0:
-        ds = wrapped_size[0]
+        di = wrapped_size[0]
         dj = (wrapped_size[1] + gap_size) // sections
+
         dl = dj - gap_size
 
-        s0 = 0
-        j0 = 0
+        float_s0 = 0.5
+        float_ds = (image.size[0] - wrapped_size[0]) / (sections - 1.)
+
+        j0 = int((wrapped_size[1] - dj * sections - gap_size)/2. + 0.5)
         for k in range(sections):
-            s1 = min(s0 + ds, array.shape[1])
-            i1 = s1 - s0
+            s0 = int(float_s0)
+            s1 = s0 + di
             j1 = j0 + dl
 
-            buffer[j0:j1,0:i1] = array[:,s0:s1]
+            buffer[j0:j1,:] = array[:,s0:s1]
 
-            s0 += ds - overlap_size
+            float_s0 += float_ds
             j0 += dj
 
     # Otherwise, insert using vertical wrapping
     else:
-        dl = wrapped_size[1]
         di = (wrapped_size[0] + gap_size) // sections
+        dj = wrapped_size[1]
+
         ds = di - gap_size
 
-        l0 = 0
-        i0 = 0
+        float_l0 = 0.5
+        float_dl = (image.size[1] - wrapped_size[1]) / (sections - 1.)
+
+        i0 = int((wrapped_size[0] - di * sections - gap_size)/2. + 0.5)
         for k in range(sections):
-            l1 = min(l0 + dl, array.shape[0])
-            j1 = l1 - l0
+            l0 = int(float_l0)
+            l1 = l0 + dj
             i1 = i0 + ds
 
-            buffer[0:j1,i0:i1] = array[l0:l1,:]
+            buffer[:,i0:i1] = array[l0:l1,:]
 
-            l0 += dl - overlap_size
+            float_l0 += float_dl
             i0 += di
 
     # Convert the new buffer back to a PIL image
