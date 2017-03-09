@@ -19,6 +19,7 @@ from optparse import OptionParser, OptionGroup
 import numpy as np
 from PIL import Image, ImageFilter
 
+import warnings
 import pyfits
 from vicar import VicarImage, VicarError
 from colornames import ColorNames
@@ -1218,21 +1219,34 @@ def ReadImageArray(filename, obj=None):
     Return:                 a tuple of three values:
                             [0]: a numpy 3-D array containing the image data.
                             [1]: True if the default display orientation is
-                                 upward; False if it is downward.
+                                 upward; False if it is downward or unknown.
                             [2]: a tuple containing (instrument_host_name,
                                  instrument_name, filter_name), if available.
     """
 
-    # Attempt to read the Numpy image
+    # Attempt to read the Pickle image; IOError if file not found
+    try:
+        with open(filename, 'rb') as f:
+            array3d = pickle.load(f)
+
+        if len(array3d.shape) == 2:
+            array3d = array3d.reshape((1,) + array3d.shape)
+        return (array3d, False, None)
+    except IOError, e:      # Problem reading file
+        raise e
+    except Exception:       # Not a pickle file
+        pass
+
+    # Attempt to read a Numpy save file
     try:
         array3d = np.load(filename)
         if len(array3d.shape) == 2:
             array3d = array3d.reshape((1,) + array3d.shape)
-        return (array3d, True, None)
+        return (array3d, False, None)
     except IOError:
         pass
 
-    # Attempt to read the VICAR image
+    # Attempt to read a VICAR image
     try:
         vic = VicarImage.from_file(filename)
         array3d = vic.data_3d
@@ -1242,7 +1256,7 @@ def ReadImageArray(filename, obj=None):
             (filter1, filter2) = vic['FILTER_NAME']
             filter_name = filter1 + "+" + filter2
             return (array3d, False, ('CASSINI', 'ISS', filter_name))
-        except VicarError:
+        except (VicarError, KeyError):
             pass
 
         # Get filter name for Voyager ISS
@@ -1257,10 +1271,10 @@ def ReadImageArray(filename, obj=None):
     except VicarError:
         pass
 
-    # Test the FITS image
-    upperfile = filename.upper()
-    if upperfile.endswith('.FITS') or upperfile.endswith('.FIT'):
-      try:
+    # Attempt to read a FITS image
+    try:
+      with warnings.catch_warnings():       # Error, not warning, if not FITS
+        warnings.filterwarnings('error')
         fitsfile = pyfits.open(filename)
         fitsobj = fitsfile[0]               # IndexError if not a FITS file
 
@@ -1338,7 +1352,7 @@ def ReadImageArray(filename, obj=None):
 
         return(array3d, True, (inst_host, inst_id, filter_name))
  
-      except IndexError:
+    except UserWarning:         # If not a FITS file
         pass
 
     # Attempt to read a PIL-compatible file or 16-bit TIFF
@@ -2076,7 +2090,7 @@ def GetSize(array_shape, size=None, scale=(100.,100.), frame=None,
             wrapped_size[0] = min(wrapped_size[0], frame[0])
             wrapped_size[1] = min(wrapped_size[1], frame[1])
 
-        if quality <= best_quality:
+        if quality < best_quality:
             break
 
         # If the improvement from 1x1 to 1x2 is marginal, stick with 1x1
