@@ -4,6 +4,7 @@
 .pydevproject
 /cspice/cspice/
 cspice/_cspice.so
+_cspice.so
 cspice/_cspice.pyd
 cspice-w32/
 cspice-w64/
