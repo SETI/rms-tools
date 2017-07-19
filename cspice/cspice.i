@@ -6174,12 +6174,24 @@ extern void spkez_c (
                     starg_buffer + i*6, lt_buffer + i);
         }
 
-        *starg = starg_buffer;
-        *starg_dim1 = et_dim1;
-        *starg_dim2 = 6;
+        if (failed_c()) {
+            free(starg_buffer);
+            *starg = NULL;
+            *starg_dim1 = 0;
+            *starg_dim2 = 6;
 
-        *lt = lt_buffer;
-        *lt_dim1 = et_dim1;
+            free(lt_buffer);
+            *lt = NULL;
+            *lt_dim1 = 0;
+        }
+        else {
+            *starg = starg_buffer;
+            *starg_dim1 = et_dim1;
+            *starg_dim2 = 6;
+
+            *lt = lt_buffer;
+            *lt_dim1 = et_dim1;
+        }
     }
 %}
 
@@ -7104,9 +7116,17 @@ extern void sxform_c (
             sxform_c(_from, to, et[i], xform_buffer + i*36);
         }
 
-        *xform = xform_buffer;
-        *xform_dim1 = et_dim1;
-        *xform_dim2 = 36;
+        if (failed_c()) {
+            free(xform_buffer);
+            *xform = NULL;
+            *xform_dim1 = 0;
+            *xform_dim2 = 36;
+        }
+        else {
+            *xform = xform_buffer;
+            *xform_dim1 = et_dim1;
+            *xform_dim2 = 36;
+        }
     }
 %}
 

@@ -1248,7 +1248,9 @@ TYPEMAP_IN(PyObject,      PyArray_OBJECT)
         (int  *SIZE1, Type OUT_ARRAY1[ANY]),
         (long *SIZE1, Type OUT_ARRAY1[ANY])
 {
-    Py_DECREF(array$argnum);
+    if (array$argnum) {
+        Py_DECREF(array$argnum);
+    }
 }
 
 /***************************************************************
@@ -1324,7 +1326,9 @@ TYPEMAP_IN(PyObject,      PyArray_OBJECT)
         (int *SIZE1, Type **OUT_ARRAY1),
         (long *SIZE1, Type **OUT_ARRAY1)
 {
-    Py_DECREF(array$argnum);
+    if (array$argnum) {
+        Py_DECREF(array$argnum);
+    }
 }
 
 /*******************************************************
@@ -1776,7 +1780,9 @@ TYPEMAP_ARGOUT(PyObject,      PyArray_OBJECT)
         (int *SIZE1, int *SIZE2, Type OUT_ARRAY2[ANY][ANY]),
         (long *SIZE1, long *SIZE2, Type OUT_ARRAY2[ANY][ANY])
 {
-    Py_DECREF(array$argnum);
+    if (array$argnum) {
+        Py_DECREF(array$argnum);
+    }
 }
 
 /***************************************************************
@@ -1855,7 +1861,9 @@ TYPEMAP_ARGOUT(PyObject,      PyArray_OBJECT)
         (int *SIZE1, int *SIZE2, Type **OUT_ARRAY2),
         (long *SIZE1, long *SIZE2, Type **OUT_ARRAY2)
 {
-    Py_DECREF(array$argnum);
+    if (array$argnum) {
+        Py_DECREF(array$argnum);
+    }
 }
 
 /*******************************************************

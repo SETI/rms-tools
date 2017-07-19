@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Create __init__.py and _cspice.so for Apple OSX 10.12 and Homebrew Python
+# Create __init__.py and _cspice.so for Apple OSX 10.12 and Enthought Python
 #
 # This script depends on swig.
 #
@@ -16,7 +16,7 @@
 # where "[cspice_path]" is replaced by the path to your existing cspice
 # directory.
 #
-# Execute this shell script: ./cspice_make_osx_10.12_homebrew_python.sh
+# Execute this shell script: ./cspice_make_osx_10.12_canopy_python.sh
 #
 # To test the installation, the following should display the CSPICE
 # toolkit version string:
@@ -28,8 +28,8 @@
 # *** NOTE ***
 # Adjust the following variables to point at your Python directories:
 
-PYTHON_INCLUDE=/usr/include/python2.7
-PYTHON_PKGS=/usr/local/lib/python2.7/site-packages
+PYTHON_INCLUDE=/Applications/Canopy.app/Contents/include/python2.7
+PYTHON_PKGS=~/Documents/Enthought/Canopy_64bit/User/lib/python2.7/site-packages
 
 rm -f cspice.py cspice_wrap.c cspice_wrap.o
 
