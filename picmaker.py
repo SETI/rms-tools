@@ -31,6 +31,8 @@ from tabulation import Tabulation
 # Command-line program
 ################################################################################
 
+# warnings.simplefilter('error')
+
 def main():
 
   # Catch any error at return exit status 1
@@ -152,7 +154,7 @@ def main():
 
     # -b, --band, --bands
     group.add_option("-b", "--band", dest="band",
-        action="store", type="int",
+        action="store", type="int", default=None,
         help="index of the band to appear in the output image; default 1.")
 
     group.add_option("--bands", dest="bands",
@@ -1263,97 +1265,100 @@ def ReadImageArray(filename, obj=None):
         try:
             filter_name = vic['LAB03'][37:43].rstrip()
             return (array3d, False, ('VOYAGER', 'ISS', filter_name))
-        except (VicarError, IndexError):
-            pass
-
+        except (VicarError, IndexError, KeyError):
             return (array3d, False, None)
 
     except VicarError:
         pass
 
     # Attempt to read a FITS image
-    try:
-      with warnings.catch_warnings():       # Error, not warning, if not FITS
-        warnings.filterwarnings('error')
-        fitsfile = pyfits.open(filename)
-        fitsobj = fitsfile[0]               # IndexError if not a FITS file
+    with open(filename, 'r') as f:
+        test = f.read(9)
 
-        array3d = None
-
-        if obj is None:
-            for i in range(len(fitsfile)):
-                array3d = fitsfile[i].data
-                if array3d is None: continue
-                if len(array3d.shape) in (2,3): break
-
-        elif isinstance(obj, (list,tuple)):
-            layers = []
-            for o in obj:
-                array2d = fitsfile[o].data
-                layers.append(array2d)
-
-            array3d = np.stack(layers)
-
-        else:
-            try:
-                obj = int(obj)
-            except ValueError:
-                pass
-
-            array3d = fitsfile[obj].data.copy()
-
-        if array3d is None: raise IOError("Image array not found in FITS file")
-
-        if len(array3d.shape) == 2: 
-            array3d = array3d.reshape((1,) + array3d.shape)
-
-        # Get the filter info
-        inst_host = None
-        inst_id = None
-        filter_name = None
-
+    if test == 'SIMPLE  =':
         try:
-            inst_host = fitsfile[0].header['TELESCOP']  # For HST
-        except KeyError:
-          try:
-            inst_host = fitsfile[0].header['HOSTNAME']  # For New Horizons
-          except KeyError:
-            pass
+            with warnings.catch_warnings():       # Error, not warning, if not FITS
+                warnings.filterwarnings('error')
+                fitsfile = pyfits.open(filename)
+                fitsobj = fitsfile[0]               # IndexError if not a FITS file
 
-        try:
-            inst_id = fitsfile[0].header['INSTRUME']    # For HST
-        except KeyError:
-          try:
-            inst_id = fitsfile[0].header['INSTRU']      # For New Horizons
-          except KeyError:
-            pass
+                array3d = None
 
-        # Get filter name for HST/WFC3 or HST/NICMOS or NH/MVIC
-        try:
-            filter_name = fitsfile[0].header['FILTER'].upper()
-        except KeyError:
-            pass
+                if obj is None:
+                    for i in range(len(fitsfile)):
+                        array3d = fitsfile[i].data
+                        if array3d is None: continue
+                        if len(array3d.shape) in (2,3): break
 
-        # Get filter name for HST/ACS
-        try:
-            filter_name = (fitsfile[0].header['FILTER1'],
-                           fitsfile[0].header['FILTER2'])
-        except KeyError:
-            pass
+                elif isinstance(obj, (list,tuple)):
+                    layers = []
+                    for o in obj:
+                        array2d = fitsfile[o].data
+                        layers.append(array2d)
 
-        # Get filter name for HST/WFPC2
-        try:
-            filter_name = (fitsfile[0].header['FILTNAM1'],
-                           fitsfile[0].header['FILTNAM2'])
-        except KeyError:
-            pass
+                    array3d = np.stack(layers)
 
-        fitsfile.close()
+                else:
+                    try:
+                        obj = int(obj)
+                    except ValueError:
+                        pass
 
-        return(array3d, True, (inst_host, inst_id, filter_name))
+                    array3d = fitsfile[obj].data.copy()
+
+                if array3d is None:
+                    raise IOError("Image array not found in FITS file")
+
+                if len(array3d.shape) == 2: 
+                    array3d = array3d.reshape((1,) + array3d.shape)
+
+                # Get the filter info
+                inst_host = None
+                inst_id = None
+                filter_name = None
+
+                try:
+                    inst_host = fitsfile[0].header['TELESCOP']  # For HST
+                except KeyError:
+                  try:
+                    inst_host = fitsfile[0].header['HOSTNAME']  # For NH
+                  except KeyError:
+                    pass
+
+                try:
+                    inst_id = fitsfile[0].header['INSTRUME']    # For HST
+                except KeyError:
+                  try:
+                    inst_id = fitsfile[0].header['INSTRU']      # For NH
+                  except KeyError:
+                    pass
+
+                # Get filter name for HST/WFC3 or HST/NICMOS or NH/MVIC
+                try:
+                    filter_name = fitsfile[0].header['FILTER'].upper()
+                except KeyError:
+                    pass
+
+                # Get filter name for HST/ACS
+                try:
+                    filter_name = (fitsfile[0].header['FILTER1'],
+                                   fitsfile[0].header['FILTER2'])
+                except KeyError:
+                    pass
+
+                # Get filter name for HST/WFPC2
+                try:
+                    filter_name = (fitsfile[0].header['FILTNAM1'],
+                                   fitsfile[0].header['FILTNAM2'])
+                except KeyError:
+                    pass
+
+                fitsfile.close()
+
+                return(array3d, True, (inst_host, inst_id, filter_name))
  
-    except UserWarning:         # If not a FITS file
-        pass
+        except UserWarning:         # If not a FITS file
+            pass
 
     # Attempt to read a PIL-compatible file or 16-bit TIFF
     try:
@@ -1596,6 +1601,7 @@ def GetLimits(array2d, limits=None, percentiles=(0.,100.),
             hrange = limits
 
         # Create histogram
+        hbins = int(hbins)
         hist = np.histogram(trimmed, bins=hbins, range=hrange)
 
         # Generate the cumulative histogram with a leading 0.
@@ -1650,7 +1656,9 @@ VOYAGER_ISS_DICT = {
     "NAD"   : (110,255,110),
     "SODIUM": (110,255,110),
     "CH4_U" : (255, 60, 60),
+    "CH4/U" : (255, 60, 60),
     "CH4_JS": (255, 60, 60),
+    "CH4/JS": (255, 60, 60),
 }
 
 NH_MVIC_DICT = {
@@ -2272,8 +2280,8 @@ def PILtoArray(image, rescale=True):
         return array
 
     # Deal with an RGB image in three bands
-    if image.mode == "RGB":
-        (r,g,b) = image.split()
+    if image.mode.startswith("RGB"):
+        (r,g,b) = image.split()[:3]
 
         r = _OnePILtoArray(r, rescale)
         g = _OnePILtoArray(g, rescale)
