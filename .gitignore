@@ -3,6 +3,7 @@
 .project
 .pydevproject
 /cspice/cspice/
+/cspice/cspice
 cspice/_cspice.so
 _cspice.so
 cspice/_cspice.pyd
