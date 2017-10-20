@@ -248,14 +248,18 @@ class PdsTable(object):
                       for row in item:
                         rows.append(str(row).strip())
                       rows = np.array(rows)
-                    items.append(np.array(rows))
+                      items.append(np.array(rows))
 
                 # ...or convert other data types
                 else:
                     old_items = items
                     items = []
                     for item in old_items:
-                        items.append(item.astype(column_info.dtype2))
+                      rows = []
+                      for row in item:
+                        rows.append(row.astype(column_info.dtype2))
+                      rows = np.array(rows)
+                      items.append(np.array(rows))
 
                 column = np.array(items).swapaxes(0,1)
 
