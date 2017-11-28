@@ -889,6 +889,201 @@ extern void cylsph_c (
         double *OUTPUT);
 
 /***********************************************************************
+* -Procedure dafbfs_c ( DAF, begin forward search )
+*
+* -Abstract
+*
+* Begin a forward search for arrays in a DAF.
+*  
+* void dafbfs_c ( SpiceInt handle )
+*
+* -Brief_I/O
+*
+* Variable  I/O  Description
+* --------  ---  --------------------------------------------------
+* handle     I   Handle of file to be searched.
+***********************************************************************/
+
+%rename (dafbfs) dafbfs_c;
+%apply (void RETURN_VOID) {void dafbfs_c};
+
+extern void dafbfs_c (
+        int handle);
+
+/***********************************************************************
+* -Procedure dafgda_c ( DAF, read data from address )
+*
+* -Abstract
+*
+* Read the double precision data bounded by two addresses within
+* a DAF.
+*
+* void dafgda_c ( SpiceInt       handle, 
+*                 SpiceInt       begin,
+*                 SpiceInt       end,
+*                 SpiceDouble  * data )
+*
+* -Brief_I/O
+*
+* Variable  I/O  Description
+* --------  ---  --------------------------------------------------
+* handle     I   Handle of a DAF.
+* begin,
+* end        I   Initial, final address within file.
+* data       O   Data contained between `begin' and `end'.                   
+***********************************************************************/
+
+%rename (dafgda) dafgda_c;
+%apply (double OUT_ARRAY1[ANY]) {double data[256]};
+%apply (void RETURN_VOID) {void dafgda_c};
+
+extern void dafgda_c (
+        int handle,
+        int begin,
+        int end,
+        double data[256]);
+                           
+/***********************************************************************
+* -Procedure dafgn_c ( DAF, get array name )
+*
+* -Abstract
+*
+* Return (get) the name for the current array in the current DAF. 
+*
+* -Brief_I/O
+*
+* void dafgn_c ( SpiceInt     lenout,
+*                SpiceChar  * name   ) 
+*
+* Variable  I/O  Description 
+* --------  ---  -------------------------------------------------- 
+* lenout     I   Length of array name string.
+* name       O   Name of current array. 
+***********************************************************************/
+
+%rename (dafgn) dafgn_c;
+
+%apply (int DIM1, char OUT_STRING[ANY]) {(int lenout,
+                                          char string[256])};
+%apply (void RETURN_VOID) {void dafgn_c};
+
+extern void dafgn_c (
+        int lenout, char string[256]);
+
+/***********************************************************************
+* -Procedure dafgs_c ( DAF, get summary )
+*
+* -Abstract
+*
+* Return (get) the summary for the current array in the current
+* DAF.
+*  
+* void dafgs_c ( SpiceDouble sum[] )
+*  
+* -Brief_I/O
+*
+* Variable  I/O  Description
+* --------  ---  --------------------------------------------------
+* sum        O   Summary for current array.
+***********************************************************************/
+
+%rename (dafgs) dafgs_c;
+
+%apply (double OUT_ARRAY1[ANY]) {double sum[128]};
+%apply (void RETURN_VOID) {void dafgs_c};
+
+extern void dafgs_c (
+        double sum[128]);
+
+/***********************************************************************
+* -Procedure daffna_c ( DAF, find next array )
+*
+* -Abstract
+*
+* Find the next (forward) array in the current DAF.
+*
+* void daffna_c ( SpiceBoolean  * found )
+*  
+* -Brief_I/O
+*
+* Variable  I/O  Description
+* --------  ---  --------------------------------------------------
+* found      O   SPICETRUE if an array was found.
+***********************************************************************/
+
+%rename (daffna) daffna_c;
+
+%apply (void RETURN_VOID) {void daffna_c};
+
+extern void daffna_c (
+        int *OUTPUT);
+  
+/***********************************************************************
+* -Procedure dafopr_c ( DAF, open for read )
+*
+* -Abstract
+*
+* Open a DAF for subsequent read requests.
+*
+* void dafopr_c ( ConstSpiceChar    * fname,
+*                 SpiceInt          * handle  )
+*                   
+* -Brief_I/O
+*
+* Variable  I/O  Description
+* --------  ---  --------------------------------------------------
+* fname      I   Name of DAF to be opened.
+* handle     O   Handle assigned to DAF.
+***********************************************************************/
+
+%rename (dafopr) dafopr_c;
+
+%apply (void RETURN_VOID) {void dafopr_c};
+
+extern void dafopr_c (
+        char *CONST_STRING,
+        int  *OUTPUT);
+       
+/***********************************************************************
+* -Procedure dafus_c ( DAF, unpack summary )
+*
+* -Abstract
+*
+* Unpack an array summary into its double precision and integer
+* components.
+*
+* void dafus_c ( ConstSpiceDouble   sum [],
+*                SpiceInt           nd,
+*                SpiceInt           ni,
+*                SpiceDouble        dc  [],
+*                SpiceInt           ic  []  )
+*                 
+* -Brief_I/O
+*
+* Variable  I/O  Description
+* --------  ---  --------------------------------------------------
+* sum        I   Array summary.
+* nd         I   Number of double precision components.
+* ni         I   Number of integer components.
+* dc         O   Double precision components.
+* ic         O   Integer components.
+***********************************************************************/
+
+%rename (dafus) dafus_c;
+
+%apply (double IN_ARRAY1[ANY]) {double sum[128]};
+%apply (double OUT_ARRAY1[ANY]) {double dc[256]};
+%apply (int OUT_ARRAY1[ANY]) {int ic[256]};
+%apply (void RETURN_VOID) {void dafus_c};
+
+extern void dafus_c (
+        double sum[128],
+        int nd,
+        int ni,
+        double dc[256],
+        int ic[256]);
+          
+/***********************************************************************
 * -Procedure dcyldr_c (Derivative of cylindrical w.r.t. rectangular )
 *
 * -Abstract
@@ -901,7 +1096,7 @@ extern void cylsph_c (
 *       SpiceDouble    y,
 *       SpiceDouble    z,
 *       SpiceDouble    jacobi[3][3] )   
-*
+*            
 * -Brief_I/O
 *
 * Variable  I/O  Description 

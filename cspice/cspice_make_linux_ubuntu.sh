@@ -32,8 +32,8 @@
 # *** NOTE ***
 # Adjust the following variables to point at your Python directories:
 
-PYTHON_INCLUDE=/home/rfrench/Canopy/appdata/canopy-1.5.1.2730.rh5-x86_64/include/python2.7
-PYTHON_PKGS=/home/rfrench/Canopy/appdata/canopy-1.5.1.2730.rh5-x86_64/lib/python2.7/site-packages
+PYTHON_INCLUDE=/home/rfrench/anaconda2/include/python2.7
+PYTHON_PKGS=/home/rfrench/anaconda2/lib/python2.7/site-packages
 
 rm -f cspice.py cspice_wrap.c cspice_wrap.o
 
