@@ -427,7 +427,7 @@ TYPEMAP_IN(PyObject,      PyArray_OBJECT)
 *
 * NEW variations...
 * 
-* If the size of the last array axis are fixed and can be specified in the
+* If the size of the last array axis is fixed and can be specified in the
 * SWIG interface:
 *       (type IN_ARRAY2[ANY][ANY], int DIM1)
 *       (int DIM1, type IN_ARRAY2[ANY][ANY])
@@ -1358,7 +1358,7 @@ TYPEMAP_ARGOUT(PyObject,      PyArray_OBJECT)
 * If the size of the array can be specified in the SWIG interface:
 *       (type OUT_ARRAY2[ANY][ANY])
 *       (type OUT_ARRAY2[ANY][ANY], int DIM1, int DIM2)
-*       (int DIM1, int DIM2, type OUT_ARRAY2[ANY])
+*       (int DIM1, int DIM2, type OUT_ARRAY2[ANY][ANY])
 *
 * If the upper limit on the size of the array's first axis can be specified in
 * the SWIG interface, but the size of the first axis returned by C is variable:

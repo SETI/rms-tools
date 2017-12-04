@@ -1,11 +1,11 @@
 *~
 *.pyc
+*.so
+*/*.so
+cspice1/_cspice_swig.so
 .project
 .pydevproject
-/cspice/cspice/
-/cspice/cspice
-cspice/_cspice.so
-_cspice.so
+/cspice*/cspice/
 cspice/_cspice.pyd
 cspice-w32/
 cspice-w64/

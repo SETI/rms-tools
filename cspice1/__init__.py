@@ -4,7 +4,7 @@
 # PDS RMS Node CSPICE-Python interface
 # Library cspice1
 #
-# This module provides a very basic Python interface to the CSPICE library.
+# This module provides a basic Python interface to the CSPICE library.
 #
 # - Access to CSPICE library functions are provided through SWIG wrappers.
 # - Essentially every function that a user is likely to call directly is
@@ -26,42 +26,42 @@
 # example, a number of functions return a boolean flag value where True
 # indicates success and False indicates failure. This interface to CSPICE gives
 # the user control over how these situations are handled:
+#
 # - For every function that handles exceptions in a non-Pythonic way, there
 #   exists a function with the same name but suffix "_error". This latter
 #   function suppresses any status flags from the returned quantity and,
 #   instead, raises an appropriate Python exception, which is typically
 #   KeyError.
+#
 # - For every one of these functions, there also exists a function with the
 #   same name but suffix "_flag", which returns the same flags as does the
 #   associated C function.
 #
 # You can use these functions to switch the default behavior of any of these
 # functions.
-#   use_exceptions_not_flags(names)
-#   use_flags_not_exceptions(names)
+#   use_errors()
+#   use_flags()
+# For backwards compatibility, use_errors() is the default.
 #
-# You can also obtain a particular version of any function using these
-# functions, which return functions:
-#   exception_version(func)
-#   flag_version(func)
+# Every function also has attributes error_version and flag_version, which
+# return the version of the function that uses either of these options. For
+# functions that do not have error and flag versions, these attributes return
+# the function itself.
 #
-# November 2017
+# Mark Showalter, PDS Ring-Moon Systems Node, December 4, 2017
 ################################################################################
 
 from cspice_swig import *
 import cspice_swig as swig
 
-from cspice_info import SPICE_DOCSTRINGS, SPICE_SIGNATURES, SPICE_RETURNS
-from cspice_info import SPICE_DEFAULTS
+from cspice_info import CSPICE1_DOCSTRINGS, CSPICE1_SIGNATURES, CSPICE1_RETURNS
+from cspice_info import CSPICE1_DEFAULTS
 
-SPICE_DOCSTRINGS = cspice_info.SPICE_DOCSTRINGS
-SPICE_SIGNATURES = cspice_info.SPICE_SIGNATURES
-SPICE_RETURNS    = cspice_info.SPICE_RETURNS
-SPICE_DEFAULTS   = cspice_info.SPICE_DEFAULTS
+VERSION = 1
 
 ################################################################################
-# Define versions of functions that raise exceptions rather than set status
-# flags
+# Define _error versions of functions that raise exceptions rather than return
+# status flags
 ################################################################################
 
 def bodc2n_error(code):
@@ -92,12 +92,12 @@ def ckcov_error(ck, code, *args):
 
     return coverage
 
-def cidfrm_error(name):
-    (code, name, found) = swig.cidfrm(code)
+def cidfrm_error(code):
+    (frcode, name, found) = swig.cidfrm(code)
     if not found:
         raise KeyError('Error in cidfrm(): body code %d not found' % code)
 
-    return [code, name]
+    return [frcode, name]
 
 def ckgp_error(*args):
     (cmat, clkout, found) = swig.ckgp(*args)
@@ -238,78 +238,61 @@ def stpool_error(item, nth, contin):
 #   RETURN    = a list indicating the type of each return value;
 ################################################################################
 
-def _process_types(signature):
-    """Validates the contents of a signature, and replaces array entries with
-    a partially parsed representation as a tuple."""
+# At initialization, apply docstrings, SIGNATURE, RETURNS and func_defaults
+# attributes to all the cspice1 functions.
 
-    newsig = []
+for name in CSPICE1_DOCSTRINGS:
+    globals()[name].__doc__   = CSPICE1_DOCSTRINGS[name]
+    globals()[name].SIGNATURE = CSPICE1_SIGNATURES[name]
+    globals()[name].RETURNS   = CSPICE1_RETURNS[name]
 
-    # Loop through elements in the given signature
-    # The signature of each function is defined in cspice_info.py
-    for k in range(len(signature)):
-        argtype = signature[k]
+    if name in CSPICE1_DEFAULTS:
+        globals()[name].func_defaults = tuple(CSPICE1_DEFAULTS[name])
 
-        # Interpret argtype if it is an array declaration
-        # E.g., replace "float[*,3]" with ("float", (0,3))
-        if '[' in argtype:
-            parts = argtype.split('[')
-            assert len(parts) == 2
-            argtype = parts[0]
-            assert argtype in ('float', 'int', 'bool', 'string')
+# At initialization, define a function *_flag for every function *_error.
+#
+# Also save...
+#   CSPICE1_FUNC_NAMES      = a list of every function name.
+#   CSPICE1_FUNC_BASENAMES  = a list of every unique function basename (without
+#                             a _error or _flag suffix).
+#   CSPICE1_ERROR_BASENAMES = a list of every basename that takes _error and
+#                             _flag suffixes.
 
-            assert parts[1].endswith(']')
-            shapestr = ('(' + parts[1][:-1] + ')').replace('*', '0')
-            shape = eval(shapestr)
+CSPICE1_FUNC_NAMES = CSPICE1_DOCSTRINGS.keys()
+CSPICE1_FUNC_BASENAMES = []
+CSPICE1_ERROR_BASENAMES = []
 
-            newsig.append((argtype, shape))
+for name in CSPICE1_FUNC_NAMES:
+    if name.endswith('_error'):
+        short_name = name[:-6]
+        flag_name = short_name + '_flag'
 
-        # Validate a scalar argtype
-        else:
-            assert argtype in ('float', 'int', 'bool', 'string',
-                               'body_code', 'body_name',
-                               'frame_code', 'frame_name')
-            newsig.append(argtype)
+        globals()[flag_name] = globals()[short_name]
 
-    return newsig
+        CSPICE1_DOCSTRINGS[flag_name] = CSPICE1_DOCSTRINGS[short_name]
+        CSPICE1_SIGNATURES[flag_name] = CSPICE1_SIGNATURES[short_name]
+        CSPICE1_RETURNS   [flag_name] = CSPICE1_RETURNS   [short_name]
 
-# At runtime, apply docstrings, SIGNATURE, RETURNS and DEFAULTS attributes to
-# all the cspice1 functions 
-for key in SPICE_DOCSTRINGS:
-    if key in globals():
-        globals()[key].__doc__ = SPICE_DOCSTRINGS[key]
+        if short_name in CSPICE1_DEFAULTS:
+            CSPICE1_DEFAULTS[flag_name] = CSPICE1_DEFAULTS[short_name]
 
-        signature = _process_types(SPICE_SIGNATURES[key])
-        returns   = _process_types(SPICE_RETURNS[key])
+        CSPICE1_ERROR_BASENAMES.append(short_name)
 
-        globals()[key].SIGNATURE = signature
-        globals()[key].RETURNS   = returns
+    else:
+        CSPICE1_FUNC_BASENAMES.append(name)
 
-        if key in SPICE_DEFAULTS:
-            globals()[key].func_defaults = tuple(SPICE_DEFAULTS[key])
-
-# At runtime, save a function *_flag for every function *_error
-keys = SPICE_DOCSTRINGS.keys()  # save keys first because dictionary changes
-for key in keys:
-    if key in globals():
-        if not key.endswith('_error'): continue
-
-        short_key = key[:-6]
-        flag_key = short_key + '_flag'
-
-        globals()[flag_key] = globals()[short_key]
-
-        SPICE_DOCSTRINGS[flag_key] = SPICE_DOCSTRINGS[short_key]
-        SPICE_SIGNATURES[flag_key] = SPICE_SIGNATURES[short_key]
-        SPICE_RETURNS   [flag_key] = SPICE_RETURNS   [short_key]
-
-        if short_key in SPICE_DEFAULTS:
-            SPICE_DEFAULTS[flag_key] = SPICE_DEFAULTS[short_key]
+CSPICE1_FUNC_NAMES = CSPICE1_DOCSTRINGS.keys()
+CSPICE1_FUNC_NAMES.sort()
+CSPICE1_FUNC_BASENAMES.sort()
+CSPICE1_ERROR_BASENAMES.sort()
 
 ################################################################################
-# Define functions to select between *_error and *_flag versions of functions
+# Define attributes error_version and flag_version for every function
 ################################################################################
 
 def _strip_error_flag(name):
+    """Remove '_error' or '_flag' from the end of a function name."""
+
     if name.endswith('_error'):
         name = name[:-6]
     elif name.endswith('_flag'):
@@ -317,62 +300,60 @@ def _strip_error_flag(name):
 
     return name
 
-def use_errors(names=[]):
-    """Switch all functions, or just those listed, to raise exceptions instead
-    of returning flags."""
+for name in CSPICE1_FUNC_NAMES:
+    func = globals()[name]
+    short_key = _strip_error_flag(name)
+
+    long_key = short_key + '_error'
+    if long_key in globals():
+        func.error_version = globals()[long_key]
+        func.flag_version  = globals()[short_key + '_flag']
+    else:
+        func.error_version = func
+        func.flag_version = func
+
+################################################################################
+# Define functions to select between *_error and *_flag versions of functions
+################################################################################
+
+def use_errors(*names):
+    """Switch the named functions, or else all relevant cspice1 functions, to
+    raise exceptions instead of returning flags."""
 
     if names:
-        keys = [_strip_error_flag(n) for n in names]
+        basenames = [_strip_error_flag(n) for n in names]
+        for basename in basenames:
+            if basename not in CSPICE1_FUNC_BASENAMES:
+                raise ValueError('Unrecognized cspice function "%s"' % n)
+        basenames = [n for n in basenames if n in CSPICE1_ERROR_BASENAMES]
+        basenames = set(basenames)
     else:
-        keys = [n[:-6] for n in SPICE_DOCSTRINGS if n.endswith('_error')]
+        basenames = CSPICE1_ERROR_BASENAMES
 
-    for key in keys:
-        long_key = key + '_error'
-        if key in globals() and long_key in globals():
-            globals()[key] = globals()[long_key]
+    for basename in basenames:
+        globals()[basename] = globals()[basename].error_version
 
-def use_flags(names=[]):
-    """Switch all functions, or just those listed, to return flags instead of
-    raising exceptions."""
+def use_flags(*names):
+    """Switch the named functions, or else all relevant cspice1 functions, to
+    return flags instead of raising exceptions."""
 
     if names:
-        keys = [_strip_error_flag(n) for n in names]
+        basenames = [_strip_error_flag(n) for n in names]
+        for basename in basenames:
+            if basename not in CSPICE1_FUNC_BASENAMES:
+                raise ValueError('Unrecognized cspice function "%s"' % n)
+        basenames = [n for n in basenames if n in CSPICE1_ERROR_BASENAMES]
+        basenames = set(basenames)
     else:
-        keys = [n[:-6] for n in SPICE_DOCSTRINGS if not n.endswith('_error')]
+        basenames = CSPICE1_ERROR_BASENAMES
 
-    for key in keys:
-        long_key = key + '_flag'
-        if key in globals() and long_key in globals():
-            globals()[key] = globals()[long_key]
+    for basename in basenames:
+        globals()[basename] = globals()[basename].flag_version
 
-def error_version(func):
-    """Return the _error version of this function, if available."""
+################################################################################
+# For backward compatibility, default is to use errors, not flags
+################################################################################
 
-    long_key = _strip_error_flag(func.__name__) + '_error'
-    if long_key in globals():
-        return globals()[long_key]
-
-    return func
-
-def flag_version(func):
-    """Return the flag version of this function."""
-
-    long_key = _strip_error_flag(func.__name__) + '_flag'
-    if long_key in globals():
-        return globals()[long_key]
-
-    return func
-
-def function_lookup(name):
-    """Return the cspice1 function with this name."""
-
-    if name in SPICE_DOCSTRINGS:
-        return globals()[name]
-
-    short_name = _strip_error_flag(name)
-    if short_name in SPICE_DOCSTRINGS:
-        return globals()[short_name]
-
-    raise KeyError('cspice1 function "%s" not found' % name)
+use_errors()
 
 ################################################################################

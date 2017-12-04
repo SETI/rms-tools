@@ -196,6 +196,38 @@ def cylsph(r, lonc, z):
     """cylsph(double r, double lonc, double z)"""
     return _cspice_swig.cylsph(r, lonc, z)
 
+def dafbfs(handle):
+    """dafbfs(int handle)"""
+    return _cspice_swig.dafbfs(handle)
+
+def dafcls(handle):
+    """dafcls(int handle)"""
+    return _cspice_swig.dafcls(handle)
+
+def dafgda(handle, begin, end):
+    """dafgda(int handle, int begin, int end)"""
+    return _cspice_swig.dafgda(handle, begin, end)
+
+def dafgn():
+    """dafgn()"""
+    return _cspice_swig.dafgn()
+
+def dafgs():
+    """dafgs()"""
+    return _cspice_swig.dafgs()
+
+def daffna():
+    """daffna()"""
+    return _cspice_swig.daffna()
+
+def dafopr(CONST_STRING):
+    """dafopr(char * CONST_STRING)"""
+    return _cspice_swig.dafopr(CONST_STRING)
+
+def dafus(sum, nd, ni):
+    """dafus(double [128] sum, int nd, int ni)"""
+    return _cspice_swig.dafus(sum, nd, ni)
+
 def dcyldr(x, y, z):
     """dcyldr(double x, double y, double z)"""
     return _cspice_swig.dcyldr(x, y, z)
