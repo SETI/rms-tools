@@ -1240,22 +1240,36 @@ def _yxdhms_format_from_day_sec(day, sec, ymd=True, sep="T", digits=None,
     if sep != " ": sep = "T"
     if suffix != "Z": suffix = ""
 
+    # Round the seconds
+    if digits is None or digits < 0:
+        lsec = 2
+        sec = np.floor(sec + 0.5)
+    else:
+        lsec = 3 + digits
+        factor = 10.**digits
+        sec = np.floor(sec * factor + 0.5) / factor
+
     # Return a scalar
     if np.shape(day) == () and np.shape(sec) == ():
+        if sec >= seconds_on_day(day):
+            sec -= seconds_on_day(day)
+            day += 1
+
         return (_yxd_format_from_day(day, ymd) + sep +
                 hms_format_from_sec(sec, digits, suffix))
 
     # Coerce the day and second arrays to the same shape
     (day, sec) = np.broadcast_arrays(day, sec)
 
+    # Check day boundaries
+    secs_on_day = seconds_on_day(day)
+    crossovers = np.where(sec >= secs_on_day)
+    day[crossovers] += 1
+    sec[crossovers] -= secs_on_day[crossovers]
+
     # Determine the sizes of the fields
     if ymd: lday = 10
     else:   lday = 8
-
-    if digits is None or digits < 0:
-        lsec = 2
-    else:
-        lsec = 3 + digits
 
     lstring = lday + 1 + 6 + lsec + len(suffix)
 
