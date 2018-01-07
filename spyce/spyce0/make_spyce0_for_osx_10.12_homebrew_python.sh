@@ -31,7 +31,7 @@
 PYTHON_INCLUDE=/usr/include/python2.7
 PYTHON_PKGS=/usr/local/lib/python2.7/site-packages
 
-rm -f __init__.py spyce0_wrap.c spyce0_wrap.o
+rm -f spyce0_wrap.c spyce0_wrap.o
 
 swig -python spyce0.i
 
