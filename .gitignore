@@ -9,4 +9,4 @@ cspice1/_cspice_swig.so
 cspice/_cspice.pyd
 cspice-w32/
 cspice-w64/
-spyce/spyce0/cspice
+cspyce/cspyce0/cspice
