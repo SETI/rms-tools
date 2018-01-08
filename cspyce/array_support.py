@@ -1,16 +1,16 @@
 ################################################################################
-# spyce/array_suppport.py
-# Used internally by spyce; not intended for direct import.
+# cspyce/array_suppport.py
+# Used internally by cspyce; not intended for direct import.
 ################################################################################
 
 import numpy as np
 
-import spyce
-import spyce.spyce1 as spyce1
-from spyce.alias_support import alias_version
+import cspyce
+import cspyce.cspyce1 as cspyce1
+from cspyce.alias_support import alias_version
 
 ################################################################################
-# spyce array function wrapper
+# cspyce array function wrapper
 ################################################################################
 
 ARRAY_NOTE = """
@@ -32,7 +32,7 @@ def _arrayize_arglist(arglist):
 
 def array_version(func):
     """Wrapper function to apply NumPy broadcasting rules to the vectorized
-    inputs of any spyce function.
+    inputs of any cspyce function.
     """
 
     if hasattr(func, 'array'):
@@ -96,7 +96,7 @@ def array_version(func):
     wrapper.NOTES     = [ARRAY_NOTE] + wrapper.NOTES[1:] # replace vector note
 
     # Save key attributes of the wrapper function before returning
-    spyce.assign_docstring(wrapper)
+    cspyce.assign_docstring(wrapper)
     wrapper.__name__ = _array_name(func.__name__)
     wrapper.func_defaults = func.func_defaults
 
@@ -148,10 +148,10 @@ def _exec_with_broadcasting(func, *args, **keywords):
         return func.__call__(*args, **keywords)
 
     # Broadcast the arrays
-    spyce1.chkin(func.array.__name__)
+    cspyce1.chkin(func.array.__name__)
     (broadcasted_shape, reshaped_args) = _broadcast_arrays(arg_ranks, args)
-    if spyce1.failed():
-        spyce1.chkout(func.array.__name__)
+    if cspyce1.failed():
+        cspyce1.chkout(func.array.__name__)
         return None
 
     # Update the argument list with flattened arrays
@@ -165,9 +165,9 @@ def _exec_with_broadcasting(func, *args, **keywords):
 
     # Execute the function
     results = func.__call__(*args, **keywords)
-    spyce1.chkout(func.array.__name__)
+    cspyce1.chkout(func.array.__name__)
 
-    if spyce1.failed():
+    if cspyce1.failed():
         return results
 
     # Reshape the results
@@ -209,10 +209,10 @@ def _broadcast_arrays(ranks, args):
 
         for i in range(1,lshape+1): # work starting from right
           if (shape[-i] != 1 and broadcasted[-i] != shape[-i]):
-            spyce1.setmsg('Incompatible shapes for broadcasting: ' +
+            cspyce1.setmsg('Incompatible shapes for broadcasting: ' +
                           '%s, %s' %  (str(tuple(shape)),
                                        str(tuple(broadcasted))))
-            spyce1.sigerr('SPICE(INVALIDARRAYSHAPE)')
+            cspyce1.sigerr('SPICE(INVALIDARRAYSHAPE)')
             return (None,None)
 
           scaling.append(broadcasted[-i] // shape[-i])
@@ -242,7 +242,7 @@ def _broadcast_arrays(ranks, args):
 
 def _reshaped_array(scaling, rank, array):
     """Return an array that can safely be flattened in such a way that it will
-    work inside a spyce vectorized function."""
+    work inside a cspyce vectorized function."""
 
     # Save the original shape and core shape
     if rank == 0:
@@ -286,47 +286,47 @@ def _reshaped_array(scaling, rank, array):
 # Define the alias function selector
 ################################################################################
 
-SPYCE_DICT = spyce.__dict__
+SPYCE_DICT = cspyce.__dict__
 
 def use_arrays(*funcs):
     """Switch the listed functions or names of functions to use the "array"
-    version by default. This affects all versions of any given spyce function.
-    If the list is empty, apply this operation to all spyce functions.
+    version by default. This affects all versions of any given cspyce function.
+    If the list is empty, apply this operation to all cspyce functions.
     """
 
     if funcs:
-        spyce.GLOBAL_STATUS.add('ARRAYS')
-        spyce.GLOBAL_STATUS.discard('VECTORS')
-        spyce.GLOBAL_STATUS.discard('SCALARS')
+        cspyce.GLOBAL_STATUS.add('ARRAYS')
+        cspyce.GLOBAL_STATUS.discard('VECTORS')
+        cspyce.GLOBAL_STATUS.discard('SCALARS')
     else:
-        spyce.GLOBAL_STATUS.discard('ARRAYS')
-        spyce.GLOBAL_STATUS.discard('VECTORS')
-        spyce.GLOBAL_STATUS.discard('SCALARS')
+        cspyce.GLOBAL_STATUS.discard('ARRAYS')
+        cspyce.GLOBAL_STATUS.discard('VECTORS')
+        cspyce.GLOBAL_STATUS.discard('SCALARS')
 
-    for name in spyce._get_func_names(funcs, source=SPYCE_DICT):
+    for name in cspyce._get_func_names(funcs, source=SPYCE_DICT):
         if 'alias' not in name:
             SPYCE_DICT[name] = SPYCE_DICT[name].alias
 
-    for name in spyce._get_func_names(funcs, source=SPYCE_DICT):
+    for name in cspyce._get_func_names(funcs, source=SPYCE_DICT):
         if ('scalar' not in name and 'vector' not in name
                                  and 'array' not in name):
             SPYCE_DICT[name] = SPYCE_DICT[name].array
 
 ################################################################################
-# Function to define array versions and links for all spyce functions
+# Function to define array versions and links for all cspyce functions
 ################################################################################
 
 def _define_all_array_versions():
     """Generate all missing array functions and set the "array" attributes for
-    all spyce functions.
+    all cspyce functions.
 
     This routine can be run multiple times. At each run, it only creates
     whatever is missing.
     """
 
-    # Define an _array function for each spyce _vector function
+    # Define an _array function for each cspyce _vector function
     avpairs = []
-    funcs = spyce.get_all_funcs(SPYCE_DICT).values()
+    funcs = cspyce.get_all_funcs(SPYCE_DICT).values()
 
     # Do non-alias versions first; otherwise some .array attributes are broken
     for func in funcs:

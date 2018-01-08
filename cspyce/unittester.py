@@ -1,10 +1,10 @@
 ################################################################################
-# spyce/unittester.py: global unit-tester
+# cspyce/unittester.py: global unit-tester
 ################################################################################
 
-from spyce.unittests.unittester_errors     import *
-from spyce.unittests.unittester_kernels    import *
-from spyce.unittests.unittester_nokernels  import *
+from cspyce.unittests.unittester_errors     import *
+from cspyce.unittests.unittester_kernels    import *
+from cspyce.unittests.unittester_nokernels  import *
 
 ################################################################################
 # To run all unittests...

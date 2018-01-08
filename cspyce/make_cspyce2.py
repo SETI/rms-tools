@@ -1,39 +1,39 @@
 ################################################################################
-# spyce/make_spyce2.py
+# cspyce/make_cspyce2.py
 #
 # This program automatically generates the contents of file spice2.py. It fills
-# in the names of the input parameters so that spyce functions can be called
+# in the names of the input parameters so that cspyce functions can be called
 # using keyword inputs in addition to inputs that follow a strictly defined
 # order. It also ensures that docstrings and function attributes are carried
-# forward to the spyce2 module.
+# forward to the cspyce2 module.
 ################################################################################
 
 HEADER = \
 """################################################################################
-# spyce/spyce2.py
+# cspyce/cspyce2.py
 ################################################################################
-# module spyce.spyce2
+# module cspyce.cspyce2
 #
-# This module re-declares every spyce1 function explicitly, with its list of
+# This module re-declares every cspyce1 function explicitly, with its list of
 # argument names as used by CSPICE. The practical effect is that functions in
-# spyce2 module can be called in a fully Python-like way, the rightmost inputs
+# cspyce2 module can be called in a fully Python-like way, the rightmost inputs
 # in any order and identified by their names.
 #
-# NOTE: This file is generated automatically using program make_spyce2.py:
-#   python make_spyce2.py > spyce2.py
+# NOTE: This file is generated automatically using program make_cspyce2.py:
+#   python make_cspyce2.py > cspyce2.py
 #
 ################################################################################
 
-# This function makes spyce2 look the same as spyce1. It ensures that every
+# This function makes cspyce2 look the same as cspyce1. It ensures that every
 # location in the global dictionary and every function's internal link point
 # a new function of the same name.
 
-SPYCE_FUNCTION_LOOKUP = {}
+CSPYCE_FUNCTION_LOOKUP = {}
 
 def relink_all(new_dict, old_dict):
 
     # Assign a new function to the dictionary at the same location as every
-    # spyce function found in the old dictionary
+    # cspyce function found in the old dictionary
 
     dict_names = {}     # maps each function name to its dictionary locations
     old_funcs = {}      # maps each function name to its old function
@@ -53,9 +53,9 @@ def relink_all(new_dict, old_dict):
         func = new_dict[name]
         for key in keys:
             new_dict[key] = func
-            SPYCE_FUNCTION_LOOKUP[func.__name__] = func
+            CSPYCE_FUNCTION_LOOKUP[func.__name__] = func
 
-    # Make sure each spyce function has the same properties and attributes as
+    # Make sure each cspyce function has the same properties and attributes as
     # the one in the old dictionary
 
     for (name, old_func) in old_funcs.iteritems():
@@ -75,11 +75,11 @@ def relink_all(new_dict, old_dict):
 
 """
 
-import spyce.spyce1 as spyce1
+import cspyce.cspyce1 as cspyce1
 
-# Get a list by name of every define spyce function
+# Get a list by name of every define cspyce function
 arglists = {}  # keyed by name, returns argument name lists
-for (key, func) in spyce1.__dict__.iteritems():
+for (key, func) in cspyce1.__dict__.iteritems():
     if type(func).__name__ != 'function': continue
     if not hasattr(func, 'ARGNAMES'): continue
     arglists[func.__name__] = func.ARGNAMES
@@ -93,21 +93,21 @@ keys.sort()
 
 print HEADER
 
-print "import spyce.spyce1 as spyce1"
-print "from spyce.spyce1 import *"
+print "import cspyce.cspyce1 as cspyce1"
+print "from cspyce.cspyce1 import *"
 print
 
 for key in keys:
     argstr = ', '.join(arglists[key])
 
     print 'def %s(%s):' % (key, argstr)
-    print '  return spyce1.%s(%s)' % (key, argstr)
+    print '  return cspyce1.%s(%s)' % (key, argstr)
     print
 
 print '# Upon execution, re-connect all the lost attibutes and broken links...'
 print
 
-print 'relink_all(globals(), spyce1.__dict__)'
+print 'relink_all(globals(), cspyce1.__dict__)'
 
 print
 print 80*'#'

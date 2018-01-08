@@ -1,4 +1,4 @@
-%module spyce0
+%module cspyce0
 %{
 #define SWIG_FILE_WITH_INIT
 
@@ -109,7 +109,7 @@ void stlabx_(ConstSpiceDouble pobj[3],
              ConstSpiceDouble vobs[3],
              SpiceDouble      corpos[3]);
 
-// From spyce_typemaps.i
+// From cspyce_typemaps.i
 void set_python_exception_flag(int flag);
 int get_python_exception_flag(void);
 char *get_message_after_reset(int option);
@@ -118,7 +118,7 @@ void reset_messages(void);
 %}
 
 %include "typemaps.i"
-%include "spyce_typemaps.i"
+%include "cspyce_typemaps.i"
 %include "vectorize.i"
 
 %init %{

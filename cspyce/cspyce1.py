@@ -1,26 +1,26 @@
 ################################################################################
-# spyce/spyce1.py
+# cspyce/cspyce1.py
 ################################################################################
-# module spyce.spyce1
+# module cspyce.cspyce1
 #
-# This module provides several enhancements over the low-level spyce0 interface
-# to the CSPICE library. See spyce/spyce0/__init__.py for more information about
-# spyce0.
+# This module provides several enhancements over the low-level cspyce0 interface
+# to the CSPICE library. See cspyce/cspyce0/__init__.py for more information
+# about cspyce0.
 #
-# To use spyce1:
-#   import spyce.spyce1
+# To use cspyce1:
+#   import cspyce.cspyce1
 # or
-#   import spyce.spyce1 as spyce
+#   import cspyce.cspyce1 as cspyce
 #
 # ADDED FEATURES
 #
 # DOCSTRINGS
-# - All spyce functions have informative docstrings, so typing
+# - All cspyce functions have informative docstrings, so typing
 #       help(function)
 #   provides useful information.
 #
 # DEFAULTS
-# - Many spyce functions take sensible default values if input arguments are
+# - Many cspyce functions take sensible default values if input arguments are
 #   omitted.
 #   - In gcpool, gdpool, gipool, and gnpool, start values default to 1.
 #   - The functions that take "SET" or "GET" as their first argument (erract,
@@ -33,7 +33,7 @@
 # of function failed() regularly to determine if an error has occurred. However,
 # Python's exception handling mechanism obviates the need for this approach.
 #
-# In the spyce1 module, we introduce two new options to function erract, which
+# In the cspyce1 module, we introduce two new options to function erract, which
 # is used in CSPICE to control the error handling options. The options are
 # 'EXCEPTION' and 'RUNTIME'. When error handling is set to one of these values,
 # Python exception handling takes over. Error conditions raise exceptions
@@ -48,18 +48,18 @@
 #
 # Many CSPICE functions bypass the library's own error handling mechanism;
 # instead they return a status flag, sometimes called "found" or "ok", or an
-# empty response to indicate failure. The spyce module provides alternative
+# empty response to indicate failure. The cspyce module provides alternative
 # options for these functions.
 # 
-# Within spyce1, functions that return error flags have an alternative
-# implementation with a suffix of "_error". This version uses the CSPICE/spyce
+# Within cspyce1, functions that return error flags have an alternative
+# implementation with a suffix of "_error". This version uses the CSPICE/cspyce
 # error handling mechanism instead.
 #
 # Note that most _error versions of functions have fewer return values than
 # the associated non-error versions. The user should be certain which version is
 # being used before interpreting the returned value(s).
 #
-# The spyce1 module provides several ways to control which version of the
+# The cspyce1 module provides several ways to control which version of the
 # function to use:
 #
 # - The function use_flags() takes a function name or list of names and
@@ -69,17 +69,17 @@
 # - The function use_errors() takes a function name or list of names and
 #   designates the _error version of each function as the default. If the input
 #   argument is missing, _error versions are selected universally. With this
-#   option, for example, a call to spyce1.bodn2c() will actuall call
-#   spyce1.bodn2c_error() instead.
+#   option, for example, a call to cspyce1.bodn2c() will actuall call
+#   cspyce1.bodn2c_error() instead.
 #
 # You can also close between the "flag" and "error" versions of a function using
-# spyce function attributes, as discussed below.
+# cspyce function attributes, as discussed below.
 #
 # FUNCTION ATTRIBUTES
 #
 # Like any other Python class, functions can have attributes. These are used to
-# simplify the choices of function options in spyce1. Every spyce1 function has
-# these attributes:
+# simplify the choices of function options in cspyce1. Every cspyce1 function
+# has these attributes:
 #
 #   error   = the version of this function that raises errors intead of
 #             returning flags.
@@ -106,17 +106,18 @@ import os
 import numpy as np
 import textwrap
 
-import spyce.spyce0 as spyce0
-from spyce.spyce0 import *
+import cspyce.cspyce0 as cspyce0
+from cspyce.cspyce0 import *
 
-from spyce.spyce_info import SPYCE_SIGNATURES, SPYCE_ARGNAMES, SPYCE_DEFAULTS, \
-                             SPYCE_RETURNS, SPYCE_RETNAMES, SPYCE_DEFINITIONS, \
-                             SPYCE_ABSTRACT, SPYCE_PS, SPYCE_URL
+from cspyce.cspyce_info import \
+    CSPYCE_SIGNATURES, CSPYCE_ARGNAMES, CSPYCE_DEFAULTS, \
+    CSPYCE_RETURNS, CSPYCE_RETNAMES, CSPYCE_DEFINITIONS, \
+    CSPYCE_ABSTRACT, CSPYCE_PS, CSPYCE_URL
 
 # Global variables used below
 import __main__
 INTERACTIVE = not hasattr(__main__, '__file__');
-SPYCE_ERRACT = 'EXCEPTION'         # A local copy of the requested erract.
+CSPYCE_ERRACT = 'EXCEPTION'         # A local copy of the requested erract.
 
 ################################################################################
 # GET/SET handling
@@ -126,7 +127,7 @@ def erract(op, action):
     """Internal to CSPICE, action is always 'EXCEPTION', 'RUNTIME' or 'RETURN'
     in interactive mode."""
 
-    global INTERACTIVE, SPYCE_ERRACT
+    global INTERACTIVE, CSPYCE_ERRACT
 
     traceback_name = 'erract_wrapper'
 
@@ -136,26 +137,26 @@ def erract(op, action):
     # GET...
     op = op.upper().strip()
     if op == 'GET':
-        return SPYCE_ERRACT
+        return CSPYCE_ERRACT
 
     # SET...
     if op == 'SET':
         chkin(traceback_name)
 
-        spyce0.erract('SET', action)
+        cspyce0.erract('SET', action)
         if failed():
             chkout(traceback_name)
             return
 
         # Save a local copy of the erract value
-        SPYCE_ERRACT = spyce0.erract('GET', '')
+        CSPYCE_ERRACT = cspyce0.erract('GET', '')
 
         # In interactive mode, override certain modes internally
-        if INTERACTIVE and SPYCE_ERRACT in ('ABORT', 'DEFAULT'):
-            spyce0.erract('SET', 'RETURN')
+        if INTERACTIVE and CSPYCE_ERRACT in ('ABORT', 'DEFAULT'):
+            cspyce0.erract('SET', 'RETURN')
 
         chkout(traceback_name)
-        return SPYCE_ERRACT
+        return CSPYCE_ERRACT
 
     # If it's not a recognized op, maybe it's an action and 'SET' is assumed
     # This call is recursive.
@@ -171,7 +172,7 @@ def errdev(op, device):
     cleaned_op = op.upper().strip()
     if cleaned_op in ('GET', 'SET'):
         chkin(traceback_name)
-        result = spyce0.errdev(op, device)
+        result = cspyce0.errdev(op, device)
         chkout(traceback_name)
         return result
 
@@ -181,7 +182,7 @@ def errdev(op, device):
 
     # Otherwise, let default error handling take over
     chkin(traceback_name)
-    result = spyce0.errdev(op, device)
+    result = cspyce0.errdev(op, device)
     chkout(traceback_name)
     return result
 
@@ -194,20 +195,20 @@ def errprt(op, list):
     op = op.upper().strip()
     if op in ('GET', 'SET'):
         chkin(traceback_name)
-        result = spyce0.errprt(op, list)
+        result = cspyce0.errprt(op, list)
         chkout(traceback_name)
         return result
 
     # Try implied set (using recursive call)
     if list.strip() == '':
         chkin(traceback_name)
-        result = spyce0.errprt('SET', op)
+        result = cspyce0.errprt('SET', op)
         chkout(traceback_name)
         return result
 
     # Otherwise, let default error handling take over
     chkin(traceback_name)
-    result = spyce0.errprt(op, list)
+    result = cspyce0.errprt(op, list)
     chkout(traceback_name)
     return result
 
@@ -220,7 +221,7 @@ def timdef(action, item='', value=''):
     action = action.upper().strip()
     if action in ('GET', 'SET'):
         chkin(traceback_name)
-        result = spyce0.timdef(action, item, value)
+        result = cspyce0.timdef(action, item, value)
         chkout(traceback_name)
         return result
 
@@ -229,16 +230,16 @@ def timdef(action, item='', value=''):
         if action in ('CALENDAR', 'SYSTEM', 'ZONE'):
             chkin(traceback_name)
             if item:
-                result = spyce0.timdef('SET', action, item)
+                result = cspyce0.timdef('SET', action, item)
             else:
-                result = spyce0.timdef('GET', action, ' ')
+                result = cspyce0.timdef('GET', action, ' ')
 
             chkout(traceback_name)
             return result
 
     # Otherwise, let default error handling take over
     chkin(traceback_name)
-    result = spyce0.timdef(action, item, value)
+    result = cspyce0.timdef(action, item, value)
     chkout(traceback_name)
     return result
 
@@ -250,7 +251,7 @@ def timdef(action, item='', value=''):
 ################################################################################
 
 def bodc2n_error(code):
-    (name, found) = spyce0.bodc2n(code)
+    (name, found) = cspyce0.bodc2n(code)
     if not found:
         chkin('bodc2n_error')
         setmsg('body code %s not found in kernel pool' % code)
@@ -260,7 +261,7 @@ def bodc2n_error(code):
     return name
 
 def bodn2c_error(name):
-    (code, found) = spyce0.bodn2c(name)
+    (code, found) = cspyce0.bodn2c(name)
     if not found:
         chkin('bodn2c_error')
         setmsg('body name "%s" not found in kernel pool' % name)
@@ -270,7 +271,7 @@ def bodn2c_error(name):
     return code
 
 def bods2c_error(name):
-    (code, found) = spyce0.bods2c(name)
+    (code, found) = cspyce0.bods2c(name)
     if not found:
         chkin('bods2c_error')
         setmsg('body name "%s" not found in kernel pool' % name)
@@ -280,7 +281,7 @@ def bods2c_error(name):
     return code
 
 def ccifrm_error(frclss, clssid):
-    (frcode, frname, center, found) = spyce0.ccifrm(frclss, clssid)
+    (frcode, frname, center, found) = cspyce0.ccifrm(frclss, clssid)
     if not found:
         chkin('ccifrm_error')
         setmsg('unrecognized frame description: class %s; ' % frclss +
@@ -291,7 +292,7 @@ def ccifrm_error(frclss, clssid):
     return [frcode, frname, center]
 
 def cidfrm_error(code):
-    (frcode, name, found) = spyce0.cidfrm(code)
+    (frcode, name, found) = cspyce0.cidfrm(code)
     if not found:
         chkin('cidfrm_error')
         setmsg('body code %s not found in kernel pool' % code)
@@ -301,7 +302,7 @@ def cidfrm_error(code):
     return [frcode, name]
 
 def ckcov_error(ck, idcode, needav, level, tol, timsys):
-    coverage = spyce0.ckcov(ck, idcode, needav, level, tol, timsys)
+    coverage = cspyce0.ckcov(ck, idcode, needav, level, tol, timsys)
     if coverage.size == 0:
         chkin('ckcov_error')
         setmsg('body code %s not found in C kernel file %s' % (idcode, ck))
@@ -311,9 +312,9 @@ def ckcov_error(ck, idcode, needav, level, tol, timsys):
     return coverage
 
 def ckgp_error(inst, sclkdp, tol, ref):
-    (cmat, clkout, found) = spyce0.ckgp(inst, sclkdp, tol, ref)
+    (cmat, clkout, found) = cspyce0.ckgp(inst, sclkdp, tol, ref)
     if not found:
-        name = spyce0.frmnam(inst)
+        name = cspyce0.frmnam(inst)
         if name:
             namestr = ' (' + name + ')'
         else:
@@ -330,9 +331,9 @@ def ckgp_error(inst, sclkdp, tol, ref):
     return [cmat, clkout]
 
 def ckgpav_error(inst, sclkdp, tol, ref):
-    (cmat, av, clkout, found) = spyce0.ckgpav(inst, sclkdp, tol, ref)
+    (cmat, av, clkout, found) = cspyce0.ckgpav(inst, sclkdp, tol, ref)
     if not found:
-        name = spyce0.frmnam(inst)
+        name = cspyce0.frmnam(inst)
         if name:
             namestr = ' (' + name + ')'
         else:
@@ -349,7 +350,7 @@ def ckgpav_error(inst, sclkdp, tol, ref):
     return [cmat, av, clkout]
 
 def cnmfrm_error(cname):
-    (frcode, frname, found) = spyce0.cnmfrm(cname)
+    (frcode, frname, found) = cspyce0.cnmfrm(cname)
     if not found:
         chkin('cnmfrm_error')
         setmsg('body name "%s" not found in kernel pool' % cname)
@@ -359,7 +360,7 @@ def cnmfrm_error(cname):
     return [frcode, frname]
 
 def dtpool_error(name):
-    (found, n, vtype) = spyce0.dtpool(name)
+    (found, n, vtype) = cspyce0.dtpool(name)
     if not found:
         chkin('dtpool_error')
         setmsg('pool variable "%s" not found' % name)
@@ -369,7 +370,7 @@ def dtpool_error(name):
     return [n, vtype]
 
 def frinfo_error(frcode):
-    (cent, frclss, clssid, found) = spyce0.frinfo(frcode)
+    (cent, frclss, clssid, found) = cspyce0.frinfo(frcode)
     if not found:
         chkin('frinfo_error')
         setmsg('frame code %s not found in kernel pool' % frcode)
@@ -379,7 +380,7 @@ def frinfo_error(frcode):
     return [cent, frclss, clssid]
 
 def frmnam1_error(frcode):  # change of name; frmnam_error is defined below
-    frname = spyce0.frmnam(frcode)
+    frname = cspyce0.frmnam(frcode)
     if frname == '':
         chkin('frmnam_error')
         setmsg('frame code %s not found' % frcode)
@@ -389,9 +390,9 @@ def frmnam1_error(frcode):  # change of name; frmnam_error is defined below
     return frname
 
 def gcpool_error(name, start=0):
-    (cvals, found) = spyce0.gcpool(name, start)
+    (cvals, found) = cspyce0.gcpool(name, start)
     if not found:
-        [ok, count, nctype] = spyce0.dtpool(name)
+        [ok, count, nctype] = cspyce0.dtpool(name)
         if not ok:
             chkin('gcpool_error')
             setmsg('pool variable "%s" not found' % name)
@@ -399,7 +400,7 @@ def gcpool_error(name, start=0):
             chkout('gcpool_error')
             return []
 
-    [ok, count, nctype] = spyce0.dtpool(name)
+    [ok, count, nctype] = cspyce0.dtpool(name)
     if nctype != 'C':
         chkin('gcpool_error')
         setmsg('string information not available; '
@@ -420,9 +421,9 @@ def gcpool_error(name, start=0):
     return cvals
 
 def gdpool_error(name, start=0):
-    (values, found) = spyce0.gdpool(name, start)
+    (values, found) = cspyce0.gdpool(name, start)
     if not found:
-        [ok, count, nctype] = spyce0.dtpool(name)
+        [ok, count, nctype] = cspyce0.dtpool(name)
         if not ok:
             chkin('gdpool_error')
             setmsg('pool variable "%s" not found' % name)
@@ -430,7 +431,7 @@ def gdpool_error(name, start=0):
             chkout('gdpool_error')
             return []
 
-    [ok, count, nctype] = spyce0.dtpool(name)
+    [ok, count, nctype] = cspyce0.dtpool(name)
     if nctype != 'N':
         chkin('gdpool_error')
         setmsg('numeric values are not available; '
@@ -451,9 +452,9 @@ def gdpool_error(name, start=0):
     return values
 
 def gipool_error(name, start=0):
-    (ivals, found) = spyce0.gipool(name, start)
+    (ivals, found) = cspyce0.gipool(name, start)
     if not found:
-        [ok, count, nctype] = spyce0.dtpool(name)
+        [ok, count, nctype] = cspyce0.dtpool(name)
         if not ok:
             chkin('gipool_error')
             setmsg('pool variable "%s" not found' % name)
@@ -461,7 +462,7 @@ def gipool_error(name, start=0):
             chkout('gipool_error')
             return []
 
-    [ok, count, nctype] = spyce0.dtpool(name)
+    [ok, count, nctype] = cspyce0.dtpool(name)
     if nctype != 'N':
         chkin('gipool_error')
         setmsg('numeric values are not available; '
@@ -482,7 +483,7 @@ def gipool_error(name, start=0):
     return ivals
 
 def gnpool_error(name, start=0):
-    (kvars, found) = spyce0.gnpool(name, 0)
+    (kvars, found) = cspyce0.gnpool(name, 0)
     if not found:
         chkin('gnpool_error')
         setmsg('no kernel pool variables found matching template "%s"' % name)
@@ -501,7 +502,7 @@ def gnpool_error(name, start=0):
     return kvars[start:]
 
 def namfrm1_error(frname):  # change of name; namfrm_error is defined below
-    frcode = spyce0.namfrm(frname)
+    frcode = cspyce0.namfrm(frname)
     if frcode == 0:
         chkin('namfrm_error')
         setmsg('frame name %s not found in kernel pool' % frname)
@@ -511,7 +512,7 @@ def namfrm1_error(frname):  # change of name; namfrm_error is defined below
     return frcode
 
 def pckcov_error(pck, code):
-    coverage = spyce0.pckcov(pck, code)
+    coverage = cspyce0.pckcov(pck, code)
     if coverage.size == 0:
         chkin('pckcov_error')
         setmsg('frame code %s not found in binary PC kernel file %s' % (code,
@@ -522,7 +523,7 @@ def pckcov_error(pck, code):
     return coverage
 
 def spkcov_error(spk, code):
-    coverage = spyce0.spkcov(spk, code)
+    coverage = cspyce0.spkcov(spk, code)
     if coverage.size == 0:
         chkin('spkcov_error')
         setmsg('body code %s not found in SP kernel file %s' % (code, spk))
@@ -532,7 +533,7 @@ def spkcov_error(spk, code):
     return coverage
 
 def srfc2s_error(code, bodyid):
-    (srfstr, isname) = spyce0.srfc2s(code, bodyid)
+    (srfstr, isname) = cspyce0.srfc2s(code, bodyid)
     if not isname:
         chkin('srfc2s_error')
         setmsg('surface for %s/%s not found' % (code, bodyid))
@@ -542,7 +543,7 @@ def srfc2s_error(code, bodyid):
     return srfstr
 
 def srfcss_error(code, bodstr):
-    (srfstr, isname) = spyce0.srfcss(code, bodstr)
+    (srfstr, isname) = cspyce0.srfcss(code, bodstr)
     if not isname:
         chkin('srfcss_error')
         setmsg('surface for %s/"%s" not found' % (code, bodstr))
@@ -552,7 +553,7 @@ def srfcss_error(code, bodstr):
     return srfstr
 
 def srfs2c_error(srfstr, bodstr):
-    (code, found) = spyce0.srfs2c(srfstr, bodstr)
+    (code, found) = cspyce0.srfs2c(srfstr, bodstr)
     if not found:
         chkin('srfs2c_error')
         setmsg('surface for "%s"/"%s" not found' % (srfstr, bodstr))
@@ -562,7 +563,7 @@ def srfs2c_error(srfstr, bodstr):
     return code
 
 def srfscc_error(srfstr, bodyid):
-    (code, found) = spyce0.srfscc(srfstr, bodyid)
+    (code, found) = cspyce0.srfscc(srfstr, bodyid)
     if not found:
         chkin('srfscc_error')
         setmsg('"%s"/%s not found' % (srfstr, bodyid))
@@ -572,9 +573,9 @@ def srfscc_error(srfstr, bodyid):
     return code
 
 def stpool_error(item, nth, contin):
-    (string, found) = spyce0.stpool(item, nth, contin)
+    (string, found) = cspyce0.stpool(item, nth, contin)
     if not found:
-        [ok, count, nctype] = spyce0.dtpool(name)
+        [ok, count, nctype] = cspyce0.dtpool(name)
         if not ok:
             chkin('stpool_error')
             setmsg('pool variable "%s" not found' % name)
@@ -583,7 +584,7 @@ def stpool_error(item, nth, contin):
             return ''
 
         if nth != 0:
-            (_, ok) = spyce0.stpool(item, 0, contin)
+            (_, ok) = cspyce0.stpool(item, 0, contin)
             if ok:
                 chkin('stpool_error')
                 setmsg('index too large; '
@@ -594,7 +595,7 @@ def stpool_error(item, nth, contin):
                 chkout('stpool_error')
                 return ''
 
-    [ok, count, nctype] = spyce0.dtpool(item)
+    [ok, count, nctype] = cspyce0.dtpool(item)
     if nctype != 'C':
         setmsg('string values are not available; '
                'kernel pool variable "%s" has numeric values' % item)
@@ -605,7 +606,7 @@ def stpool_error(item, nth, contin):
     return string
 
 def tparse_error(string):
-    (sp2000, msg) = spyce0.tparse(string)
+    (sp2000, msg) = cspyce0.tparse(string)
     if msg:
         chkin('tparse_error')
         setmsg(msg)
@@ -615,7 +616,7 @@ def tparse_error(string):
     return sp2000
 
 def tpictr_error(string):
-    (pictur, ok, msg) = spyce0.tpictr(string)
+    (pictur, ok, msg) = cspyce0.tpictr(string)
     if not ok:
         chkin('tpictr_error')
         setmsg(msg)
@@ -627,9 +628,9 @@ def tpictr_error(string):
 #### These functions are both vectorized and have _error versions
 
 def ckgp_vector_error(inst, sclkdp, tol, ref):
-    (cmat, clkout, found) = spyce0.ckgp_vector(inst, sclkdp, tol, ref)
+    (cmat, clkout, found) = cspyce0.ckgp_vector(inst, sclkdp, tol, ref)
     if not np.all(found):
-        name = spyce0.frmnam(inst)
+        name = cspyce0.frmnam(inst)
         if name:
             namestr = ' (' + name + ')'
         else:
@@ -653,16 +654,16 @@ def ckgp_vector_error(inst, sclkdp, tol, ref):
     return [cmat, clkout]
 
 def ckgpav_vector_error(inst, sclkdp, tol, ref):
-    (cmat, av, clkout, found) = spyce0.ckgpav_vector(inst, sclkdp, tol, ref)
+    (cmat, av, clkout, found) = cspyce0.ckgpav_vector(inst, sclkdp, tol, ref)
     if not np.all(found):
         raise ValueError('Error in ckgpav_vector(): C matrix not found')
 
     return [cmat, av, clkout]
 
 def ckgpav_vector_error(inst, sclkdp, tol, ref):
-    (cmat, av, clkout, found) = spyce0.ckgpav_vector(inst, sclkdp, tol, ref)
+    (cmat, av, clkout, found) = cspyce0.ckgpav_vector(inst, sclkdp, tol, ref)
     if not np.all(found):
-        name = spyce0.frmnam(inst)
+        name = cspyce0.frmnam(inst)
         if name:
             namestr = ' (' + name + ')'
         else:
@@ -686,7 +687,7 @@ def ckgpav_vector_error(inst, sclkdp, tol, ref):
     return [cmat, av, clkout]
 
 def invert_error(m1):
-    inverse = spyce0.invert(m1)
+    inverse = cspyce0.invert(m1)
     if np.all(inverse == 0.):
         chkin('invert_error')
         setmsg('singular matrix encountered; inverse failed')
@@ -696,7 +697,7 @@ def invert_error(m1):
     return inverse
 
 def invert_vector_error(m1):
-    inverses = spyce0.invert_vector(m1)
+    inverses = cspyce0.invert_vector(m1)
     tests = np.all(inverses == 0., (-2,-1))
     if np.any(tests):
         chkin('invert_error')
@@ -723,13 +724,13 @@ def _name_as_key(name):
     return name
 
 def frmnam(frcode):
-    return FRAME_NAME_OVERRIDES.get(frcode, spyce0.frmnam(frcode))
+    return FRAME_NAME_OVERRIDES.get(frcode, cspyce0.frmnam(frcode))
 
 def frmnam_error(frcode):
     return FRAME_NAME_OVERRIDES.get(frcode, frmnam1_error(frcode))
 
 def namfrm(frname):
-    return FRAME_CODE_OVERRIDES.get(_name_as_key(frname), spyce0.namfrm(frname))
+    return FRAME_CODE_OVERRIDES.get(_name_as_key(frname), cspyce0.namfrm(frname))
 
 def namfrm_error(frname):
     return FRAME_CODE_OVERRIDES.get(_name_as_key(frname), namfrm1_error(frname))
@@ -755,7 +756,7 @@ def namfrm_error(frname):
 ################################################################################
 
 def assign_docstring(func, note=""):
-    """Assign a docstring to a spyce function.
+    """Assign a docstring to a cspyce function.
 
     An optional additional note string can provide version information. It must
     be pre-formatted, wrapped at 72 columns, and begin and end with a newline.
@@ -830,25 +831,25 @@ def assign_docstring(func, note=""):
     func.__doc__ = ''.join(doclist)
 
 # Non-vector functions
-for name in SPYCE_SIGNATURES:
+for name in CSPYCE_SIGNATURES:
     func = globals()[name]
-    func.ABSTRACT  = SPYCE_ABSTRACT[name]
-    func.SIGNATURE = SPYCE_SIGNATURES[name]
-    func.ARGNAMES  = SPYCE_ARGNAMES[name]
-    func.RETURNS   = SPYCE_RETURNS[name]
-    func.RETNAMES  = SPYCE_RETNAMES[name]
-    func.PS        = SPYCE_PS.get(name, '')
-    func.URL       = SPYCE_URL.get(name, '')
+    func.ABSTRACT  = CSPYCE_ABSTRACT[name]
+    func.SIGNATURE = CSPYCE_SIGNATURES[name]
+    func.ARGNAMES  = CSPYCE_ARGNAMES[name]
+    func.RETURNS   = CSPYCE_RETURNS[name]
+    func.RETNAMES  = CSPYCE_RETNAMES[name]
+    func.PS        = CSPYCE_PS.get(name, '')
+    func.URL       = CSPYCE_URL.get(name, '')
     func.NOTES     = []
-    func.DEFINITIONS = SPYCE_DEFINITIONS[name]
+    func.DEFINITIONS = CSPYCE_DEFINITIONS[name]
 
-    if name in SPYCE_DEFAULTS:
-        func.func_defaults = tuple(SPYCE_DEFAULTS[name])
+    if name in CSPYCE_DEFAULTS:
+        func.func_defaults = tuple(CSPYCE_DEFAULTS[name])
 
     assign_docstring(func)
 
-# This is a set of every unique spyce function's basename (before any suffix)
-SPYCE_BASENAMES = {n for n in SPYCE_ABSTRACT.keys() if not n.endswith('_error')}
+# This is a set of every unique cspyce function's basename (before any suffix)
+CSPYCE_BASENAMES = {n for n in CSPYCE_ABSTRACT.keys() if not n.endswith('_error')}
 
 ################################################################################
 # Assign docstrings, signatures, etc. to the _vector functions
@@ -898,7 +899,7 @@ and return arrays of the results. If no inputs have an extra dimension,
 it returns results identical to the un-vectorized version.
 """
 
-for basename in SPYCE_BASENAMES:
+for basename in CSPYCE_BASENAMES:
     for suffix in ('', '_error'):
         vname = basename + '_vector' + suffix
         if vname not in globals(): continue
@@ -929,7 +930,7 @@ for basename in SPYCE_BASENAMES:
 #   func == func_vector != func_error
 #   func != func_vector != func_error != func_vector_error
 
-for name in SPYCE_BASENAMES:
+for name in CSPYCE_BASENAMES:
     ename  = name + '_error'
     vname  = name + '_vector'
     vename = name + '_vector_error'

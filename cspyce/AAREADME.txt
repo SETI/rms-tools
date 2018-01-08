@@ -1,5 +1,5 @@
 ================================================================================
-                             SPYCE MODULE OVERVIEW
+                             CSPYCE MODULE OVERVIEW
                                   Version 0.9
                                  December, 2017
 
@@ -15,13 +15,13 @@ PYTHONIZATION
 
 This module has been designed to replicate the core features of CSPICE for
 users who wish to translate a program that already exists. Function names in
-spyce match their CSPICE names.
+cspyce match their CSPICE names.
 
 However, it is also designed to behave as much as possible like a normal
 Python module. To that end, it has the following features.
 
 - The C language requires buffers to be allocated for output and it requires
-  array sizes to be include for both input and output. The spyce module,
+  array sizes to be include for both input and output. The cspyce module,
   instead, eliminates all extraneous inputs, and all output arguments are
   returned as a list (or as a single object if the function only returns one
   item).
@@ -30,26 +30,26 @@ Python module. To that end, it has the following features.
   programmers can still opt to use CSPICE's error handling mechanism if they
   wish to.
 
-- All spyce functions can handle positional arguments as well as arguments
+- All cspyce functions can handle positional arguments as well as arguments
   passed by name.
 
-- All spyce functions have informative docstrings, so typing
+- All cspyce functions have informative docstrings, so typing
       help(function)
   provides useful information.
 
-- Many spyce functions take sensible default values if input arguments are
+- Many cspyce functions take sensible default values if input arguments are
   omitted.
 
 - The CSPICE concepts of "windows" and "cells" are not needed in Python. In 
   CSPICE, these allow a function to return a variable amount of information,
-  which the program can then iterate through. The spyce counterpart of each of
+  which the program can then iterate through. The cspyce counterpart of each of
   these functions simply returns a complete list of the results.
 
 ENHANCEMENTS
 
-In addition, the spyce module takes advantage of features of the Python language
-to provide numerous options about how the functions perform their work. These
-options include:
+In addition, the cspyce module takes advantage of features of the Python
+language to provide numerous options about how the functions perform their work.
+These options include:
 
 - Whether to return a CSPICE-style error condition or to raise a Python
   exception.
@@ -57,13 +57,13 @@ options include:
 - How to handle CSPICE functions that return a status flag, e.g., "found" or
   "ok", instead of using the CSPICE toolkit's error handling mechanism.
 
-- Whether to allow spyce functions to accept arrays of inputs all at once,
+- Whether to allow cspyce functions to accept arrays of inputs all at once,
   rather than looping through inputs in Python.
 
 - Whether to automate the translation between SPICE body and frame IDs and their
   associated names.
 
-- Whether to allow spyce to support aliases, in which the same body or frame
+- Whether to allow cspyce to support aliases, in which the same body or frame
   is associated with alternative names or IDs.
 
 ================================================================================
@@ -76,7 +76,7 @@ condition using function erract(). In CSPICE, those options are "RETURN",
 CPICE.
 
 - As usual, the user can select the exception handling mechanism to use by
-  calling the function erract(). In spyce, the default is "EXCEPTION".
+  calling the function erract(). In cspyce, the default is "EXCEPTION".
 
 - When using one of CSPICE's error handling methods, a call to failed() will
   reveal whethen an error has occurred, and a call to reset() is needed to
@@ -88,7 +88,7 @@ CPICE.
 
 - Because it would be a highly questionable thing to do, the "ABORT" and
   "DEFAULT" options are overridden by "EXCEPTION" when the user is running
-  spyce from an interactive shell. However, they resume their standard effects
+  cspyce from an interactive shell. However, they resume their standard effects
   during non-interactive runs.
 
 - When using the "EXCEPTION" option, each CSPICE error condition raises a
@@ -124,18 +124,18 @@ CPICE.
 
 HANDLING OF ERROR FLAGS: Many CSPICE functions bypass the library's own error
 handling mechanism; instead they return a status flag, sometimes called "found"
-or "ok", or perhaps an empty response to indicate failure. The spyce module
+or "ok", or perhaps an empty response to indicate failure. The cspyce module
 provides alternative options for these functions.
 
-Within spyce, functions that return error flags have an alternative
-implementation with a suffix of "_error", which uses the CSPICE/spyce error
+Within cspyce, functions that return error flags have an alternative
+implementation with a suffix of "_error", which uses the CSPICE/cspyce error
 handling mechanism instead.
 
 Note that most _error versions of functions have fewer return values than the
 associated non-error versions. The user should be certain which version is being
 used before interpreting the returned value(s).
 
-The spyce module provides several ways to control which version of the function
+The cspyce module provides several ways to control which version of the function
 to use:
 
 - The function use_flags() takes a function name or list of names and designates
@@ -145,14 +145,14 @@ to use:
 - The function use_errors() takes a function name or list of names and
   designates the _error version of each function as the default. If the input
   argument is missing, _error versions are selected universally. With this
-  option, for example, a call to spyce1.bodn2c() will actually call
-  spyce1.bodn2c_error() instead.
+  option, for example, a call to cspyce1.bodn2c() will actually call
+  cspyce1.bodn2c_error() instead.
 
 For backward compatibilty with our original Python cspice library, the _error
 versions of all cspice functions are selected by default.
 
 You can also choose between the "flag" and "error" versions of a function using
-spyce function attributes, as discussed below.
+cspyce function attributes, as discussed below.
 
 ================================================================================
 VECTORS AND ARRAYS
@@ -194,11 +194,11 @@ results.
   and either raise an error or return a flag, the "_vector" suffix comes
   before "_error".
 
-ARRAYS: An optional import allows the spyce module to support multidimensional
+ARRAYS: An optional import allows the cspyce module to support multidimensional
 arrays:
 
-import spyce
-import spyce.arrays
+import cspyce
+import cspyce.arrays
 
 The latter import creates a new function in which the suffix "_array" replaces
 "_vector" for every vectorized function. Whereas _vector function support only
@@ -208,7 +208,7 @@ dimension (10,4) and another has dimension (4,), then the two shapes will be
 broadcasted together and returned quantities will be arrays with shape (10,4).
 
 You can choose between the scalar, vector, and array versions of a function by
-using their explicit names, or by using spyce function attributes, as discussed
+using their explicit names, or by using cspyce function attributes, as discussed
 below.
 
 ================================================================================
@@ -217,7 +217,7 @@ ALIASES
 Aliases allow the user to associate multiple names or codes with the same CSPICE
 body or frame. Aliases can be used for a variety of purposes.
 
-- You can use names and codes interchangeably as input arguments to any spyce
+- You can use names and codes interchangeably as input arguments to any cspyce
   function.
 - You can use a body name or code in place of a frame name or code, and the
   primary frame associated with that identified body will be used.
@@ -225,56 +225,56 @@ body or frame. Aliases can be used for a variety of purposes.
 
 Most importantly, you can allow multiple names or codes to refer to the same
 CPSICE body or frame. For bodies and frames that have multiple names or codes,
-calls to a spyce function will try each option in sequence until it finds one
+calls to a cspyce function will try each option in sequence until it finds one
 that works. Options are always tried in the order of they were defined, so
 higher-priority names and codes are tried first.
 
 Example 1: Jupiter's moon Dia uses code = 553, but it previously used code
-55076. With 55076 defined as an alias for 553, a spyce call will return
+55076. With 55076 defined as an alias for 553, a cspyce call will return
 information about Dia under either of its codes.
 
 Example 2: The Earth's rotation is, by default, modeled by frame "IAU_EARTH".
 However, "ITRF93" is the name of a much more precise description of Earth's
-rotation. If you define "IAU_EARTH" as an alias for "ITRF93", then the spyce
+rotation. If you define "IAU_EARTH" as an alias for "ITRF93", then the cspyce
 toolkit will use ITRF93 if it is available, and otherwise IAU_EARTH.
 
-Immediately after a spyce call involving aliases, you can find out what value
+Immediately after a cspyce call involving aliases, you can find out what value
 or values were actually used by looking at attributes of the function. For
-example, the first input to spyce function spkez is called "targ" and it
+example, the first input to cspyce function spkez is called "targ" and it
 identifies the code of a target being observed. After a call to
-  spyce.spkez(553, ...
-the value of spyce.spkez.targ will be the code actually used, in this case
+  cspyce.spkez(553, ...
+the value of cspyce.spkez.targ will be the code actually used, in this case
 either 553 or 55076.
 
 To enable aliases, you must import an additional module
 
-import spyce
-import spyce.aliases
+import cspyce
+import cspyce.aliases
 
-(Note that spyce.aliases and spyce.arrays can both be imported, and in either
+(Note that cspyce.aliases and cspyce.arrays can both be imported, and in either
 order. Note also that these are unconventional modules, in that they introduce
-new functionality into the "spyce" namespace rather than creating new namespaces
-called "spyce.aliases" and "spyce.arrays".)
+new functionality into the "cspyce" namespace rather than creating new
+namespaces called "cspyce.aliases" and "cspyce.arrays".)
 
-With this import, a new function is defined for every spyce function that takes
+With this import, a new function is defined for every cspyce function that takes
 a frame or body as input. The new function has the same name as the pre-existing
-spyce function, but with "_alias" inserted immediately after the original spyce
-name (and before any other suffix such as "_vector" or "_error").
+cspyce function, but with "_alias" inserted immediately after the original
+cspyce name (and before any other suffix such as "_vector" or "_error").
 
-You can make alias support the default for individual spyce functions or for
-the entire spyce module by calling:
-  spyce.use_aliases()
+You can make alias support the default for individual cspyce functions or for
+the entire cspyce module by calling:
+  cspyce.use_aliases()
 These versions can subsequently be disabled as the default by calling:
-  spyce.use_noaliases()
+  cspyce.use_noaliases()
 
 To define a body alias or frame alias, call
-  spyce.define_body_aliases(name_or_code, name_or_code, ...)
-  spyce.define_frame_aliases(name_or_code, name_or_code, ...)
+  cspyce.define_body_aliases(name_or_code, name_or_code, ...)
+  cspyce.define_frame_aliases(name_or_code, name_or_code, ...)
 where the arguments are an arbitrary list of codes and names.
 
 To determine the aliases associated with a name or code, call
-  spyce.get_body_aliases(name_or_code)
-  spyce.get_frame_aliases(name_or_code)
+  cspyce.get_body_aliases(name_or_code)
+  cspyce.get_frame_aliases(name_or_code)
 where the argument is either a name or a code.
 
 You can also select between the alias-supporting and alias-nonsupporting
@@ -283,7 +283,7 @@ versions of a function using function attributes.
 ================================================================================
 FUNCTION NAMES, VERSIONS AND SELECTION METHODS
 
-A spyce function can accumulate several suffixes, based on the particular
+A cspyce function can accumulate several suffixes, based on the particular
 behavior, as so:
     basename[_alias][_vector|_array][_error]
 Only functions that are truly distinct are defined. For example, if a function
@@ -291,18 +291,18 @@ does not have a vector option, then no function will exist containing the
 "_vector" suffix.
 
 Note that you can use these functions to set defaults:
-    spyce.use_flags()
-    spyce.use_errors()
-    spyce.use_scalars()
-    spyce.use_vectors()
-    spyce.use_arrays()
-    spyce.use_aliases()
-    spyce.use_noaliases()
+    cspyce.use_flags()
+    cspyce.use_errors()
+    cspyce.use_scalars()
+    cspyce.use_vectors()
+    cspyce.use_arrays()
+    cspyce.use_aliases()
+    cspyce.use_noaliases()
 
 FUNCTION ATTRIBUTES: These provide a simpler mechanism for choosing the needed
-version of a function, without remembering the suffix rules. Every spyce
+version of a function, without remembering the suffix rules. Every cspyce
 function has these attributes, each of which identifies another (or possibly the
-same) spyce function:
+same) cspyce function:
 
 func.flag       the equivalent function without the _error suffix, if any.
 func.error      the equivalent function with the _error suffix, if any.
@@ -319,7 +319,7 @@ for example, which functions support aliases or which functions support flags.
 Thus, if the programmer wishes to be sure s/he is using the error version of
 function bodn2c, and wants the vector version if it exists (but it doesn't!),
 can call
-    spyce.bodn2c.error.vector(args...)
+    cspyce.bodn2c.error.vector(args...)
 
 Thus, it is never strictly necessary to refer to any function with its suffixes.
 

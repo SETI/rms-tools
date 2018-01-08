@@ -1,11 +1,11 @@
 ################################################################################
-# spyce/alias_support.py
-# Used internally by spyce; not intended for direct import.
+# cspyce/alias_support.py
+# Used internally by cspyce; not intended for direct import.
 ################################################################################
 
 import re
-import spyce
-import spyce.spyce1 as spyce1
+import cspyce
+import cspyce.cspyce1 as cspyce1
 
 # Global dictionaries used to track aliases
 BODY_CODE_ALIASES = {}
@@ -27,9 +27,9 @@ def get_body_aliases(item):
 
     try:
         if type(item) == str:
-            item = spyce1.bodn2c_error(item)
+            item = cspyce1.bodn2c_error(item)
 
-        return ([item], [spyce1.bodc2n_error(item)]) # this corrects name case
+        return ([item], [cspyce1.bodc2n_error(item)]) # this corrects name case
     except KeyError:
         pass
 
@@ -37,7 +37,7 @@ def get_body_aliases(item):
         if type(item) == str:
             item = int(item)
 
-        return ([item], [spyce1.bodc2n_error(item)])
+        return ([item], [cspyce1.bodc2n_error(item)])
     except (KeyError, ValueError):
         pass
 
@@ -57,9 +57,9 @@ def get_frame_aliases(item):
 
     try:
         if type(item) == str:
-            item = spyce1.namfrm_error(item)
+            item = cspyce1.namfrm_error(item)
 
-        return ([item], [spyce1.frmnam_error(item)]) # this corrects name case
+        return ([item], [cspyce1.frmnam_error(item)]) # this corrects name case
     except KeyError:
         pass
 
@@ -67,14 +67,14 @@ def get_frame_aliases(item):
         if type(item) == str:
             item = int(item)
 
-        return ([item], [spyce1.frmnam_error(item)])
+        return ([item], [cspyce1.frmnam_error(item)])
     except (KeyError, ValueError):
         pass
 
     # If it's not a frame, see if it's a body with an associated frame
     body_codes = get_body_aliases(item)[0]
     for body_code in body_codes:
-        frame_code = spyce.cidfrm_error(body_code)[0]
+        frame_code = cspyce.cidfrm_error(body_code)[0]
         results = get_frame_aliases(frame_code)
         if results[0]:
             return results
@@ -136,7 +136,7 @@ def define_body_aliases(*items):
 
     # Update the kernel pool
     for (name, code) in zip(name_list, code_list):
-        spyce1.boddef(name, code)
+        cspyce1.boddef(name, code)
 
 def define_frame_aliases(*items):
     """Define a list of items (integer codes or strings) as aliases of the same
@@ -245,13 +245,13 @@ def _expand_name_list(code_list, name_list):
     return name_list
 
 ################################################################################
-# spyce alias function wrapper
+# cspyce alias function wrapper
 ################################################################################
 
 ALIAS_NOTE = """
 This version supports aliases, meaning that any input identifying a
 SPICE body or frame can be specified using any of its aliases (integer
-or name). The spyce function will try each of the aliases in their order
+or name). The cspyce function will try each of the aliases in their order
 of priority, and the first valid results will be returned.
 
 **These inputs can be given as either a name or an integer code.
@@ -308,7 +308,7 @@ def alias_version(func):
     _alias_signature(wrapper)   # Add asterisks on aliased inputs
 
     # Save key attributes of the wrapper function before returning
-    spyce.assign_docstring(wrapper, ALIAS_NOTE)
+    cspyce.assign_docstring(wrapper, ALIAS_NOTE)
     wrapper.__name__ = _alias_name(func.__name__)
     wrapper.func_defaults = func.func_defaults
 
@@ -414,9 +414,9 @@ def _exec_with_aliases(wrapper, func, *args, **keywords):
         _setarg(indx, options[0], args, keywords)
 
     # Call the function
-    spyce.chkin(wrapper.__name__)
+    cspyce.chkin(wrapper.__name__)
     results = func.__call__(*args, **keywords)
-    spyce.chkout(wrapper.__name__)
+    cspyce.chkout(wrapper.__name__)
 
     return results
 
@@ -460,11 +460,11 @@ def _exec_with_one_alias(alias_indices, wrapper, func, *args, **keywords):
 
     # Recursion is done, so execute the function
     try:
-        spyce.chkin(wrapper.__name__)
+        cspyce.chkin(wrapper.__name__)
         results = func.error.__call__(*args, **keywords)
-        if spyce.failed():
-            spyce.reset()
-            spyce.chkout(wrapper.__name__)
+        if cspyce.failed():
+            cspyce.reset()
+            cspyce.chkout(wrapper.__name__)
             raise NotImplementedError()
 
     except Exception:
@@ -480,49 +480,49 @@ def _exec_with_one_alias(alias_indices, wrapper, func, *args, **keywords):
 # Define the alias function selector
 ################################################################################
 
-SPYCE_DICT = spyce.__dict__
+SPYCE_DICT = cspyce.__dict__
 
 def use_aliases(*funcs):
     """Switch the listed functions or names of functions to use the "alias"
-    version by default. This affects all versions of any given spyce function.
-    If the list is empty, apply this operation to all spyce functions.
+    version by default. This affects all versions of any given cspyce function.
+    If the list is empty, apply this operation to all cspyce functions.
     """
 
     if funcs:
-        spyce.GLOBAL_STATUS.add('ALIASES')
-        spyce.GLOBAL_STATUS.discard('NOALIASES')
+        cspyce.GLOBAL_STATUS.add('ALIASES')
+        cspyce.GLOBAL_STATUS.discard('NOALIASES')
     else:
-        spyce.GLOBAL_STATUS.discard('ALIASES')
-        spyce.GLOBAL_STATUS.discard('NOALIASES')
+        cspyce.GLOBAL_STATUS.discard('ALIASES')
+        cspyce.GLOBAL_STATUS.discard('NOALIASES')
 
-    for name in spyce._get_func_names(funcs, source=SPYCE_DICT):
+    for name in cspyce._get_func_names(funcs, source=SPYCE_DICT):
         if 'alias' not in name:
             SPYCE_DICT[name] = SPYCE_DICT[name].alias
 
 def use_noaliases(*funcs):
     """Switch the listed functions or names of functions to use the "noalias"
-    version by default. This affects all versions of any given spyce function.
-    If the list is empty, apply this operation to all spyce functions.
+    version by default. This affects all versions of any given cspyce function.
+    If the list is empty, apply this operation to all cspyce functions.
     """
 
     if funcs:
-        spyce.GLOBAL_STATUS.discard('ALIASES')
-        spyce.GLOBAL_STATUS.add('NOALIASES')
+        cspyce.GLOBAL_STATUS.discard('ALIASES')
+        cspyce.GLOBAL_STATUS.add('NOALIASES')
     else:
-        spyce.GLOBAL_STATUS.discard('ALIASES')
-        spyce.GLOBAL_STATUS.discard('NOALIASES')
+        cspyce.GLOBAL_STATUS.discard('ALIASES')
+        cspyce.GLOBAL_STATUS.discard('NOALIASES')
 
-    for name in spyce._get_func_names(funcs, source=SPYCE_DICT):
+    for name in cspyce._get_func_names(funcs, source=SPYCE_DICT):
         if 'alias' not in name:
             SPYCE_DICT[name] = SPYCE_DICT[name].noalias
 
 ################################################################################
-# Function to define alias versions and links for all spyce functions
+# Function to define alias versions and links for all cspyce functions
 ################################################################################
 
 def _define_all_alias_versions():
     """Generate all missing alias functions and set the "alias" and "noalias"
-    attribute for all spyce functions.
+    attribute for all cspyce functions.
 
     This routine can be run multiple times. At each run, it only creates
     whatever is missing.
@@ -530,7 +530,7 @@ def _define_all_alias_versions():
 
     # Create an alias version of each function that needs one
     alias_pairs = []
-    funcs = spyce.get_all_funcs(SPYCE_DICT).values()
+    funcs = cspyce.get_all_funcs(SPYCE_DICT).values()
     for func in funcs:
         if hasattr(func, 'alias'): continue
 
@@ -542,9 +542,9 @@ def _define_all_alias_versions():
 
         alias_pairs.append((alias_func, func))
 
-    # At this point, every alias function exists and every spyce function has
+    # At this point, every alias function exists and every cspyce function has
     # "alias" and "noalias" attributes. However, links to other associated
-    # spyce functions still need to be filled in.
+    # cspyce functions still need to be filled in.
 
     for (afunc, func) in alias_pairs:
         _define_missing_versions_for_alias(afunc, func)

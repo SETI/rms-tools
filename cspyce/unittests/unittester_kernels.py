@@ -3,7 +3,7 @@
 import sys
 import numpy as np
 import numbers
-import spyce as s
+import cspyce as s
 import unittest
 
 class Test_spyce1_kernels(unittest.TestCase):

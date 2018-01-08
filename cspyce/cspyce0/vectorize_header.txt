@@ -1,7 +1,7 @@
 /***********************************************************************************************************************************
-* spyce0/vectorize_header.txt
+* cspyce0/vectorize_header.txt
 *
-* This file contains the header information for SWIG file vectorize.i. It defines the typemaps used by all the spyce0 vectorized
+* This file contains the header information for SWIG file vectorize.i. It defines the typemaps used by all the cspyce0 vectorized
 * functions.
 *
 * Program make_vectorize.py reads this file and copies it to the top of file vectorize.i.
