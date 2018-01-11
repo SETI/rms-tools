@@ -35,7 +35,7 @@ rm -f cspyce0_wrap.c cspyce0_wrap.o
 
 swig -python cspyce0.i
 
-gcc -c `python-config --cflags` cspyce0_wrap.c -I$PYTHON_INCLUDE \
+/usr/bin/gcc -c `python-config --cflags` cspyce0_wrap.c -I$PYTHON_INCLUDE \
     -I$PYTHON_PKGS/numpy/core/include -Icspice/src/cspice
 # This returns many warnings but should not report any errors
 

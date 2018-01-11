@@ -25,7 +25,6 @@ from vicar import VicarImage, VicarError
 from colornames import ColorNames
 from tiff16 import WriteTiff16, ReadTiff16
 from pdsparser import PdsLabel
-from tabulation import Tabulation
 
 ################################################################################
 # Command-line program
