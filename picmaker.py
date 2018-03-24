@@ -14,6 +14,7 @@
 ################################################################################
 
 import os, sys, fnmatch
+import traceback
 from optparse import OptionParser, OptionGroup
 
 import numpy as np
@@ -25,6 +26,7 @@ from vicar import VicarImage, VicarError
 from colornames import ColorNames
 from tiff16 import WriteTiff16, ReadTiff16
 from pdsparser import PdsLabel
+from tabulation import Tabulation
 
 ################################################################################
 # Command-line program
@@ -157,7 +159,7 @@ def main():
         help="index of the band to appear in the output image; default 1.")
 
     group.add_option("--bands", dest="bands",
-        action="store", type="int", nargs=2,
+        action="store", type="int", nargs=2, default=None,
         help="pair of indices indicating a range of bands to be averaged for " +
              "the output image. This serves as an alternative to the --band "  +
              "option.")
@@ -173,7 +175,7 @@ def main():
         action="store", type="int", default=None,
         help="numeric index or name of the object in the file to display; "    +
              "default is the first valid image object in the file. Object "    +
-             "numbering starts at 1.") 
+             "numbering starts at 0.") 
 
     # --pointer
     group.add_option("--pointer", dest="pointer",
@@ -250,11 +252,12 @@ def main():
         help="the color of the gap between sections of a wrapped image. "      +
              "A color can be specified by X11 name or by (R,G,B) triplet.")
 
-    # --wfpc2
-    group.add_option("--wfpc2", dest="wfpc2",
+    # --hst
+    group.add_option("--hst", dest="hst",
         action="store_true", default=False,
-        help="construct a 2x2 mosaic using all four detectors of an HST/WFPC2 "+
-             "image.")
+        help="construct a mosaic using all the detectors of an HST image. "    +
+             "This is a 2x2 mosaic (with rotation) for WFPC2 and a 1x2 "       +
+             "for WFC.")
 
     parser.add_option_group(group)
 
@@ -473,21 +476,20 @@ def main():
     option_dicts = []
     for options in options_list:
 
-        # wfpc2 option check
-        if options.wfpc2 and options.band is not None:
-            raise ValueError("wfpc2 and band options are incompatible")
+        # hst option checks
+        if options.hst:
+            if options.band is not None or options.bands is not None:
+                raise ValueError("hst and band options are incompatible")
 
-        if options.wfpc2 and options.bands is not None:
-            raise ValueError("wfpc2 and bands options are incompatible")
-
-        if options.wfpc2 and options.movie:
-            raise ValueError("wfpc2 and movie options are incompatible")
-
-        # band vs. bands
-        if options.band is not None and options.bands is not None:
+        # band vs. bands (except with hst option)
+        elif options.band is not None and options.bands is not None:
             if (options.band != options.bands[0] or
                 options.band != options.bands[1]):
                     raise ValueError("band and bands options are incompatible")
+
+        # hst and movie
+        if options.hst and options.movie:
+            raise ValueError("hst and movie options are incompatible")
 
         # scale, wscale, hscale
         if options.scale is not None and options.wscale is not None:
@@ -521,10 +523,11 @@ def main():
                 raise ValueError("16-bit filter options are not supported")
 
         # Select bands, sort and convert for Python indexing
-        if options.band is None:
-            options.band = 0
-        if options.bands is None:
-            options.bands = (options.band, options.band+1)
+        if not options.hst:
+            if options.band is None:
+                options.band = 0
+            if options.bands is None:
+                options.bands = (options.band, options.band+1)
 
         # Select rectangle coordinates, sort and convert for Python indexing
         if options.rectangle is None:
@@ -550,9 +553,6 @@ def main():
 
         if options.percentiles is not None:
             options.percentiles = tuple(sorted(options.percentiles))
-
-        # Convert object index to Python indexing
-        if type(options.obj) == int: options.obj -= 1
 
         # Incorporate alt_pointer into pointer list
         if options.alt_pointer is not None:
@@ -593,7 +593,7 @@ def main():
             'overlap': options.overlaps,
             'gap_size': options.gap_size,
             'gap_color': options.gap_color,
-            'wfpc2': options.wfpc2,
+            'hst': options.hst,
 
             # scaling options
             'valid': options.valid,
@@ -683,6 +683,10 @@ def main():
     sys.excepthook(*sys.exc_info())
     sys.exit(1)
 
+  except KeyboardInterrupt:
+    print '*** KeyboardInterrupt ***'
+    sys.exit(2)
+
 ################################################################################
 # A handy utility
 ################################################################################
@@ -763,7 +767,7 @@ def ImagesToPics(filenames, directory=None,
         extension='jpg', suffix='', strip=[], quality=75, twobytes=False,
         bands=None, lines=None, samples=None, obj=None, pointer=['IMAGE'],
         size=None, scale=(100.,100.), frame=None, wrap=False, overlap=(0.,0.),
-            gap_size=1, gap_color='white', wfpc2=False,
+            gap_size=1, gap_color='white', hst=False,
         valid=None, limits=None, percentiles=None, trim=0,
         colormap=None, below_color=None, above_color=None, invalid_color=None,
             gamma=1., tint=False,
@@ -821,13 +825,14 @@ def ImagesToPics(filenames, directory=None,
     obj                 the name or index of the image object to extract from
                         the file. Needed for FITS images that can contain more
                         than one image. Default is to extract the first image
-                        object in the file.
+                        object in the file. Numbering starts at 0.
 
     pointer             the name of the PDS pointer identifying the name of the
                         image object; used when the input file is a PDS label.
                         Converted to upper case. This can also be specified as
                         a list of names, in which case the first matching
-                        pointer found in the label is used.
+                        pointer found in the label is used. Default is
+                        ['IMAGE'].
 
     size                the size of the output image. A tuple of values can be
                         used to specify different values for width and
@@ -863,8 +868,10 @@ def ImagesToPics(filenames, directory=None,
                         by triples (r,g,b), where the red, green and blue values
                         are each specified by a value between 0 and 255.
 
-    wfpc2               True to construct a WFPC2 mosaic involving all four
-                        detectors.
+    hst                 True to construct a mosaic involving multiple HST
+                        detectors. For WFPC2, it creates a 2x2 mosaic with
+                        rotation; for WFC it creates a 1x2 stack of the two
+                        CCDs.
 
     valid               an optional tuple defining the valid range of pixels.
                         Values outside this range are disregarded. In the output
@@ -965,21 +972,14 @@ def ImagesToPics(filenames, directory=None,
                         (array3d, default_is_up, filter_info, infile).
     """
 
-    WFPC2_ROTATIONS = ['none', 'rot90', 'rot180', 'rot270']
-
-    if wfpc2: obj = (1,2,3,4)
-
     ############################################################################
     # Main code begins here
     ############################################################################
 
     # Check for incompatible options
 
-    if wfpc2 and bands is not None:
-        raise ValueError("wfpc2 and bands options are incompatible")
-
-    if wfpc2 and movie:
-        raise ValueError("wfpc2 and movie options are incompatible")
+    if hst and bands is not None:
+        raise ValueError("hst and bands options are incompatible")
 
     # frame vs. size
     if frame is not None and size is not None:
@@ -1009,13 +1009,41 @@ def ImagesToPics(filenames, directory=None,
 
         # Otherwise, do all the input...
         else:
-            # If this is a PDS3 label file, get the image filename and save the
-            # filter name
+            # If this is a PDS3 label file, get the image filename(s) and save
+            # the filter name
             filter_info = None
             upperfile = infile.upper()
             if upperfile.endswith('.LBL'):
                 labeldict = PdsLabel.from_file(infile).as_dict()
 
+                # Get the instrument info if available
+                filter_info = None
+
+                if 'INSTRUMENT_HOST_ID' in labeldict:
+                    inst_host = labeldict['INSTRUMENT_HOST_ID']
+                elif 'SPACECRAFT_ID' in labeldict:
+                    inst_host = labeldict['SPACECRAFT_ID']
+                else:
+                    inst_host = None
+
+                if inst_host is not None:
+                    if 'INSTRUMENT_ID' in labeldict:
+                        inst_id = labeldict['INSTRUMENT_ID']
+                        if 'DETECTOR_ID' in labeldict:
+                            detector_id = labeldict['DETECTOR_ID']
+                            if type(detector_id) == str:
+                                inst_id += '/' + detector_id
+                    else:
+                        inst_id = None
+
+                    if 'FILTER_NAME' in labeldict:
+                        filter_name = labeldict['FILTER_NAME']
+                    else:
+                        filter_name = None
+
+                    filter_info = (inst_host, inst_id, filter_name)
+
+                # Find the first matching object pointer
                 if type(pointer) == str:
                     pointer = [pointer]
 
@@ -1028,47 +1056,41 @@ def ImagesToPics(filenames, directory=None,
 
                     if pname in labeldict:
                         pds_obj = labeldict[pname]
+                        if type(pds_obj) == tuple:
+                            pds_obj = pdsobj[0]
                         break
 
                 if pds_obj is None:
                     raise KeyError('PDS pointer %s not found' %
                                    pointer[0].upper())
 
-                if type(pds_obj) not in (list, tuple):
+                # Convert to a list of filenames for reading
+                if type(pds_obj) == str:
                     pds_obj = [pds_obj]
 
-                if obj is None: obj = 0
+                if obj is None:
+                    max_obj = len(pds_obj) - 1
+                    imagefile = [os.path.join(os.path.split(infile)[0],
+                                              p) for p in pds_obj]
+                elif type(obj) == int:
+                    max_obj = obj
+                    imagefile = os.path.join(os.path.split(infile)[0],
+                                             pds_obj[obj])
+                else:
+                    max_obj = max(obj)
+                    imagefile = [os.path.join(os.path.split(infile)[0],
+                                              pds_obj[o]) for o in obj]
 
-                if obj >= len(pds_obj):
+                if max_obj >= len(pds_obj):
                     raise IndexError(('index %d for PDS pointer %s ' +
-                                     'out of range') % (obj, pname[1:]))
+                                      'out of range') % (max_obj+1, pname[1:]))
 
-                imagefile = pds_obj[obj]
-
-                infile = os.path.join(os.path.split(infile)[0], imagefile)
-
-                if 'INSTRUMENT_HOST_NAME' in labeldict:
-                    inst_host = labeldict['INSTRUMENT_HOST_NAME']
-                elif 'SPACECRAFT_NAME' in labeldict:
-                    inst_host = labeldict['SPACECRAFT_NAME']
-                else:
-                    inst_host = None
-
-                if 'INSTRUMENT_ID' in labeldict:
-                    inst_id = labeldict['INSTRUMENT_ID']
-                else:
-                    inst_id = None
-
-                if 'FILTER_NAME' in labeldict:
-                    filter_name = labeldict['FILTER_NAME']
-                else:
-                    filter_name = None
-
-                filter_info = (inst_host, inst_id, filter_name)
+            else:
+                imagefile = infile
 
             # Read the image array, select up, try to find the filter
             (array3d, default_is_up,
-                      filter_info2) = ReadImageArray(infile, obj)
+                      filter_info2) = ReadImageArray(imagefile, obj, hst)
             filter_info = filter_info or filter_info2
 
         # Now construct the picture...
@@ -1089,11 +1111,19 @@ def ImagesToPics(filenames, directory=None,
             if colormap2 is not None:
                 colormap = colormap2
 
-        # Handle WFPC2 layout option
-        if wfpc2:
+        # Handle HST mosaics
+        if hst and filter_info[0] == 'HST' and \
+                   (filter_info[1] in ('ACS/WFC', 'WFPC2')):
 
-            arrays = []
-            for b in range(4):
+            # Flip for downward orientation (PIL images are there already)
+            if default_is_up:       # If images were read from a FITS file
+                array3d = array3d[:,::-1,:]
+
+            this_display_upward = False
+
+            # Create RGB version of each image
+            arraysRGB = []
+            for b in range(array3d.shape[0]):
 
                 # Slice out the needed part of the image
                 (array2d, mask) = SliceArray(array3d, samples, lines, (b,b+1),
@@ -1106,30 +1136,73 @@ def ImagesToPics(filenames, directory=None,
                 these_limits = GetLimits(array2d, limits, percentiles,
                                          assume_int=is_int, trim=trim)
 
-                # Apply rotation if necessary
-                temp_rotate = WFPC2_ROTATIONS[b]
-                array2d = RotateArray(array2d, True, temp_rotate)
-                if mask is not None:
-                    mask = RotateArray(mask, True, temp_rotate)
-
                 # Apply colormap
                 arrayRGB = ApplyColormap(array2d, these_limits, colormap, mask,
-                                         below_color, above_color, invalid_color)
+                                         below_color, above_color,
+                                         invalid_color)
 
-                arrays.append(arrayRGB)
+                arraysRGB.append(arrayRGB)
 
-            (dl, ds, db) = arrays[0].shape
-            arrayRGB = np.empty((dl*2, ds*2, db), dtype=arrays[0].dtype)
-            arrayRGB[ :dl, -ds:] = arrays[0]
-            arrayRGB[ :dl,  :ds] = arrays[1]
-            arrayRGB[-dl:,  :ds] = arrays[2]
-            arrayRGB[-dl:, -ds:] = arrays[3]
+            # Assemble mosaic...
+            if filter_info[1] == 'WFPC2':
 
-            # Apply rotation if necessary
-            array2d = RotateArray(array2d, this_display_upward, rotate)
-            if mask is not None:
-                mask = RotateArray(mask, this_display_upward, rotate)
+                # Distribute WFPC2 images into quadrants, with rotation
+                quadsRGB = np.zeros((4,) + arraysRGB[0].shape)
 
+                for b in range(array3d.shape[0]):
+                    if type(imagefile) == str:
+                        quadsRGB[b] = np.rot90(arraysRGB[b],b)
+                    else:
+                        testfile = imagefile[b].upper()
+                        if 'PC1' in testfile:
+                            quadsRGB[0] = arraysRGB[b]
+                        elif 'WF2' in testfile:
+                            quadsRGB[1] = np.rot90(arraysRGB[b],1)
+                        elif 'WF3' in testfile:
+                            quadsRGB[2] = np.rot90(arraysRGB[b],2)
+                        elif 'WF4' in testfile:
+                            quadsRGB[3] = np.rot90(arraysRGB[b],3)
+                        else:
+                            quadsRGB[b] = np.rot90(arraysRGB[b],b)
+
+                (_, dl, ds, db) = quadsRGB.shape
+                arrayRGB = np.empty((2*dl, 2*ds, db))
+                arrayRGB[:dl, -ds:] = quadsRGB[0]
+                arrayRGB[:dl, :ds ] = quadsRGB[1]
+                arrayRGB[-dl:,:ds ] = quadsRGB[2]
+                arrayRGB[-dl:,-ds:] = quadsRGB[3]
+
+            else:
+
+                # Handle WFC layout option.
+                # Layer 1 = WFC2, on bottom; Layer 4 = WFC1, on top
+
+                if len(arraysRGB) > 1:
+                    panelsRGB = np.zeros((2,) + arraysRGB[0].shape)
+                    # panelsRGB[0] = WFC1; panelsRGB[1] = WFC2
+
+                    for b in range(2):
+                        if type(imagefile) == str:
+                            panelsRGB[1-b] = arraysRGB[b]
+                        else:
+                            testfile = imagefile[b].upper()
+                            if 'WFC1' in testfile:
+                                panelsRGB[0] = arraysRGB[b]
+                            elif 'WFC2' in testfile:
+                                panelsRGB[1] = arraysRGB[b]
+                            else:
+                                panelsRGB[b] = arraysRGB[b]
+
+                    (dl, ds, db) = arraysRGB[0].shape
+                    arrayRGB = np.zeros((2*dl, ds, db))
+
+                    arrayRGB[:dl]  = panelsRGB[0]   # WFC1 on top
+                    arrayRGB[-dl:] = panelsRGB[1]   # WFC2 on bottom
+
+                else:
+                    arrayRGB = arraysRGB[0]
+
+        # Standard procedure, no mosaicking
         else:
             # Slice out the needed part of the image
             (array2d, mask) = SliceArray(array3d, samples, lines, bands, valid)
@@ -1139,20 +1212,18 @@ def ImagesToPics(filenames, directory=None,
 
             # Get the histogram limits
             these_limits = GetLimits(array2d, limits, percentiles,
-                                     assume_int=is_int)
+                                     assume_int=is_int, trim=trim)
 
             # Save the current limits for movie mode
             min_limits.append(these_limits[0])
             max_limits.append(these_limits[1])
 
-            # Apply rotation if necessary
-            array2d = RotateArray(array2d, this_display_upward, rotate)
-            if mask is not None:
-                mask = RotateArray(mask, this_display_upward, rotate)
-
             # Apply colormap
             arrayRGB = ApplyColormap(array2d, these_limits, colormap, mask,
                                      below_color, above_color, invalid_color)
+
+        # Apply rotation if necessary
+        arrayRGB = RotateArrayRGB(arrayRGB, this_display_upward, rotate)
 
         # Apply gamma
         arrayRGB = ApplyGamma(arrayRGB, gamma)
@@ -1183,9 +1254,10 @@ def ImagesToPics(filenames, directory=None,
         # Write PIL image via PIL or as a 16-bit TIFF
         WritePIL(image, outfile, quality)
 
-      except (IOError, RuntimeError, KeyError, IndexError):
+      except Exception:
         if proceed:
             info = sys.exc_info()
+            traceback.print_tb(info[2])
             print infile, '**** %s: %s' % (info[0].__name__, info[1][0])
         else:
             raise
@@ -1204,18 +1276,20 @@ def ImagesToPics(filenames, directory=None,
 # Read the 3-D image array from a data file
 ################################################################################
 
-def ReadImageArray(filename, obj=None):
+def ReadImageArray(filename, obj=None, hst=False):
     """Return the 3D pixel array and the default display orientation, given the
     file and optional object number.
     
     Input:
         filename            input file name, which could be in Vicar, FITS,
-                            TIFF, or .npy format.
+                            TIFF, or .npy format. Alternatively, a list of
+                            filenames whose arrays are stacked together.
         obj                 index or name of the object to load; only used if
                             the file contains multiple image objects. Default is
                             to return the first image object. If obj is a list
                             or tuple, then multiple objects are stacked to
                             create a new image cube.
+        hst                 True to mosaic an HST image involving multiple CCDs.
 
     Return:                 a tuple of three values:
                             [0]: a numpy 3-D array containing the image data.
@@ -1223,6 +1297,28 @@ def ReadImageArray(filename, obj=None):
                                  upward; False if it is downward or unknown.
                             [2]: a tuple containing (instrument_host_name,
                                  instrument_name, filter_name), if available.
+    """
+
+    if type(filename) == str:
+        return ReadImageArray1(filename, obj, hst)
+
+    # In the case of multiple filenames
+    results = []
+    for k in range(len(filename)):
+        results.append(ReadImageArray1(filename[k], None, hst))
+
+    arrays = [r[0] for r in results]
+    for k in range(len(arrays)):
+        array = arrays[k]
+        if len(array.shape) < 3:
+            arrays[k] = np.reshape(array, (1,) + array.shape)
+
+    array = np.vstack(arrays)
+    return (array,) + results[0][1:]
+
+def ReadImageArray1(filename, obj=None, hst=False):
+    """Return the 3D pixel array and the default display orientation, given the
+    file and optional object number.
     """
 
     # Attempt to read the Pickle image; IOError if file not found
@@ -1276,40 +1372,10 @@ def ReadImageArray(filename, obj=None):
 
     if test == 'SIMPLE  =':
         try:
-            with warnings.catch_warnings():       # Error, not warning, if not FITS
+            with warnings.catch_warnings(): # Error, not warning, if not FITS
                 warnings.filterwarnings('error')
                 fitsfile = pyfits.open(filename)
-                fitsobj = fitsfile[0]               # IndexError if not a FITS file
-
-                array3d = None
-
-                if obj is None:
-                    for i in range(len(fitsfile)):
-                        array3d = fitsfile[i].data
-                        if array3d is None: continue
-                        if len(array3d.shape) in (2,3): break
-
-                elif isinstance(obj, (list,tuple)):
-                    layers = []
-                    for o in obj:
-                        array2d = fitsfile[o].data
-                        layers.append(array2d)
-
-                    array3d = np.stack(layers)
-
-                else:
-                    try:
-                        obj = int(obj)
-                    except ValueError:
-                        pass
-
-                    array3d = fitsfile[obj].data.copy()
-
-                if array3d is None:
-                    raise IOError("Image array not found in FITS file")
-
-                if len(array3d.shape) == 2: 
-                    array3d = array3d.reshape((1,) + array3d.shape)
+                fitsobj = fitsfile[0]       # IndexError if not a FITS file
 
                 # Get the filter info
                 inst_host = None
@@ -1325,7 +1391,9 @@ def ReadImageArray(filename, obj=None):
                     pass
 
                 try:
-                    inst_id = fitsfile[0].header['INSTRUME']    # For HST
+                    inst_id = fitsfile[0].header['INSTRUME']
+                    if 'DETECTOR' in fitsfile[0].header:
+                      inst_id += '/' + fitsfile[0].header['DETECTOR']  # For HST
                 except KeyError:
                   try:
                     inst_id = fitsfile[0].header['INSTRU']      # For NH
@@ -1352,6 +1420,59 @@ def ReadImageArray(filename, obj=None):
                 except KeyError:
                     pass
 
+                # Load array(s)
+                array3d = None
+
+                if obj is None:
+                    if hst and inst_id == 'ACS/WFC':
+                        array = fitsfile[1].data    # WFC2
+                        try:
+                            array2 = fitsfile[4].data
+                            shape = (2,) + array.shape
+                            array3d = np.empty(shape)
+                            array3d[0] = array      # WFC2
+                            array3d[1] = array2     # WFC1
+                        except IndexError:
+                            array3d = array
+
+                    elif hst and inst_id == 'WFPC2':
+                        array3d = []
+                        for i in range(len(fitsfile)):
+                            array = fitsfile[i].data
+                            if type(array) != np.ndarray: continue
+                            if len(array.shape) not in (2,3): continue
+                            array3d.append(array)
+                        array3d = np.array(array3d)
+
+                    else:
+                        for i in range(len(fitsfile)):
+                            array3d = fitsfile[i].data
+                            if type(array3d) != np.ndarray: continue
+                            if len(array3d.shape) in (2,3): break
+
+                elif isinstance(obj, (list,tuple)):
+                    layers = []
+                    for o in obj:
+                        array2d = fitsfile[o].data
+                        layers.append(array2d)
+
+                    array3d = np.stack(layers)
+
+                else:
+                    try:
+                        obj = int(obj)
+                    except ValueError:
+                        pass
+
+                    print 11111, filename, obj, fitsfile[obj]
+                    array3d = fitsfile[obj].data.copy()
+
+                if array3d is None:
+                    raise IOError("Image array not found in FITS file")
+
+                if len(array3d.shape) == 2: 
+                    array3d = array3d.reshape((1,) + array3d.shape)
+
                 fitsfile.close()
 
                 return(array3d, True, (inst_host, inst_id, filter_name))
@@ -1376,7 +1497,7 @@ def ReadImageArray(filename, obj=None):
 def SliceArray(array3d, samples=None, lines=None, bands=None, valid=None):
     """Returns the requested slice of a 3-D array as a 2-D array. The input
     3-D array is not modified.
-    
+
     Input:
         array3d             a 3-D image array indexed (bands, lines, samples).
         samples             a tuple containing the range of lines to include
@@ -1384,7 +1505,7 @@ def SliceArray(array3d, samples=None, lines=None, bands=None, valid=None):
         lines               a tuple containing the range of lines to include
                             in the output image; default is None for all.
         bands               a tuple containing the range of bands to average for
-                            the output 2-D array.
+                            the output 2-D array; default is None for all.
         valid               a tuple containing the numeric range of valid
                             pixels; default is None to make all pixels valid.
 
@@ -1798,23 +1919,20 @@ def TintedColormap(filter_info):
 # Apply rotation
 ################################################################################
 
-def RotateArray(array2d, display_upward, rotation_name):
-    """Applies an arbitrary orientation to a 2-D array.
+def RotateArrayRGB(arrayRGB, display_upward, rotation_name):
+    """Applies an arbitrary orientation to an RGB array.
 
     Input:
-        array2d             a 2-D array, to be modified in place.
+        arrayRGB            an RGB array.
         display_upward      True if the image should be displayed upward; False
                             if it should be displayed downward.
         rotation_name       name of the rotation to be applied. Choices are
                             "FLIPTB", "FLIPLR", "ROT90", "ROT180", ROT270".
                             Case is insignificant.
-
-    Return:                 a pointer to the rotated array, which has been
-                            modified in place.
     """
 
     # Apply the default orientation
-    if display_upward: array2d = np.flipud(array2d)
+    if display_upward: arrayRGB = np.flipud(arrayRGB)
 
     # Apply an additional rotation if necessary
     if rotation_name:
@@ -1822,16 +1940,16 @@ def RotateArray(array2d, display_upward, rotation_name):
 
         if   rotation_name == "NONE": pass
 
-        elif rotation_name == "FLIPLR": array2d = np.fliplr(array2d)
-        elif rotation_name == "FLIPTB": array2d = np.flipud(array2d)
+        elif rotation_name == "FLIPLR": arrayRGB = np.fliplr(arrayRGB)
+        elif rotation_name == "FLIPTB": arrayRGB = np.flipud(arrayRGB)
 
-        elif rotation_name == "ROT90":  array2d = np.rot90(array2d, 1)
-        elif rotation_name == "ROT180": array2d = np.rot90(array2d, 2)
-        elif rotation_name == "ROT270": array2d = np.rot90(array2d, 3)
-        
+        elif rotation_name == "ROT90":  arrayRGB = np.rot90(arrayRGB, 1)
+        elif rotation_name == "ROT180": arrayRGB = np.rot90(arrayRGB, 2)
+        elif rotation_name == "ROT270": arrayRGB = np.rot90(arrayRGB, 3)
+
         else: raise KeyError("Unrecognized rotation method: " + rotation_name)
 
-    return array2d
+    return arrayRGB
 
 ################################################################################
 # Apply colormap
@@ -1966,7 +2084,7 @@ def ApplyGamma(array, gamma):
     Return                  a pointer to the rescaled array, changed in place.
     """
 
-    if gamma != 1: array = array  ** (1./gamma)
+    if gamma != 1.: array = array**(1./gamma)
 
     return array
 
