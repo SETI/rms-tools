@@ -100,7 +100,7 @@ class PdsTableInfo(object):
 
         Input:
             label_file      either a string containing the full path to a PDS
-                            label file, or a list containing the all the records
+                            label file, or a list containing all the records
                             of a PDS label.
         """
 
@@ -138,8 +138,10 @@ class PdsTableInfo(object):
         # Save the key info about each column in a list and a dictionary
         self.column_info_list = []
         self.column_info_dict = {}
-        self.dtype0 = {}            # Also construct the dtype0 dictionary
-
+        self.dtype0 = {'names': [], # Also construct the dtype0 dictionary
+                       'formats': [],
+                       'offsets': [],
+                       'itemsize': self.row_bytes}
         counter = 0
         for node in table_node:
             if node.pdsvalue.value == "COLUMN":
@@ -149,7 +151,9 @@ class PdsTableInfo(object):
                 self.column_info_list.append(pdscol)
                 self.column_info_dict[pdscol.name] = pdscol
 
-                self.dtype0[pdscol.name] = pdscol.dtype0
+                self.dtype0['names'].append(pdscol.name)
+                self.dtype0['formats'].append(pdscol.dtype0[0])
+                self.dtype0['offsets'].append(pdscol.dtype0[1])
 
         # Fill in the complete table file name
         self.table_file_path = os.path.join(os.path.dirname(label_file_path),
@@ -193,7 +197,11 @@ class PdsTable(object):
         """
 
         # Parse the label
-        self.info = PdsTableInfo(label_file)
+        if (type(label_file) == type([]) or
+            type(label_file) == type(())):
+            self.info = PdsTableInfo("", label_list=label_file)
+        else:
+            self.info = PdsTableInfo(label_file)
 
         # Select the columns
         if len(columns) == 0:
@@ -202,11 +210,13 @@ class PdsTable(object):
             keys = columns
 
         # Load the table data
-        file = open(self.info.table_file_path, "r")
+        file = open(self.info.table_file_path, "rb")
         lines = file.readlines()
         file.close()
 
-        table = np.array(lines, dtype=self.info.dtype0)
+        table = np.array([lines], dtype='S'+str(self.info.dtype0['itemsize']))
+        table = table.view(self.info.dtype0)[0]
+
 
         # Extract the substring arrays and save in a dictionary and list...
         self.column_list = []
@@ -215,56 +225,87 @@ class PdsTable(object):
         for key in keys:
             column_info = self.info.column_info_dict[key]
             column = table[key]
+            # column = table[key][0:1]
+            # self.info.rows = 1
 
             # For multiple items...
             if column_info.items > 1:
-
                 # Replace the column substring with a list of sub-substrings
                 column.dtype = np.dtype(column_info.dtype1)
 
                 items = []
                 for i in range(column_info.items):
                     item = column["item_" + str(i)]
+
+                    rows = []
+                    for row in item:
+                        if type(row) == bytes or type(row) == np.bytes_:
+                            # print(row, row.decode())
+                            rows.append(row.decode())
+                        else:
+                            rows.append(row)
+                    item = np.array(rows)
+
                     items.append(item)
 
-                # Apply the callback function if necessary for each tem
+                # Convert from byte strings to normal string
+
+                # Apply the callback function if necessary for each item
                 if key in callbacks:
                     old_items = items
                     items = []
                     callback = callbacks[key]
                     for item in old_items:
-                      rows = []
-                      for row in item:
-                        rows.append(callback(str(row)))
-                      rows = np.array(rows)
-                      items.append(np.array(rows))
+                        rows = []
+                        for row in item:
+                            rows.append(callback(str(row)))
+                        rows = np.array(rows)
+                        items.append(np.array(rows))
 
                 # Strip strings...
                 if column_info.dtype2 is None and key not in nostrip:
                     old_items = items
                     items = []
                     for item in old_items:
-                      rows = []
-                      for row in item:
-                        rows.append(str(row).strip())
-                      rows = np.array(rows)
-                      items.append(np.array(rows))
+                        rows = []
+                        for row in item:
+                            rows.append(str(row).strip())
+                        rows = np.array(rows)
+                        items.append(np.array(rows))
 
                 # ...or convert other data types
                 else:
                     old_items = items
                     items = []
                     for item in old_items:
-                      rows = []
-                      for row in item:
-                        rows.append(row.astype(column_info.dtype2))
-                      rows = np.array(rows)
-                      items.append(np.array(rows))
+                        rows = []
+                        for row in item:
+                            try:
+                                rows.append(row.astype(column_info.dtype2))
+                            except ValueError:
+                                warnings.warn("Illegal " + column_info.dtype2 +
+                                              " format in multi-val column " +
+                                              column_info.name +
+                                              "; values like " + str(row) +
+                                              " were not converted to numeric")
+                                break
+                        rows = np.array(rows)
+                        items.append(np.array(rows))
 
                 column = np.array(items).swapaxes(0,1)
 
-            # Apply the callback function if necessary
             else:
+                # Convert from byte strings to normal string
+                rows = []
+                for row in column:
+                    if type(row) == bytes or type(row) == np.bytes_:
+                        # print(row, row.decode())
+                        rows.append(row.decode())
+                    else:
+                        rows.append(row)
+                column = np.array(rows)
+
+                # Apply the callback function if necessary
                 if key in callbacks:
                     callback = callbacks[key]
                     rows = []
@@ -285,9 +326,22 @@ class PdsTable(object):
                     try:
                         column = column.astype(column_info.dtype2)
                     except ValueError:
-                        warnings.warn("Illegal " + column_info.dtype2 +
-                                      " format in column " + column_info.name +
-                                      "; values were not converted to numeric")
+                        # Actually find the bad one so we have a good error
+                        for c in column:
+                            try:
+                                c.astype(column_info.dtype2)
+                            except ValueError:
+                                # print(c)
+                                # print(type(c))
+                                # print(column_info.dtype2)
+                                # print(type(column_info.dtype2))
+                                # print(c.astype(column_info.dtype2))
+                                warnings.warn("Illegal " + column_info.dtype2 +
+                                              " format in column " +
+                                              column_info.name +
+                                              "; values like " + str(c)+
+                                              " were not converted to numeric")
+                                break
 
                 # Convert time columns if necessary
                 if key in times:
@@ -333,9 +387,9 @@ class PdsTable(object):
 ERROR_TOLERANCE = 1.e-15
 
 class Test_PdsTable(unittest.TestCase):
-    
+
     def test_table_parse(self):
-        
+
         # Testing different values parsed correctly...
         test_table_basic = PdsTable(os.path.join(os.environ["OOPS_TEST_DATA"],
                                                  "cassini/ISS/index.lbl"))

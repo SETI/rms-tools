@@ -28,37 +28,39 @@
 # Mark's notes from earlier draft version...
 #
 # Structure generated supports basic dictionary-type indexing.
-# 
+#
 # Node objects contain a single record, except the opening lines of OBJECT and
 # GROUPs enclose their contents.
-# 
+#
 # Comments are attached to the item before them unless this is impossible (such
 # as due to intervening punctuation); then they are attached to the item after.
-# 
+#
 # Every PdsItem has indices in the string to where the information begins and
 # ends, as well as a pointer to the string.
-# 
+#
 # Every PdsItem has a possible "eol" object which could be a newline, short
 # comment or long comment. It also has a possible "eol_before" The only case of
 # eol_before is in a sequence or set where the comment occurs after a comma; in
 # this case, the comment is attached to the element that follows.
-# 
+#
 # PdsValues only have attached comments if they appear inside the gaps within
 # the definition, e.g., between a value and its units, or between the elements
 # of a sequence or set.
-# 
+#
 # Most comments are attached to statements instead. They are usually after the
 # value but can also appear before or after the equal sign.
-# 
+#
 # There is currently no organized way to locate comments except by an extensive
 # tree search.
-# 
+#
 # Still need an option to find and replace STRUCTURE pointers and re-parse.
-# 
+#
 # Changing the label will throw off all the string pointers!
 #
 # MRS, July 26, 2009
 ################################################################################
+
+from __future__ import print_function
 
 from pyparsing import *
 import decimal as dec
@@ -444,7 +446,7 @@ class PdsBasedInteger(PdsInteger):
         is_neg   = (digits[0] == "-")
         use_plus = (digits[0] == "+")
         if is_neg or use_plus: digits = digits[1:]
-            
+
         value = 0
         for c in digits:
             i = "0123456789ABCDE".index(c)
@@ -467,7 +469,7 @@ REAL_WITH_INT   = Combine(SIGNED_INT
                         + "."
                         + Optional(UNSIGNED_INT)
                         + Optional(EXPONENT))
-REAL_WO_INT     = Combine(Optional(SIGN) 
+REAL_WO_INT     = Combine(Optional(SIGN)
                         + "."
                         + UNSIGNED_INT
                         + Optional(EXPONENT))
@@ -1458,7 +1460,7 @@ class PdsLabel():
         """
 
         # Open file for read; could be binary
-        file = open(filename, "rb")
+        file = open(filename, "r")
 
         # Create a list of lines
         lines = []
@@ -1532,22 +1534,21 @@ def test():
     result = PdsLabel.FromFile("test.lbl")
 
 #    result.PrintLabel()
-    print result.nodename
+    print(result.nodename)
 
     test = result.GetSubnode("IMAGE")
-    print test.nodename
+    print(test.nodename)
     test.PrintLabel()
 
-    print test["LINE_SAMPLES"]
-    print test["HORIZONTAL_PIXEL_FOV"]
-    print result["START_TIME"]
-    print result["IMAGE_TIME"]
-    print result["^IMAGE"]
+    print(test["LINE_SAMPLES"])
+    print(test["HORIZONTAL_PIXEL_FOV"])
+    print(result["START_TIME"])
+    print(result["IMAGE_TIME"])
+    print(result["^IMAGE"])
 
-    print result["mask"]
-    print result["oned"]
-    print result["twod"]
+    print(result["mask"])
+    print(result["oned"])
+    print(result["twod"])
 
 # Execute the main test progam if this is not imported
 if __name__ == "__main__": test()
-

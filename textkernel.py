@@ -43,6 +43,8 @@
 # August 2011
 ################################################################################
 
+from __future__ import print_function
+
 from pyparsing import *
 import julian
 import datetime as dt
@@ -330,7 +332,7 @@ PREDEFINED_FRAME_INFO = {
 # At load time, augment the PREDEFINED_FRAME_INFO to support lookups by name
 # and by center ID as well as frame ID
 
-for id in PREDEFINED_FRAME_INFO.keys():
+for id in list(PREDEFINED_FRAME_INFO.keys()): # Keys change during loop!
     info = PREDEFINED_FRAME_INFO[id]
     PREDEFINED_FRAME_INFO[info["NAME"]] = info
 
@@ -1305,7 +1307,7 @@ class Test_FromFile(unittest.TestCase):
   def runTest(self):
 
     import os.path
-    
+
     # Test DefaultBodies()
     dict = default_bodies(clear=True)
     self.assertEqual(dict["BODY"][618], dict["BODY"]["PAN"])
@@ -1375,7 +1377,7 @@ class Test_FromFile(unittest.TestCase):
                  "vg200011.tsc"]
 
     for file in filenames:
-        print file
+        print(file)
         d = from_file(os.path.join(prefix, file))
 
 ################################################################################
