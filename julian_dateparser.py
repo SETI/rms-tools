@@ -287,7 +287,7 @@ class Test_Basics(unittest.TestCase):
         self.assertEqual(parser.parseString("1 ").asList()[0],   "1")
         self.assertEqual(parser.parseString(" 12 ").asList()[0], "12")
         self.assertEqual(parser.parseString("01").asList()[0],   "01")
-        for num in range(01, 13):
+        for num in range(1, 13):
             self.assertEqual(parser.parseString(str(num)).asList()[0], str(num))
 
         # ...cannot complete match
@@ -310,7 +310,7 @@ class Test_Basics(unittest.TestCase):
         self.assertEqual(parser.parseString("1 ").asList()[0],   "1")
         self.assertEqual(parser.parseString(" 31 ").asList()[0], "31")
         self.assertEqual(parser.parseString("01").asList()[0],   "01")
-        for num in range(01, 32):
+        for num in range(1, 32):
             self.assertEqual(parser.parseString(str(num)).asList()[0], str(num))
 
         # ...cannot complete match
@@ -336,7 +336,7 @@ class Test_Basics(unittest.TestCase):
         self.assertEqual(parser.parseString("366").asList()[0],  "366")
         self.assertEqual(parser.parseString("001").asList()[0],  "001")
         self.assertEqual(parser.parseString("010").asList()[0],  "010")
-        for num in range(01, 367):
+        for num in range(1, 367):
             self.assertEqual(parser.parseString(str(num)).asList()[0], str(num))
 
         # ...cannot complete match
@@ -1725,7 +1725,7 @@ class Test_DATETIME(unittest.TestCase):
                     [['YEAR', 2000], ['DAY', 366],
                      ['HOUR', 0], ['MINUTE', 0], ['SECOND', 0.0]])
         self.assertEqual(parser.parseString("2000-001 T 00:00:00").asList(),
-                    [['YEAR', 2000], ['DAY', 001],
+                    [['YEAR', 2000], ['DAY', 1],
                      ['HOUR', 0], ['MINUTE', 0], ['SECOND', 0.0]])
 
         # Test FRACTIONAL_DATE and MJD_DATE
