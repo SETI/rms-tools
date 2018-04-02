@@ -26,6 +26,9 @@
 #   - Redefined PLUTO_CHARON as PLUTO_CHARON_OLD
 #   - Redefined PLUTO_CHARON_AS_RINGS as PLUTO_CHARON
 ################################################################################
+
+from __future__ import print_function
+
 import numpy as np
 import unittest
 import warnings
@@ -106,14 +109,20 @@ class Gravity():
                                    Gravity._jseries(self.omega_jn, self.r2/a2))
         return np.sqrt(omega2)
 
-    def kappa(self, a):
-        """Returns the radial oscillation frequency (radians/s) at semimajor
-        axis a."""
+    def kappa2(self, a):
+        """Returns the square of the radial oscillation frequency (radians/s) at
+        semimajor axis a."""
 
         a2 = a * a
         kappa2 = self.gm/(a*a2) * (1. +
                                    Gravity._jseries(self.kappa_jn, self.r2/a2))
-        return np.sqrt(kappa2)
+        return kappa2
+
+    def kappa(self, a):
+        """Returns the radial oscillation frequency (radians/s) at semimajor
+        axis a."""
+
+        return np.sqrt(self.kappa2(a))
 
     def nu(self, a):
         """Returns the vertical oscillation frequency (radians/s) at semimajor
@@ -263,7 +272,7 @@ class Gravity():
 
         return sum_values
 
-    def solve_a(self, freq, factors=(1,0,0), iters=5):
+    def solve_a(self, freq, factors=(1,0,0)):
         """Solves for the semimajor axis at which the frequency is equal to the
         given combination of factors on omega, kappa and nu. Solution is via
         Newton's method."""
@@ -302,12 +311,23 @@ class Gravity():
             a = (self.gm * (term * self.r2 * self.r2 / freq)**2)**(1/11.)
 
         # Iterate using Newton's method
-        for iter in range(iters):
+        da_prev_max = 1.e99
+        for iter in range(20):
             # a step in Newton's method: x(i+1) = x(i) - f(xi) / fp(xi)
             # our f(x) = self.combo() - freq
             #     fp(x) = self.dcombo()
 
-            a -= ((self.combo(a, factors) - freq) / self.dcombo_da(a, factors))
+            da = ((self.combo(a, factors) - freq) / self.dcombo_da(a, factors))
+            da_max = np.max(np.abs(da))
+            if da_max == 0.: break
+
+            a -= da
+
+            # If Newton's method stops converging, return what we've got
+            if iter > 4 and da_max >= da_prev_max:
+                break
+
+            da_prev_max = da_max
 
         return a
 
@@ -977,7 +997,7 @@ class Test_Gravity(unittest.TestCase):
 
         # Testing scalars in a loop...
         tests = 100
-        planets = [JUPITER, SATURN, URANUS, NEPTUNE, PLUTO_CHARON]
+        planets = [JUPITER, SATURN, URANUS, NEPTUNE]
         factors = [(1, 0, 0), (0, 1, 0), (0, 0, 1)]
 
         for test in range(tests):
@@ -986,6 +1006,28 @@ class Test_Gravity(unittest.TestCase):
             for f in factors:
                 b = obj.solve_a(obj.combo(a, f), f)
                 c = abs((b - a) / a)
+                self.assertTrue(c < ERROR_TOLERANCE)
+
+        # PLUTO_CHARON with factors (1,0,0) and (0,0,1)
+        for test in range(tests):
+          for obj in [PLUTO_CHARON]:
+            a = obj.rp * 10. ** (np.random.rand() * 2.)
+            for f in [(1,0,0),(0,0,1)]:
+                b = obj.solve_a(obj.combo(a, f), f)
+                c = abs((b - a) / a)
+                self.assertTrue(c < ERROR_TOLERANCE)
+
+        # PLUTO_CHARON with factors (0,1,0) can have duplicated values...
+        for test in range(tests):
+          for obj in [PLUTO_CHARON]:
+            a = obj.rp * 10. ** (np.random.rand() * 2.)
+            if obj.kappa2(a) < 0.: continue     # this would raise RuntimeError
+
+            for f in [(0,1,0)]:
+                combo1 = obj.combo(a,f)
+                b = obj.solve_a(combo1, f)
+                combo2 = obj.combo(b,f)
+                c = abs((combo2 - combo1) / combo1)
                 self.assertTrue(c < ERROR_TOLERANCE)
 
         # Testing a 100x100 array

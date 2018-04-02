@@ -17,8 +17,6 @@
 # 11/22/13 MRS - Added classes PdsSetPointer and PdsSequencePointer (and
 #   superclass PdsVectorPointer) to allow for a pointer to multiple file neames.
 #   This is used widely in DOCUMENT objects comprising multiple files. Surprise!
-#
-# Note: Test method is hopelessly out of date.
 ################################################################################
 # Tracking of comments has been stripped away.
 # Tracking of substring locations has been stripped away for simplicity.
@@ -1459,7 +1457,7 @@ class PdsLabel():
         """Loads a PDS label, returning a list of strings, one for each line.
         """
 
-        # Open file for read; could be binary
+        # Open file for read; could be binary but if so pretend it isn't
         file = open(filename, "r")
 
         # Create a list of lines
@@ -1516,39 +1514,3 @@ class PdsLabel():
         return PdsLabel.from_file(filename)
 
 ################################################################################
-# Test program
-################################################################################
-
-def test2():
-
-#     str(PDS_VALUE.parseString(" {\"17010011010101110\",3 <hh>} "))[0]
-#    foo = PDS_VALUE.parseString(" ( (1, /* dfsdf */ \n /* more*/ \n2),/*  */\n (3))")
-    foo = ATTRIBUTE_STMT.parseString(" A = 123 /* comment */ \n /* dddd */  \n")
-#   foo = STATEMENT.parseString(" ^A= ( \"A.b\", 4 <bytes>) \n")
-#    foo = POINTER_VALUE.parseString("(\"a.b\", 55 <bytes> )")
-#   foo = EOL.parseString(" /* aa bb gifhfi   \n")
-
-# Test program
-def test():
-
-    result = PdsLabel.FromFile("test.lbl")
-
-#    result.PrintLabel()
-    print(result.nodename)
-
-    test = result.GetSubnode("IMAGE")
-    print(test.nodename)
-    test.PrintLabel()
-
-    print(test["LINE_SAMPLES"])
-    print(test["HORIZONTAL_PIXEL_FOV"])
-    print(result["START_TIME"])
-    print(result["IMAGE_TIME"])
-    print(result["^IMAGE"])
-
-    print(result["mask"])
-    print(result["oned"])
-    print(result["twod"])
-
-# Execute the main test progam if this is not imported
-if __name__ == "__main__": test()

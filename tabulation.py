@@ -7,6 +7,8 @@
 # Mark Showalter, PDS Rings Node, December 2011
 ################################################################################
 
+from __future__ import division
+
 import numpy as np
 from scipy.interpolate import interp1d
 
@@ -155,7 +157,7 @@ class Tabulation(object):
         elif np.shape(other) == ():
             return Tabulation(self.x, self.y * other)
 
-    def __div__(self, other):
+    def __truediv__(self, other):
 
         # Division of two Tabulations
         # Note: the new domain is the intersection of the given domains

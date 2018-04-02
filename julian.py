@@ -1434,7 +1434,7 @@ class Test_Formatting(unittest.TestCase):
 # ISO format parsers
 ################################################################################
 
-def day_from_iso(strings, validate=True):
+def day_from_iso(strings, validate=True, strip=False):
     """Returns a day number based on a parsing of a date string in ISO format.
     The format is strictly required to be either yyyy-mm-dd or yyyy-ddd.
 
@@ -1456,18 +1456,32 @@ def day_from_iso(strings, validate=True):
 
     strings = np.array(strings).astype('S')
 
-    if validate:
-        if b" " in bytearray(strings):
-            raise ValueError("blank character in ISO date")
+    first_index = len(strings.shape) * (0,)
+    first = strings[first_index]
+
+    # Skip over leading and trailing blanks
+    if strip:
+        for k0 in range(len(first)):
+            if first[k0:k0+1] != b' ':
+                break
+        for k1 in range(len(first)):
+            if first[-k1-1] != b' ':
+                break
+    else:
+        k0 = 0
+        k1 = 0
+        if validate:
+            if b" " in bytearray(strings):
+                raise ValueError("blank character in ISO date")
 
     # yyyy-mm-dd case:
-    if strings.dtype == np.dtype("|S10"):
-        dtype_dict = {"y": ("|S4",0),
-                      "m": ("|S2",5),
-                      "d": ("|S2",8)}
+    if strings.itemsize - k0 - k1 == 10:
+        dtype_dict = {"y": ("|S4", k0 + 0),
+                      "m": ("|S2", k0 + 5),
+                      "d": ("|S2", k0 + 8)}
         if validate:
-            dtype_dict["dash1"] = ("|S1",4)
-            dtype_dict["dash2"] = ("|S1",7)
+            dtype_dict["dash1"] = ("|S1", k0 + 4)
+            dtype_dict["dash2"] = ("|S1", k0 + 7)
 
         strings.dtype = np.dtype(dtype_dict)
 
@@ -1490,11 +1504,11 @@ def day_from_iso(strings, validate=True):
         return day_from_ymd(y,m,d)
 
     # yyyy-ddd case:
-    if strings.dtype == np.dtype("|S8"):
-        dtype_dict = {"y": ("|S4",0),
-                      "d": ("|S3",5)}
+    if strings.itemsize - k0  == 8:
+        dtype_dict = {"y": ("|S4", k0 + 0),
+                      "d": ("|S3", k0 + 5)}
         if validate:
-            dtype_dict["dash"] = ("|S1",4)
+            dtype_dict["dash"] = ("|S1", k0 + 4)
 
         strings.dtype = np.dtype(dtype_dict)
 
@@ -1517,7 +1531,7 @@ def day_from_iso(strings, validate=True):
 
 ########################################
 
-def sec_from_iso(strings, validate=True):
+def sec_from_iso(strings, validate=True, strip=False):
     """Returns a second value based on a parsing of a time string in ISO format.
     The format is strictly required to be hh:mm:ss[.s...][Z].
 
@@ -1540,24 +1554,43 @@ def sec_from_iso(strings, validate=True):
     # Convert to an array of strings
     strings = np.array(strings).astype('S')
 
-    if validate:
-        merged = bytearray(strings)
-        if b" " in merged or b"-" in merged:
-            raise ValueError("blank character in ISO date")
+    first_index = len(strings.shape) * (0,)
+    first = strings[first_index]
+
+    # Skip over leading and trailing blanks
+    if strip:
+        for k0 in range(len(first)):
+            if first[k0:k0+1] != b' ':
+                break
+        for k1 in range(len(first)):
+            if first[-k1-1:-k1] != b' ':
+                break
+
+        lstring = len(first) - k1
+    else:
+        k0 = 0
+        k1 = 0
+        lstring = len(first)
+
+        if validate:
+            merged = bytearray(strings)
+            if b" " in merged or b"-" in merged:
+                raise ValueError("blank character in ISO time")
 
     # Prepare a dictionary to define the string format
-    dtype_dict = {"h": ("|S2",0),
-                  "m": ("|S2",3),
-                  "s": ("|S2",6)}
+    dtype_dict = {"h": ("|S2", k0 + 0),
+                  "m": ("|S2", k0 + 3),
+                  "s": ("|S2", k0 + 6)}
 
     if validate:
-        dtype_dict["colon1"] = ("|S1", 2)
-        dtype_dict["colon2"] = ("|S1", 5)
+        dtype_dict["colon1"] = ("|S1", k0 + 2)
+        dtype_dict["colon2"] = ("|S1", k0 + 5)
 
-    # Get the first string. Every subsequent string is assumed to match in
-    # format.
-    first = strings.ravel()[0]
-    lstring = len(first)
+    if k0 > 0:
+        dtype_dict["white0"] = ("|S" + str(k0), 0)
+
+    if k1 > 0:
+        dtype_dict["white1"] = ("|S" + str(k1), lstring)
 
     # Check for a trailing "Z" to ignore
     has_z = (first[-1:] == b"Z")    # note first[-1] is an int in Python 3,
@@ -1569,15 +1602,16 @@ def sec_from_iso(strings, validate=True):
     # Check for a period
     has_dot = (lstring > 8)
     if has_dot:
-        dtype_dict["dot"] = ("|S1", 8)
+        dtype_dict["dot"] = ("|S1", k0 + 8)
 
     # Check for fractional seconds
-    lfrac = lstring - 9
+    lfrac = lstring - 9 - k0
     has_frac = lfrac > 0
     if has_frac:
-        dtype_dict["f"] = ("|S" + str(lfrac), 9)
+        dtype_dict["f"] = ("|S" + str(lfrac), k0 + 9)
 
     # Extract hours, minutes, seconds
+    dtype = np.dtype(dtype_dict)
     strings.dtype = np.dtype(dtype_dict)
     h = strings["h"].astype("int")
     m = strings["m"].astype("int")
@@ -1593,6 +1627,14 @@ def sec_from_iso(strings, validate=True):
     if validate:
         if (np.any(strings["colon1"] != b":") or
             np.any(strings["colon2"] != b":")):
+                raise ValueError("invalid ISO time punctuation")
+
+        if "white1" in dtype_dict:
+            if np.any(strings["white0"] != k0 * b" "):
+                raise ValueError("invalid ISO time punctuation")
+
+        if "white1" in dtype_dict:
+            if np.any(strings["white1"] != k1 * b" "):
                 raise ValueError("invalid ISO time punctuation")
 
         if has_z:
@@ -1621,7 +1663,7 @@ def sec_from_iso(strings, validate=True):
 
 ########################################
 
-def day_sec_from_iso(strings, validate=True):
+def day_sec_from_iso(strings, validate=True, strip=False):
     """Returns a day and second based on a parsing of the string in ISO
     date-time format. The format is strictly enforced to be an ISO date plus an
     ISO time, separated by a single space or a "T"."""
@@ -1639,30 +1681,38 @@ def day_sec_from_iso(strings, validate=True):
 
     strings = np.array(strings).astype('S')
 
-    # Check for a T or blank separator
-    first = strings.ravel()[0]
+    first_index = len(strings.shape) * (0,)
+    first = strings[first_index]
 
+    # Check for a T or blank separator
     csep = b"T"
     isep = first.find(csep)
 
     if isep == -1:
+        if strip:
+            for k0 in range(len(first)):
+                if first[k0:k0+1] != b' ':
+                    break
+        else:
+            k0 = 0
+
         csep = b" "
-        isep = first.find(csep)
+        isep = first.find(csep, k0)
 
     # If no separator is found, assume it is just a date
     if isep == -1:
-        return (day_from_iso(strings, validate), 0)
+        return (day_from_iso(strings, validate, strip), 0)
 
     # Otherwise, parse the date and time separately
     dtype_dict = {"day": ("|S" + str(isep), 0),
-                  "sec": ("|S" + str(len(first) - isep - 1), isep+1)}
+                  "sec": ("|S" + str(len(first) - isep - 1), isep + 1)}
 
     if validate:
         dtype_dict["sep"] = ("|S1", isep)
 
     strings.dtype = np.dtype(dtype_dict)
-    day = day_from_iso(strings["day"], validate)
-    sec = sec_from_iso(strings["sec"], validate)
+    day = day_from_iso(strings["day"], validate, strip)
+    sec = sec_from_iso(strings["sec"], validate, strip)
 
     if validate:
         if (np.any(strings["sep"] != csep)):
@@ -1675,11 +1725,11 @@ def day_sec_from_iso(strings, validate=True):
 
 ########################################
 
-def tai_from_iso(strings, validate=True):
+def tai_from_iso(strings, validate=True, strip=False):
     """Returns the elapsed seconds TAI from January 1, 2000 given an ISO date
     or date-time string. Works for scalars or arrays."""
 
-    (day, sec) = day_sec_from_iso(strings, validate)
+    (day, sec) = day_sec_from_iso(strings, validate, strip)
     return tai_from_day(day) + sec
 
 ########################################

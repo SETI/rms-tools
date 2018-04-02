@@ -62,8 +62,10 @@ class Interval(object):
 
     def __repr__(self): return str(self)
 
-    def __setitem__(self, (xlo, xhi), value):
+    def __setitem__(self, xlimits, value):
         """Overlays the given value within the limit s (xlo,xhi)"""
+
+        (xlo, xhi) = xlimits
 
         # Ignore ranges completely outside the interval
         if xhi <= self.xlist[0]:  return

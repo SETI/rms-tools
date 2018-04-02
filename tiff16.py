@@ -15,6 +15,8 @@
 # Mark R. Showalter, SETI Institute, July 2009
 ################################################################################
 
+from __future__ import print_function
+
 import sys, os
 import numpy as np
 from struct import *
@@ -106,10 +108,10 @@ def WriteTiff16(filename, array, palette=None, up=False, byteorder="native",
 
     if byteorder.lower() == "little":
         o = "<"
-        flag = "I"
+        flag = b"I"
     else:
         o = ">"
-        flag = "M"
+        flag = b"M"
 
     # Write the Image File Header
     #------- 0 bytes
@@ -252,16 +254,16 @@ def ReadTiff16(filename, up=False, transpose=None):
     # Read the Image File Header
     #------- 0 bytes
     # f.read(pack("cc", flag, flag))
-    # f.read(pack(o+"H", fortytwo))                       # TIFF's 42
-    # f.read(pack(o+"L", eight))                          # IFD begins at offset 8
+    # f.read(pack(o+"H", fortytwo))                     # TIFF's 42
+    # f.read(pack(o+"L", eight))                        # IFD begins at offset 8
     #------- 8 bytes
 
     flag1 = f.read(1)
     flag2 = f.read(1)
     if flag1 != flag2: raise IOError("File format is not TIFF")
 
-    if   flag1 == 'I': o = "<"
-    elif flag1 == "M": o = ">"
+    if   flag1 == b'I': o = "<"
+    elif flag1 == b"M": o = ">"
     else: raise IOError("File format is not TIFF")
 
     t = unpack(o+"H", f.read(2))
@@ -553,7 +555,7 @@ def test():
 
     elif options.mode[0].upper() == "P": palette_test(options, args)
 
-    else: print "Unrecognized mode"
+    else: print("Unrecognized mode")
 
 def gray_test(options, args):
 
@@ -586,7 +588,7 @@ def gray_test(options, args):
                                               up=options.display_upward,
                                               transpose=options.rotate)
 
-        print np.any(array - new_array)
+        print(np.any(array - new_array))
 
 ################################################################################
 # Test program for RGB
@@ -628,7 +630,7 @@ def rgb_test(options, args):
                                               up=options.display_upward,
                                               transpose=options.rotate)
 
-        print np.any(array - new_array)
+        print(np.any(array - new_array))
 
 ################################################################################
 # Test program with magenta palette
@@ -672,7 +674,7 @@ def palette_test(options, args):
                                               up=options.display_upward,
                                               transpose=options.rotate)
 
-        print np.any(array - new_array), np.any(palette - new_palette)
+        print(np.any(array - new_array), np.any(palette - new_palette))
 
 # Execute the main test progam if this is not imported
 if __name__ == "__main__": test()

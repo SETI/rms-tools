@@ -45,10 +45,12 @@
 
 from __future__ import print_function
 
+import sys
 from pyparsing import *
-import julian
+
 import datetime as dt
 import unittest
+import julian
 
 global DICTIONARY
 DICTIONARY = {}
@@ -1176,14 +1178,13 @@ def from_file(filename, clear=True):
         dict["FRAME"][623]["NAME"] = IAU_SUTTUNGR
     """
 
-    # Open the file
-    f = open(filename)
+    if sys.version_info[0] < 3:
+        open_args = {}
+    else:
+        open_args = {'errors': 'ignore'}
 
-    # Create a list of lines
-    kernel_text = f.readlines()
-
-    # Close the file
-    f.close()
+    with open(filename, **open_args) as f:
+        kernel_text = f.readlines()
 
     # Parse the string and return the dictionary
     return from_text(kernel_text, commented=True, clear=clear)
@@ -1298,9 +1299,9 @@ def DefaultFrames(clear=True):
 
     return default_frames(clear)
 
-########################################
+################################################################################
 # UNIT TESTS
-########################################
+################################################################################
 
 class Test_FromFile(unittest.TestCase):
 
@@ -1354,7 +1355,7 @@ class Test_FromFile(unittest.TestCase):
     self.assertEqual(dict["FRAME"][618]["CENTER"],     618)
 
     # Test FromFile() by attempting to parse every text kernel
-    prefix = os.path.join(os.environ["OOPS_TEST_DATA"], "SPICE")
+    prefix = os.path.join(os.environ["OOPS_TEST_DATA_PATH"], "SPICE")
     filenames = ["cas_iss_v10.ti",
                  "cas_rocks_v18.tf",
                  "cas_status_v04.tf",
