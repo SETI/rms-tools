@@ -78,14 +78,16 @@ class PdsTable(object):
         (7) Time fields are represented as character strings at this stage.
     """
 
-    def __init__(self, label_file, times=[], columns=[], nostrip=[],
-                       callbacks={}, ascii=False, replacements={},
-                       invalid={}, valid_ranges={}):
+    def __init__(self, label_file, label_contents=None, times=[], columns=[],
+                       nostrip=[], callbacks={}, ascii=False, replacements={},
+                       invalid={}, valid_ranges={}, table_callback=None):
         """Constructor for a PdsTable object.
 
         Input:
-            label_file      the path to the PDS label of the table file, or else
-                            the contents of the label as a list of strings.
+            label_file      the path to the PDS label of the table file. Must be
+                            supplied to get proper relative path resolution.
+            label_contents  The contents of the label as a list of strings if
+                            we shouldn't read it from the file.
             columns         an optional list of the names of the columns to
                             return. If the list is empty, then every column is
                             returned.
@@ -123,18 +125,20 @@ class PdsTable(object):
                             returned value must be a tuple or list containing
                             the minimum and maximum numeric values in that
                             column.
+            table_callback  an optional function to be called after reading
+                            the data table contents before processing it.
 
         Notes: If both a replacement and a callback are provided for the same
         column, the callback is applied first. The invalid and valid_ranges
         parameters are applied afterward.
 
         Note that, in Python 3, performance will be slightly faster if
-        ascii=True. 
+        ascii=True.
         """
 
         # Parse the label
-        if isinstance(label_file, (list,tuple)):
-            self.info = PdsTableInfo("", label_list=label_file,
+        if label_contents is not None:
+            self.info = PdsTableInfo(label_file, label_list=label_contents,
                                      invalid=invalid, valid_ranges=valid_ranges)
         else:
             self.info = PdsTableInfo(label_file,
@@ -151,6 +155,9 @@ class PdsTable(object):
         # Load the table data in binary
         with open(self.info.table_file_path, "rb") as f:
             lines = f.readlines()
+
+        if table_callback is not None:
+            lines = table_callback(lines)
 
         table = np.array(lines, dtype='S')
         table.dtype = np.dtype(self.info.dtype0)
@@ -561,7 +568,7 @@ class PdsColumnInfo(object):
             invalid = set([invalid])
 
         self.invalid_values = set(invalid)
-        
+
         self.invalid_values.add(node_dict.get("INVALID_VALUE", None))
         self.invalid_values.add(node_dict.get("MISSING_VALUE", None))
         self.invalid_values.add(node_dict.get("UNKNOWN_VALUE", None))
