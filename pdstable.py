@@ -839,7 +839,7 @@ class Test_PdsTable(unittest.TestCase):
     # "UNK" values replace 22.5 in BIAS_STRIP_MEAN
     # "NULL" in second row of table for CALIBRATION_LAMP_STATE_FLAG
     # "UNK" in the first row for IMAGE_MID_TIME
-    # Label says INVALID_VALUE = 19.5 for DARK_STRIP_MEAN
+    # Label says INVALID_CONSTANT = 19.5 for DARK_STRIP_MEAN
     # Label says VALID_RANGE = (2,3) for INST_CMPRS_RATE
     # Manually disallow negative values for FILTER_TEMPERATURE
     # Every value of INSTRUMENT_DATA_RATE is exactly 182.783997 except one.
