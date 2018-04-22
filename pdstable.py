@@ -571,14 +571,16 @@ class PdsColumnInfo(object):
 
         self.invalid_values = set(invalid)
 
-        self.invalid_values.add(node_dict.get("INVALID_CONSTANT", None))
-        self.invalid_values.add(node_dict.get("MISSING_CONSTANT", None))
-        self.invalid_values.add(node_dict.get("UNKNOWN_CONSTANT", None))
-        self.invalid_values.add(node_dict.get("NULL_CONSTANT", None))
-        self.invalid_values.add(node_dict.get("INVALID", None))
-        self.invalid_values.add(node_dict.get("MISSING", None))
-        self.invalid_values.add(node_dict.get("UNKNOWN", None))
-        self.invalid_values.add(node_dict.get("NULL", None))
+        self.invalid_values.add(node_dict.get("INVALID_CONSTANT"       , None))
+        self.invalid_values.add(node_dict.get("MISSING_CONSTANT"       , None))
+        self.invalid_values.add(node_dict.get("UNKNOWN_CONSTANT"       , None))
+        self.invalid_values.add(node_dict.get("NOT_APPLICABLE_CONSTANT", None))
+        self.invalid_values.add(node_dict.get("NULL_CONSTANT"          , None))
+        self.invalid_values.add(node_dict.get("INVALID"                , None))
+        self.invalid_values.add(node_dict.get("MISSING"                , None))
+        self.invalid_values.add(node_dict.get("UNKNOWN"                , None))
+        self.invalid_values.add(node_dict.get("NOT_APPLICABLE"         , None))
+        self.invalid_values.add(node_dict.get("NULL"                   , None))
         self.invalid_values -= {None}
 
 ################################################################################
