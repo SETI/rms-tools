@@ -126,7 +126,9 @@ class PdsTable(object):
                             the minimum and maximum numeric values in that
                             column.
             table_callback  an optional function to be called after reading
-                            the data table contents before processing it.
+                            the data table contents before processing them. Note
+                            that this callback must handle bytestrings in Python
+                            3.
 
         Notes: If both a replacement and a callback are provided for the same
         column, the callback is applied first. The invalid and valid_ranges
@@ -569,10 +571,10 @@ class PdsColumnInfo(object):
 
         self.invalid_values = set(invalid)
 
-        self.invalid_values.add(node_dict.get("INVALID_VALUE", None))
-        self.invalid_values.add(node_dict.get("MISSING_VALUE", None))
-        self.invalid_values.add(node_dict.get("UNKNOWN_VALUE", None))
-        self.invalid_values.add(node_dict.get("NULL_VALUE", None))
+        self.invalid_values.add(node_dict.get("INVALID_CONSTANT", None))
+        self.invalid_values.add(node_dict.get("MISSING_CONSTANT", None))
+        self.invalid_values.add(node_dict.get("UNKNOWN_CONSTANT", None))
+        self.invalid_values.add(node_dict.get("NULL_CONSTANT", None))
         self.invalid_values.add(node_dict.get("INVALID", None))
         self.invalid_values.add(node_dict.get("MISSING", None))
         self.invalid_values.add(node_dict.get("UNKNOWN", None))

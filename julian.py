@@ -47,14 +47,14 @@
 
 from __future__ import print_function, division
 
-import numpy as np
-import textkernel as tk
-import julian_dateparser as jdp
-# import julian_isoparser as iso -- replaced by faster parser
+import os
 import datetime as dt
+import numpy as np
 import pyparsing
 import unittest
-import os
+
+import textkernel as tk
+import julian_dateparser as jdp
 
 ################################################################################
 # Initialization
@@ -2013,9 +2013,9 @@ def _sec_from_dict(dict, day=None, leapseconds=True, validate=True):
 
     return sec
 
-########################################
+################################################################################
 # UNIT TESTS
-########################################
+################################################################################
 
 class Test_General_Parsing(unittest.TestCase):
 

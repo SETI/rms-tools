@@ -64,8 +64,9 @@
 #   DATETIME            same as YMD_PREF_DATETIME.
 #
 # The time can come before or after the date. The separator must be white space
-# or a comma, colon, dash or slash. In the special case of yyyy-mm-dd or yyyy-ddd date 
-# formats, the separator can be a "T" to conform to ISO date format standards.
+# or a comma, colon, dash or slash. In the special case of yyyy-mm-dd or
+# yyyy-ddd date formats, the separator can be a "T" to conform to ISO date
+# format standards.
 #
 # As a special case, the date-time grammars also accept a date string with no
 # time. In year-month-day or year-day formats, the day can be fractional in this
@@ -92,6 +93,9 @@
 # Mark R. Showalter
 # PDS Rings Node
 # August 2011
+#
+# Modified 4/4/18 to allow a period after the three-letter abbreviations for a
+# month or a weekday.--MRS
 ################################################################################
 
 from pyparsing import *
@@ -183,6 +187,7 @@ N86400_86409    = Combine("8640" + Word(nums,exact=1)) + WordEnd(nums)
 ########################################
 # UNIT TESTS
 ########################################
+
 class Test_Basics(unittest.TestCase):
 
     def runTest(self):
@@ -450,30 +455,41 @@ class Test_YEAR(unittest.TestCase):
 # Option #2: A number 1-12, optionally zero-padded to 2 digits.
 ################################################################################
 
-JAN             = (CaselessKeyword("JAN") | CaselessKeyword("JANUARY")
-                        | Keyword("1") | Keyword("01"))
-FEB             = (CaselessKeyword("FEB") | CaselessKeyword("FEBRUARY")
-                        | Keyword("2") | Keyword("02"))
-MAR             = (CaselessKeyword("MAR") | CaselessKeyword("MARCH")
-                        | Keyword("3") | Keyword("03"))
-APR             = (CaselessKeyword("APR") | CaselessKeyword("APRIL")
-                        | Keyword("4") | Keyword("04"))
-MAY             = (CaselessKeyword("MAY")
-                        | Keyword("5") | Keyword("05"))
-JUN             = (CaselessKeyword("JUN") | CaselessKeyword("JUNE")
-                        | Keyword("6") | Keyword("06"))
-JUL             = (CaselessKeyword("JUL") | CaselessKeyword("JULY")
-                        | Keyword("7") | Keyword("07"))
-AUG             = (CaselessKeyword("AUG") | CaselessKeyword("AUGUST")
-                        | Keyword("8") | Keyword("08"))
-SEP             = (CaselessKeyword("SEP") | CaselessKeyword("SEPTEMBER")
-                        | Keyword("9") | Keyword("09"))
-OCT             = (CaselessKeyword("OCT") | CaselessKeyword("OCTOBER")
-                        | Keyword("10"))
-NOV             = (CaselessKeyword("NOV") | CaselessKeyword("NOVEMBER")
-                        | Keyword("11"))
-DEC             = (CaselessKeyword("DEC") | CaselessKeyword("DECEMBER")
-                        | Keyword("12"))
+JAN = (CaselessKeyword("JAN") |
+       CaselessKeyword("JANUARY") | Keyword("1") | Keyword("01"))
+FEB = (CaselessKeyword("FEB") |
+       CaselessKeyword("FEBRUARY") | Keyword("2") | Keyword("02"))
+MAR = (CaselessKeyword("MAR") |
+       CaselessKeyword("MARCH") | Keyword("3") | Keyword("03"))
+APR = (CaselessKeyword("APR") |
+       CaselessKeyword("APRIL") | Keyword("4") | Keyword("04"))
+MAY = (CaselessKeyword("MAY") | Keyword("5") | Keyword("05"))
+JUN = (CaselessKeyword("JUN") |
+       CaselessKeyword("JUNE") | Keyword("6") | Keyword("06"))
+JUL = (CaselessKeyword("JUL") |
+       CaselessKeyword("JULY") | Keyword("7") | Keyword("07"))
+AUG = (CaselessKeyword("AUG") |
+       CaselessKeyword("AUGUST") | Keyword("8") | Keyword("08"))
+SEP = (CaselessKeyword("SEP") |
+       CaselessKeyword("SEPTEMBER") | Keyword("9") | Keyword("09"))
+OCT = (CaselessKeyword("OCT") |
+       CaselessKeyword("OCTOBER") | Keyword("10"))
+NOV = (CaselessKeyword("NOV") |
+       CaselessKeyword("NOVEMBER") | Keyword("11"))
+DEC = (CaselessKeyword("DEC") |
+       CaselessKeyword("DECEMBER") | Keyword("12"))
+
+JAN_ = CaselessKeyword("JAN") + DOT
+FEB_ = CaselessKeyword("FEB") + DOT
+MAR_ = CaselessKeyword("MAR") + DOT
+APR_ = CaselessKeyword("APR") + DOT
+JUN_ = CaselessKeyword("JUN") + DOT
+JUL_ = CaselessKeyword("JUL") + DOT
+AUG_ = CaselessKeyword("AUG") + DOT
+SEP_ = CaselessKeyword("SEP") + DOT
+OCT_ = CaselessKeyword("OCT") + DOT
+NOV_ = CaselessKeyword("NOV") + DOT
+DEC_ = CaselessKeyword("DEC") + DOT
 
 # Parse actions save a list pair ["MONTH", number 1-12]
 JAN.setParseAction(lambda s,l,t: [["MONTH",  1]])
@@ -489,8 +505,21 @@ OCT.setParseAction(lambda s,l,t: [["MONTH", 10]])
 NOV.setParseAction(lambda s,l,t: [["MONTH", 11]])
 DEC.setParseAction(lambda s,l,t: [["MONTH", 12]])
 
-MONTH           = ((JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)
-                    + WordEnd(alphanums))
+MONTH = (JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC) + WordEnd(alphanums)
+
+JAN_.setParseAction(lambda s,l,t: [["MONTH",  1]])
+FEB_.setParseAction(lambda s,l,t: [["MONTH",  2]])
+MAR_.setParseAction(lambda s,l,t: [["MONTH",  3]])
+APR_.setParseAction(lambda s,l,t: [["MONTH",  4]])
+JUN_.setParseAction(lambda s,l,t: [["MONTH",  6]])
+JUL_.setParseAction(lambda s,l,t: [["MONTH",  7]])
+AUG_.setParseAction(lambda s,l,t: [["MONTH",  8]])
+SEP_.setParseAction(lambda s,l,t: [["MONTH",  9]])
+OCT_.setParseAction(lambda s,l,t: [["MONTH", 10]])
+NOV_.setParseAction(lambda s,l,t: [["MONTH", 11]])
+DEC_.setParseAction(lambda s,l,t: [["MONTH", 12]])
+
+MON_ = (JAN_|FEB_|MAR_|APR_|JUN_|JUL_|AUG_|SEP_|OCT_|NOV_|DEC_)
 
 ########################################
 # UNIT TESTS
@@ -606,16 +635,25 @@ class Test_DAY366(unittest.TestCase):
 # include the day of the week, so the parser needs to deal with it.
 ################################################################################
 
-WEEKDAY         = ((CaselessKeyword("SUN") | CaselessKeyword("SUNDAY")
-                  | CaselessKeyword("MON") | CaselessKeyword("MONDAY")
-                  | CaselessKeyword("TUE") | CaselessKeyword("TUESDAY")
-                  | CaselessKeyword("WED") | CaselessKeyword("WEDNESDAY")
-                  | CaselessKeyword("THU") | CaselessKeyword("THURSDAY")
-                  | CaselessKeyword("FRI") | CaselessKeyword("FRIDAY")
-                  | CaselessKeyword("SAT") | CaselessKeyword("SATURDAY"))
+WEEKDAY = ((CaselessKeyword("SUN") | CaselessKeyword("SUNDAY") |
+            CaselessKeyword("MON") | CaselessKeyword("MONDAY") |
+            CaselessKeyword("TUE") | CaselessKeyword("TUESDAY") |
+            CaselessKeyword("WED") | CaselessKeyword("WEDNESDAY") |
+            CaselessKeyword("THU") | CaselessKeyword("THURSDAY") |
+            CaselessKeyword("FRI") | CaselessKeyword("FRIDAY") |
+            CaselessKeyword("SAT") | CaselessKeyword("SATURDAY"))
                     + WordEnd(alphanums))
 
+WEEKDAY_ = (CaselessKeyword("SUN") + DOT |
+            CaselessKeyword("MON") + DOT |
+            CaselessKeyword("TUE") + DOT |
+            CaselessKeyword("WED") + DOT |
+            CaselessKeyword("THU") + DOT |
+            CaselessKeyword("FRI") + DOT |
+            CaselessKeyword("SAT") + DOT)
+
 WEEKDAY.setParseAction(lambda s,l,t: [["WEEKDAY", t[0][0:3]]])  # keeps 3 chars
+WEEKDAY_.setParseAction(lambda s,l,t: [["WEEKDAY", t[0][0:3]]])  # keeps 3 chars
 
 ########################################
 # UNIT TESTS
@@ -692,24 +730,24 @@ class Test_MJD_Day(unittest.TestCase):
 ################################################################################
 
 # Year-month-day order, separated by dash, slash, dot or spaces.
-DASH_YMD        = YEAR + DASH  + MONTH + DASH  + DATE31
-SLASH_YMD       = YEAR + SLASH + MONTH + SLASH + DATE31
-DOT_YMD         = YEAR + DOT   + MONTH + DOT   + DATE31
-SPACE_YMD       = YEAR +         MONTH +         DATE31
+DASH_YMD        = YEAR + DASH  + MONTH          + DASH  + DATE31
+SLASH_YMD       = YEAR + SLASH + MONTH          + SLASH + DATE31
+DOT_YMD         = YEAR + DOT   + MONTH          + DOT   + DATE31
+SPACE_YMD       = YEAR +         (MONTH ^ MON_) +         DATE31
 YMD_REQ_DATE    = DASH_YMD | SLASH_YMD | DOT_YMD | SPACE_YMD
 
 # Month-day-year order, separated by dash, slash, dot or spaces.
-DASH_MDY        = MONTH + DASH  + DATE31 + DASH  + YEAR
-SLASH_MDY       = MONTH + SLASH + DATE31 + SLASH + YEAR
-DOT_MDY         = MONTH + DOT   + DATE31 + DOT   + YEAR
-SPACE_MDY       = MONTH +         DATE31 + Optional(COMMA) + YEAR
+DASH_MDY        = MONTH          + DASH  + DATE31 + DASH  + YEAR
+SLASH_MDY       = MONTH          + SLASH + DATE31 + SLASH + YEAR
+DOT_MDY         = MONTH          + DOT   + DATE31 + DOT   + YEAR
+SPACE_MDY       = (MONTH ^ MON_) +         DATE31 + Optional(COMMA) + YEAR
 MDY_REQ_DATE    = DASH_MDY | SLASH_MDY | DOT_MDY | SPACE_MDY
 
 # Day-month-year order, separated by dash, slash, dot or spaces.
-DASH_DMY        = DATE31 + DASH  + MONTH + DASH  + YEAR
-SLASH_DMY       = DATE31 + SLASH + MONTH + SLASH + YEAR
-DOT_DMY         = DATE31 + DOT   + MONTH + DOT   + YEAR
-SPACE_DMY       = DATE31 +         MONTH +         YEAR
+DASH_DMY        = DATE31 + DASH  + MONTH          + DASH  + YEAR
+SLASH_DMY       = DATE31 + SLASH + MONTH          + SLASH + YEAR
+DOT_DMY         = DATE31 + DOT   + MONTH          + DOT   + YEAR
+SPACE_DMY       = DATE31 +         (MONTH ^ MON_) +         YEAR
 DMY_REQ_DATE    = DASH_DMY | SLASH_DMY | DOT_DMY | SPACE_DMY
 
 # Year-day order, separated by dash, slash, dot or spaces.
@@ -722,9 +760,9 @@ MDY_PREF        = MDY_REQ_DATE | YMD_REQ_DATE | DMY_REQ_DATE | OTHER_DATE
 DMY_PREF        = DMY_REQ_DATE | MDY_REQ_DATE | YMD_REQ_DATE | OTHER_DATE
 
 # These versions also tolerate a string beginning with an optional weekday.
-YMD_PREF_DATE   = Optional(WEEKDAY + Optional(COMMA)) + YMD_PREF
-MDY_PREF_DATE   = Optional(WEEKDAY + Optional(COMMA)) + MDY_PREF
-DMY_PREF_DATE   = Optional(WEEKDAY + Optional(COMMA)) + DMY_PREF
+YMD_PREF_DATE   = Optional((WEEKDAY ^ WEEKDAY_) + Optional(COMMA)) + YMD_PREF
+MDY_PREF_DATE   = Optional((WEEKDAY ^ WEEKDAY_) + Optional(COMMA)) + MDY_PREF
+DMY_PREF_DATE   = Optional((WEEKDAY ^ WEEKDAY_) + Optional(COMMA)) + DMY_PREF
 DATE            = YMD_PREF_DATE
 
 ########################################
