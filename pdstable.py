@@ -120,7 +120,7 @@ class PdsTable(object):
                             An optional entry keyed by "default" can be a list
                             or set of values that are invalid by default; these
                             are used for any column whose name does not apppear
-                            as a key in the dictionary..
+                            as a key in the dictionary.
             valid_ranges    an optional dictionary keyed by column name. The
                             returned value must be a tuple or list containing
                             the minimum and maximum numeric values in that
