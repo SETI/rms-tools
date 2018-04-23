@@ -552,7 +552,8 @@ class PdsColumnInfo(object):
             self.data_type = "float"
             self.dtype2 = "float"
             self.scalar_func = float
-        elif "TIME" in self.data_type or "DATE" in self.data_type:
+        elif ("TIME" in self.data_type or "DATE" in self.data_type or
+              self.name.endswith("_TIME") or self.name.endswith("_DATE")):
             self.data_type = "time"
             self.dtype2 = 'S'
             self.scalar_func = tai_from_iso
