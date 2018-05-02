@@ -80,7 +80,8 @@ class PdsTable(object):
 
     def __init__(self, label_file, label_contents=None, times=[], columns=[],
                        nostrip=[], callbacks={}, ascii=False, replacements={},
-                       invalid={}, valid_ranges={}, table_callback=None):
+                       invalid={}, valid_ranges={}, table_callback=None,
+                       merge_masks=False):
         """Constructor for a PdsTable object.
 
         Input:
@@ -129,6 +130,10 @@ class PdsTable(object):
                             the data table contents before processing them. Note
                             that this callback must handle bytestrings in Python
                             3.
+            merge_masks     True to return a single mask value for each column,
+                            regardless of how many items might be in that
+                            column. False to return a separate mask value for
+                            each value in a column.
 
         Notes: If both a replacement and a callback are provided for the same
         column, the callback is applied first. The invalid and valid_ranges
@@ -160,6 +165,12 @@ class PdsTable(object):
 
         if table_callback is not None:
             lines = table_callback(lines)
+
+        # Check line count
+        if len(lines) != self.info.rows:
+            raise ValueError('row count mismatch: ' +
+                             '%d rows in file; ' % len(lines) +
+                             'label says ROWS = %d' % self.info.rows)
 
         table = np.array(lines, dtype='S')
         table.dtype = np.dtype(self.info.dtype0)
@@ -364,8 +375,11 @@ class PdsTable(object):
                 else:
                     self.column_values[key] = list(zip(*new_column_items))
 
-                self.column_masks[key] = np.any(np.stack(new_column_masks),
-                                                axis=0)
+                if merge_masks:
+                    self.column_masks[key] = np.any(np.stack(new_column_masks),
+                                                    axis=0)
+                else:
+                    self.column_masks[key] = np.stack(new_column_masks)
 
             # Report errors as warnings
             if error_count:
@@ -488,6 +502,9 @@ class PdsTableInfo(object):
                             invalid = invalid.get(name, default_invalid),
                             valid_range = valid_ranges.get(name, None))
                 counter += 1
+
+                if name in self.column_info_dict:
+                    raise ValueError('duplicated column name: ' + name)
 
                 self.column_info_list.append(pdscol)
                 self.column_info_dict[pdscol.name] = pdscol
