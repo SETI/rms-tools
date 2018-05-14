@@ -379,8 +379,8 @@ class PdsTable(object):
                     self.column_masks[key] = np.any(np.stack(new_column_masks),
                                                     axis=0)
                 else:
-                    self.column_masks[key] = np.stack(new_column_masks)
-
+                    self.column_masks[key] = np.stack(new_column_masks,
+                                                      axis=1)
             # Report errors as warnings
             if error_count:
                 if error_count == 1:
