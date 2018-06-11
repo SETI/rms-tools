@@ -159,6 +159,8 @@ class PdsTable(object):
         # self.keys is an ordered list containing the name of every column to be
         # returned
 
+        self.keys_lc = [k.lower() for k in self.keys]
+
         # Load the table data in binary
         with open(self.info.table_file_path, "rb") as f:
             lines = f.readlines()
@@ -379,8 +381,9 @@ class PdsTable(object):
                     self.column_masks[key] = np.any(np.stack(new_column_masks),
                                                     axis=0)
                 else:
-                    self.column_masks[key] = np.stack(new_column_masks,
-                                                      axis=1)
+                    mask_array = np.stack(new_column_masks)
+                    self.column_masks[key] = mask_array.swapaxes(0,1)
+
             # Report errors as warnings
             if error_count:
                 if error_count == 1:
@@ -394,26 +397,82 @@ class PdsTable(object):
                                           column_info.name,
                                           error_example.strip()))
 
-    def dicts_by_row(self):
+        # Cache dicts_by_row and other info when first requested
+        self._dicts_by_row = {}
+
+        self._volume_colname_index   = None
+        self._volume_colname         = None
+        self._volume_colname_lc      = None
+
+        self._filespec_colname_index = None
+        self._filespec_colname       = None
+        self._filespec_colname_lc    = None
+
+        self._rows_by_filename = None
+        self.filename_keys     = None
+
+    ############################################################################
+    # Support for extracting rows and columns
+    ############################################################################
+
+    def dicts_by_row(self, lowercase=(False,False)):
         """Returns a list of dictionaries, one for each row in the table, and
         with each dictionary containing all of the column values in that
         particular row. The dictionary keys are the column names; append "_mask"
         to the key to get the mask value, which is True if the column value is
-        invalid; False otherwise."""
+        invalid; False otherwise.
+
+        Input parameter lowercase is a tuple of two booleans. If the first is
+        True, then the dictionary is also keyed by column names converted to
+        lower case. If the second is True, then keys with "_lower" appended
+        return values converted to lower case.
+        """
+
+        # Duplicate the lowercase value if only one is provided
+        if type(lowercase) == bool:
+            lowercase = (lowercase, lowercase)
+
+        # If we already have the needed list of dictionaries, return it
+        try:
+            return self._dicts_by_row[lowercase]
+        except KeyError:
+            pass
 
         # For each row...
-        rowdicts = []
+        row_dicts = []
         for row in range(self.info.rows):
 
             # Create and append the dictionary
-            rowdict = {}
-            for (key, items) in self.column_values.items():
-                rowdict[key] = items[row]
-                rowdict[key + "_mask"] = self.column_masks[key][row]
+            row_dict = {}
+            for (column_name, items) in self.column_values.items():
+              for key in set([column_name, column_name.replace(' ', '_')]):
+                value = items[row]
+                mask  = self.column_masks[key][row]
 
-            rowdicts.append(rowdict)
+                # Key and value unchanged
+                row_dict[key] = value
+                row_dict[key + "_mask"] = mask
 
-        return rowdicts
+                # Key in lower case; value unchanged
+                if lowercase[0]:
+                    key_lc = key.lower()
+                    row_dict[key_lc] = value
+                    row_dict[key_lc + "_mask"] = mask
+
+                # Value in lower case
+                if lowercase[1]:
+                    value_lc = lowercase_value(value)
+
+                    row_dict[key + '_lower'] = value_lc
+                    if lowercase[0]:
+                        row_dict[key_lc + '_lower'] = value_lc
+
+            row_dicts.append(row_dict)
+
+        # Cache results for later re-use
+        self._dicts_by_row[lowercase] = row_dicts
+
+        return row_dicts
 
     def get_column(self, name):
         """Return the values in the specified column as a list or 1-D array."""
@@ -427,6 +486,416 @@ class PdsTable(object):
 
     def get_keys(self):
         return list(self.keys)
+
+    ############################################################################
+    # Support for finding rows by specified column values
+    ############################################################################
+
+    def find_row_indices(self, lowercase=(False,False), limit=None,
+                               substrings=[], **params):
+        """A list of indices of rows in the table where each named parameter
+        equals the specified value.
+
+        Input parameter lowercase is a tuple of two booleans. If the first is
+        True, then the dictionary is also keyed by column names converted to
+        lower case. If the second is True, then keys with "_lower" appended
+        return values converted to lower case.
+
+        If limit is not zero or None, this is the maximum number of matching
+        rows that are return.
+
+        Input parameter substrings is a list of column names for which a match
+        occurs if the given parameter value is embedded within the string; an
+        exact match is not required.
+        """
+
+        dicts_by_row = self.dicts_by_row(lowercase=lowercase)
+
+        # Make a list (key, value, test_substring, mask_key)
+        test_info = []
+        for (key, match_value) in params.items():
+            if key.endswith('_lower'):
+                mask_key = key[:-6] + '_mask'
+                match_value = lowercase_value(match_value)
+                test_substring = (key in substrings or key[:-6] in substrings)
+            else:
+                mask_key = key + '_mask'
+                test_substring = (key in substrings)
+
+            test_info.append((key, match_value, test_substring, mask_key))
+
+        matches = []
+
+        # For each row in the table...
+        for k in range(len(dicts_by_row)):
+            row_dict = dicts_by_row[k]
+
+            # Assume it's a match
+            match = True
+
+            # Apply each test...
+            for (key, match_value, test_substring, mask_key) in test_info:
+
+                # Reject all masked values
+                if np.any(row_dict[mask_key]):
+                    match = False
+                    break
+
+                # Test column value(s)
+                column_values = row_dict[key]
+                if test_substring:
+                    if isinstance(column_values, str):
+                        failures = [match_value not in column_values]
+                    else:
+                        failures = [match_value not in c for c in column_values]
+                elif isinstance(column_values, (str, int, float)):
+                    failures = [match_value != column_values]
+                else:
+                    failures = [match_value != c for c in column_values]
+
+                if np.any(failures):
+                    match = False
+                    break
+
+            # If there were no failures, we have a match
+            if match:
+                matches.append(k)
+                if limit and len(matches) >= limit:
+                    return matches
+
+        return matches
+
+    def find_row_index(self, lowercase=(False,False), substrings=[], **params):
+        """The index of the first row in the table where each named parameter
+        equals the specified value.
+
+        Input parameter lowercase is a tuple of two booleans. If the first is
+        True, then the dictionary is also keyed by column names converted to
+        lower case. If the second is True, then keys with "_lower" appended
+        return values converted to lower case.
+        """
+
+        matches = self.find_row_indices(lowercase=lowercase, limit=1,
+                                        substrings=substrings, **params)
+
+        if matches:
+            return matches[0]
+
+        raise ValueError('row not found: ' + str(params))
+
+    def find_rows(self, lowercase=(False,False), **params):
+        """A list of dictionaries representing rows in the table where each
+        named parameter equals the specified value.
+
+        Input parameter lowercase is a tuple of two booleans. If the first is
+        True, then the dictionary is also keyed by column names converted to
+        lower case. If the second is True, then keys with "_lower" appended
+        return values converted to lower case.
+        """
+
+        indices = self.find_row_indices(lowercase=lowercase, **params)
+        return [self.dicts_by_row()[k] for k in indices]
+
+    def find_row(self, lowercase=(False,False), **params):
+        """A dictionary representing the first row of the table where each
+        named parameter equals the specified value.
+
+        Input parameter lowercase is a tuple of two booleans. If the first is
+        True, then the dictionary is also keyed by column names converted to
+        lower case. If the second is True, then keys with "_lower" appended
+        return values converted to lower case.
+        """
+
+        k = self.find_row_index(lowercase=lowercase, **params)
+        return self.dicts_by_row()[k]
+
+    ############################################################################
+    # Support for finding rows by filename
+    ############################################################################
+
+    def volume_column_index(self):
+        """The index of the column containing volume IDs, or -1 if none."""
+
+        if self._volume_colname_index is None:
+            self._volume_colname_index = -1
+            self._volume_colname = ''
+            self._volume_colname_lc = ''
+
+            for guess in ('volume_id', 'volume id', 'volume_name',
+                                                    'volume name'):
+                if guess in self.keys_lc:
+                    k = self.keys_lc.index(guess)
+                    self._volume_colname_index = k
+                    self._volume_colname_lc = guess
+                    self._volume_colname = self.keys[k]
+                    return k
+
+        return -1
+
+    def filespec_column_index(self):
+        """The index of the column containing file specification name, or -1 if
+        none."""
+
+        if self._filespec_colname_index is None:
+            self.filespec_colname_index = -1
+            self.filespec_colname = ''
+            self.filespec_colname_lc = ''
+
+            for guess in ('file_specification_name', 'file specification name',
+                          'file_name', 'file name', 'filename', 'product_id',
+                          'product id'):
+
+                if guess in self.keys_lc:
+                    k = self.keys_lc.index(guess)
+                    self._filespec_colname_index = k
+                    self._filespec_colname_lc = guess
+                    self._filespec_colname = self.keys[k]
+                    return k
+
+        return -1
+
+    def find_row_indices_by_volume_filespec(self, volume_id, filespec=None,
+                                                  limit=None, substring=False):
+        """The row indices of the table with the specified volume_id and
+        file_specification_name.
+
+        The search is case-insensitive.
+
+        If the table does not contain the volume ID or if the given value of
+        volume_id is blank, the search is performed on the filespec alone,
+        ignoring the volume ID. Also, if only one argument is specified, it is
+        treated as the filespec.
+
+        The search ignores the extension of filespec so it does not matter
+        whether the column contains paths to labels or data files. It also works
+        in tables that contain columns of file names without directory paths.
+
+        If input parameter substring is True, then a match occurs whenever the
+        given filespec appears inside what is tabulated in the file, so a
+        complete match is not required.
+        """
+
+        dicts_by_row = self.dicts_by_row(lowercase=(True,True))
+        keys = dicts_by_row[0].keys()
+
+        if filespec is None:
+            filespec = volume_id
+            volume_id = ''
+
+        # Find the name of the columns containing the VOLUME_ID and
+        # FILE_SPECIFICATION_NAME
+        _ = self.volume_column_index()
+        _ = self.filespec_column_index()
+
+        if self._volume_colname is None:
+            volume_colname = ''
+        else:
+            volume_colname = self._volume_colname_lc + '_lower'
+
+        if self._filespec_colname_lc is None:
+            raise ValueError('FILE SPECIFICATION NAME column not found')
+        else:
+            filespec_colname = self._filespec_colname_lc + '_lower'
+
+        # Convert to VMS format for really old indices
+        example = dicts_by_row[0][self.filespec_colname_lc]
+        if '[' in example:
+            parts = filespec.split('/')
+            filespec = '[' + '.'.join(parts[:-1]) + ']' + parts[-1]
+
+        # Strip away the directory path if not present
+        elif '/' not in example:
+            filespec = os.path.basename(filespec)
+
+        # Copy the extension of the example
+        filespec = os.path.splitext(filespec)[0]
+        if not substring:
+            ext = os.path.splitext(example)[1]
+            filespec += ext
+
+        # OK now search
+        volume_id = volume_id.lower()
+        filespec = filespec.lower()
+        if substring:
+            substrings = [filespec_colname]
+        else:
+            substrings = []
+
+        if volume_colname and volume_id:
+            return self.find_row_indices(lowercase=(True,True),
+                                         substrings=substrings, limit=limit,
+                                         **{filespec_colname: filespec,
+                                            volume_colname: volume_id})
+        else:
+            return self.find_row_indices(lowercase=(True,True),
+                                         substrings=substrings, limit=limit,
+                                         **{filespec_colname: filespec})
+
+    def find_row_index_by_volume_filespec(self, volume_id, filespec=None,
+                                                substring=False):
+        """The row index with the specified volume_id and
+        file_specification_name.
+
+        The search is case-insensitive.
+
+        If the table does not contain the volume ID or if the given value of
+        volume_id is blank, the search is performed on the filespec alone,
+        ignoring the volume ID. Also, if only one argument is specified, it is
+        treated as the filespec.
+
+        The search ignores the extension of filespec so it does not matter
+        whether the column contains paths to labels or data files. It also works
+        in tables that contain columns of file names without directory paths.
+
+        If input parameter substring is True, then a match occurs whenever the
+        given filespec appears inside what is tabulated in the file, so a
+        complete match is not required.
+        """
+
+        indices = self.find_row_indices_by_volume_filespec(volume_id, filespec,
+                                                           limit=1,
+                                                           substring=substring)
+        if indices:
+            return indices[0]
+
+        if volume_id and not filespec:
+            raise ValueError('row not found: filespec=%s; ' % volume_id)
+        elif volume_id:
+            raise ValueError('row not found: volume_id=%s; ' % volume_id +
+                                            'filespec=%s' % filespec)
+        else:
+            raise ValueError('row not found: filespec=%s' % filespec)
+
+    def find_rows_by_volume_filespec(self, volume_id, filespec=None,
+                                           limit=None, substring=False):
+        """The rows of the table with the specified volume_id and
+        file_specification_name.
+
+        The search is case-insensitive.
+
+        If the table does not contain the volume ID or if the given value of
+        volume_id is blank, the search is performed on the filespec alone,
+        ignoring the volume ID. Also, if only one argument is specified, it is
+        treated as the filespec.
+
+        The search ignores the extension of filespec so it does not matter
+        whether the column contains paths to labels or data files. It also works
+        in tables that contain columns of file names without directory paths.
+
+        If input parameter substring is True, then a match occurs whenever the
+        given filespec appears inside what is tabulated in the file, so a
+        complete match is not required.
+        """
+
+        indices = self.find_row_indices_by_volume_filespec(volume_id, filespec,
+                                                           limit=limit,
+                                                           substring=substring)
+        return [self.dicts_by_row()[k] for k in indices]
+
+    def find_row_by_volume_filespec(self, volume_id, filespec=None,
+                                          substring=False):
+        """The first row of the table with the specified volume_id and
+        file_specification_name.
+
+        The search is case-insensitive.
+
+        If the table does not contain the volume ID or if the given value of
+        volume_id is blank, the search is performed on the filespec alone,
+        ignoring the volume ID. Also, if only one argument is specified, it is
+        treated as the filespec.
+
+        The search ignores the extension of filespec so it does not matter
+        whether the column contains paths to labels or data files. It also works
+        in tables that contain columns of file names without directory paths.
+
+        If input parameter substring is True, then a match occurs whenever the
+        given filespec appears inside what is tabulated in the file, so a
+        complete match is not required.
+        """
+
+        k = self.find_row_index_by_volume_filespec(volume_id, filespec,
+                                                   substring=substring)
+        return self.dicts_by_row()[k]
+
+    def index_rows_by_filename_key(self):
+        """A dictionary of row indices keyed by the file basename associated
+        with the row. The key has the file basename stripped away and is
+        converted to lower case."""
+
+        if self._rows_by_filename is None:
+            _ = self.volume_column_index()
+            _ = self.filespec_column_index()
+
+            filespecs = self.column_values[self._filespec_colname]
+            masks = self.column_masks[self._filespec_colname]
+
+            rows_by_filename = {}
+            filename_keys = []
+            for k in range(len(filespecs)):
+                if masks[k]: continue
+
+                key = filename_key(filespecs[k])
+                key_lc = key.lower()
+                if key_lc not in rows_by_filename:
+                    rows_by_filename[key_lc] = []
+                    filename_keys.append(key)
+
+                rows_by_filename[key_lc].append(k)
+
+            self._rows_by_filename = rows_by_filename
+            self.filename_keys = filename_keys
+
+    def row_indices_by_filename_key(self, key):
+        """Quick lookup of the row indices associated with a filename key."""
+
+        # Create the index if necessary
+        self.index_rows_by_filename_key()
+
+        return self._rows_by_filename[key.lower()]
+
+    def rows_by_filename_key(self, key):
+        """Quick lookup of the rows associated with a filename key."""
+
+        # Create the index if necessary
+        self.index_rows_by_filename_key()
+
+        indices = self._rows_by_filename[key.lower()]
+
+        rows = []
+        for k in indices:
+            rows.append(self.dicts_by_row()[k])
+
+        return rows
+
+def lowercase_value(value):
+    """Convert a table value to lower case. Handles strings and tuples; leaves
+    ints and floats unchanged."""
+
+    if isinstance(value, str):
+        value_lc = value.lower()
+    elif type(value) == tuple:
+        value_lc = []
+        for item in value:
+            if type(item) == str:
+                value_lc.append(item.lower())
+            else:
+                value_lc.append(item)
+    elif type(value) == np.ndarray:
+        value_lc = value.copy()
+        for k in range(len(value)):
+            if isinstance(value[k], str):
+                value_lc[k] = value[k].lower()
+    else:
+        value_lc = value
+
+    return value_lc
+
+def filename_key(filename):
+    """Convert a filename to a key for indexing the rows."""
+
+    basename = os.path.basename(filename)
+    key = os.path.splitext(basename)[0]
+    return key
 
 ################################################################################
 # Class PdsTableInfo
