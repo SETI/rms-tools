@@ -81,7 +81,7 @@ class PdsTable(object):
     def __init__(self, label_file, label_contents=None, times=[], columns=[],
                        nostrip=[], callbacks={}, ascii=False, replacements={},
                        invalid={}, valid_ranges={}, table_callback=None,
-                       merge_masks=False):
+                       merge_masks=False, filename_keylen=0):
         """Constructor for a PdsTable object.
 
         Input:
@@ -134,6 +134,10 @@ class PdsTable(object):
                             regardless of how many items might be in that
                             column. False to return a separate mask value for
                             each value in a column.
+            filename_keylen number of characters in the filename to use as the
+                            key of the index if this table is to be indexed by
+                            filename. Zero to use the entire file basename after
+                            stripping off the extension.
 
         Notes: If both a replacement and a callback are provided for the same
         column, the callback is applied first. The invalid and valid_ranges
@@ -398,6 +402,7 @@ class PdsTable(object):
                                           error_example.strip()))
 
         # Cache dicts_by_row and other info when first requested
+        self.filename_keylen = filename_keylen
         self._dicts_by_row = {}
 
         self._volume_colname_index   = None
@@ -613,6 +618,16 @@ class PdsTable(object):
     # Support for finding rows by filename
     ############################################################################
 
+    def filename_key(self, filename):
+        """Convert a filename to a key for indexing the rows."""
+
+        basename = os.path.basename(filename)
+        key = os.path.splitext(basename)[0]
+        if self.filename_keylen and len(key) > self.filename_keylen:
+            key = key[:self.filename_keylen]
+
+        return key
+
     def volume_column_index(self):
         """The index of the column containing volume IDs, or -1 if none."""
 
@@ -643,7 +658,7 @@ class PdsTable(object):
 
             for guess in ('file_specification_name', 'file specification name',
                           'file_name', 'file name', 'filename', 'product_id',
-                          'product id'):
+                          'product id', 'stsci_group_id'):
 
                 if guess in self.keys_lc:
                     k = self.keys_lc.index(guess)
@@ -834,7 +849,7 @@ class PdsTable(object):
             for k in range(len(filespecs)):
                 if masks[k]: continue
 
-                key = filename_key(filespecs[k])
+                key = self.filename_key(filespecs[k])
                 key_lc = key.lower()
                 if key_lc not in rows_by_filename:
                     rows_by_filename[key_lc] = []
@@ -889,13 +904,6 @@ def lowercase_value(value):
         value_lc = value
 
     return value_lc
-
-def filename_key(filename):
-    """Convert a filename to a key for indexing the rows."""
-
-    basename = os.path.basename(filename)
-    key = os.path.splitext(basename)[0]
-    return key
 
 ################################################################################
 # Class PdsTableInfo
