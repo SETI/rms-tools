@@ -447,7 +447,7 @@ class PdsBasedInteger(PdsInteger):
 
         value = 0
         for c in digits:
-            i = "0123456789ABCDE".index(c)
+            i = "0123456789ABCDEF".index(c.upper())
             if i >= radix:
                 raise ValueError("Digits are incompatible with radix")
 
