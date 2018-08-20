@@ -25,6 +25,12 @@
 #   - Updated Pluto system gravity based on Brozovic et al. 2014.
 #   - Redefined PLUTO_CHARON as PLUTO_CHARON_OLD
 #   - Redefined PLUTO_CHARON_AS_RINGS as PLUTO_CHARON
+#
+# Revised July 16, 2018 (MRS)
+#   - Added second-order dependence on e and sin(i) to the functions for n,
+#     kappa and nu. Formulas are adapted from from Renner & Sicardy, Use of the
+#     Geometric Elements in Numerical Simulations, Cel. Mech. and  Dyn. Astron.
+#     94, 237-248 (2006). See Eqs. 14-16.
 ################################################################################
 
 from __future__ import print_function
@@ -98,72 +104,137 @@ class Gravity():
     def potential(self, a):
         """Returns the potential energy at radius a, in the equatorial plane."""
 
-        return -self.gm/a * (1. -
-                             Gravity._jseries(self.potential_jn, self.r2/a2))
+        return -self.gm/a * (1. - OblateGravity._jseries(self.potential_jn,
+                                                         self.r2/a2))
 
-    def omega(self, a):
-        """Returns the mean motion (radians/s) at semimajor axis a."""
+    def omega(self, a, e=0., sin_i=0.):
+        """Returns the mean motion (radians/s) at semimajor axis a.
+
+        Corrections for e and sin(i) are accurate to second order.
+        """
 
         a2 = a * a
-        omega2 = self.gm/(a*a2) * (1. +
-                                   Gravity._jseries(self.omega_jn, self.r2/a2))
-        return np.sqrt(omega2)
+        gm_a3 = self.gm / (a*a2)
+        ratio2 = self.r2 / a2
+
+        omega2 = gm_a3 * (1. + Gravity._jseries(self.omega_jn, ratio2))
+        omega1 = np.sqrt(omega2)
+
+        if (e or sin_i) and self.jn:
+            omega1 += np.sqrt(gm_a3) * ratio2 * self.jn[0] * \
+                      (3. * e**2 - 12. * sin_i**2)
+
+        return omega1
 
     def kappa2(self, a):
         """Returns the square of the radial oscillation frequency (radians/s) at
         semimajor axis a."""
 
         a2 = a * a
-        kappa2 = self.gm/(a*a2) * (1. +
-                                   Gravity._jseries(self.kappa_jn, self.r2/a2))
+        kappa2 = self.gm/(a*a2) * (1. + Gravity._jseries(self.kappa_jn,
+                                                         self.r2/a2))
         return kappa2
 
-    def kappa(self, a):
+    def kappa(self, a, e=0., sin_i=0.):
         """Returns the radial oscillation frequency (radians/s) at semimajor
         axis a."""
 
-        return np.sqrt(self.kappa2(a))
+        a2 = a * a
+        gm_a3 = self.gm / (a*a2)
+        ratio2 = self.r2 / a2
 
-    def nu(self, a):
+        kappa2 = gm_a3 * (1. + Gravity._jseries(self.kappa_jn, ratio2))
+        kappa1 = np.sqrt(kappa2)
+
+        if (e or sin_i) and self.jn:
+            kappa1 += np.sqrt(gm_a3) * ratio2 * self.jn[0] * (-9. * sin_i**2)
+
+        return kappa1
+
+    def nu(self, a, e=0., sin_i=0.):
         """Returns the vertical oscillation frequency (radians/s) at semimajor
         axis a."""
 
         a2 = a * a
-        nu2 = self.gm/(a*a2) * (1. +
-                                Gravity._jseries(self.nu_jn, self.r2/a2))
-        return np.sqrt(nu2)
+        gm_a3 = self.gm / (a*a2)
+        ratio2 = self.r2 / a2
 
-    def domega_da(self, a):
+        nu2 = gm_a3 * (1. + Gravity._jseries(self.nu_jn, ratio2))
+        nu1 = np.sqrt(nu2)
+
+        if (e or sin_i) and self.jn:
+            nu1 += np.sqrt(gm_a3) * ratio2 * self.jn[0] * \
+                      (6. * e**2 - 12.75 * sin_i**2)
+
+        return nu1
+
+    def domega_da(self, a, e=0., sin_i=0.):
         """Returns the radial derivative of the mean motion (radians/s/km) at
         semimajor axis a."""
 
         a2 = a * a
-        domega2 = self.gm/(a2*a2) * (-3. +
-                                   Gravity._jseries(self.domega_jn, self.r2/a2))
-        return domega2 / (2. * self.omega(a))
+        gm_a4 = self.gm / (a2*a2)
+        ratio2 = self.r2 / a2
 
-    def dkappa_da(self, a):
+        domega2 = gm_a4 * (-3. + Gravity._jseries(self.domega_jn, ratio2))
+        domega1 = domega2 / (2. * self.omega(a))
+
+        if (e or sin_i) and self.jn:
+            domega1 -= 3.5 * np.sqrt(self.gm/a)/a2 * ratio2 * self.jn[0] * \
+                       (3. * e**2 - 12. * sin_i**2)
+
+        return domega1
+
+    def dkappa_da(self, a, e=0., sin_i=0.):
         """Returns the radial derivative of the radial oscillation frequency
         (radians/s/km) at semimajor axis a."""
 
         a2 = a * a
-        dkappa2 = self.gm/(a2*a2) * (-3. +
-                                   Gravity._jseries(self.dkappa_jn, self.r2/a2))
-        return dkappa2 / (2. * self.kappa(a))
+        gm_a4 = self.gm / (a2*a2)
+        ratio2 = self.r2 / a2
 
-    def dnu_da(self, a):
+        dkappa2 = gm_a4 * (-3. + Gravity._jseries(self.dkappa_jn, ratio2))
+        dkappa1 = dkappa2 / (2. * self.kappa(a))
+
+        if (e or sin_i) and self.jn:
+            dkappa1 -= 3.5 * np.sqrt(self.gm/a)/a2 * ratio2 * self.jn[0] * \
+                       (-9. * sin_i**2)
+
+        return dkappa1
+
+    def dnu_da(self, a, e=0., sin_i=0.):
         """Returns the radial derivative of the vertical oscillation frequency
         (radians/s/km) at semimajor axis a."""
 
         a2 = a * a
-        dnu2 = self.gm/(a2*a2) * (-3. +
-                                  Gravity._jseries(self.dnu_jn, self.r2/a2))
-        return dnu2 / (2. * self.nu(a))
+        gm_a4 = self.gm / (a2*a2)
+        ratio2 = self.r2 / a2
 
-    def combo(self, a, factors):
+        dnu2 = gm_a4 * (-3. + Gravity._jseries(self.dnu_jn, ratio2))
+        dnu1 = dnu2 / (2. * self.nu(a))
+
+        if (e or sin_i) and self.jn:
+            dnu1 -= 3.5 * np.sqrt(self.gm/a)/a2 * ratio2 * self.jn[0] * \
+                       (6. * e**2 - 12.75 * sin_i**2)
+
+        return dnu1
+
+    def combo(self, a, factors, e=0., sin_i=0.):
         """Returns a frequency combination, based on given coefficients for
         omega, kappa and nu. Full numeric precision is preserved in the limit
         of first- or second-order cancellation of the coefficients."""
+
+        # Shortcut for nonzero e or i, to be refined later
+        if e or sin_i:
+            sum_values = 0.
+            if factors[0]:
+                sum_values = sum_values + factors[0] * self.omega(a, e, sin_i)
+            if factors[1]:
+                sum_values = sum_values + factors[1] * self.kappa(a, e, sin_i)
+            if factors[2]:
+                sum_values = sum_values + factors[2] * self.nu(a, e, sin_i)
+
+            return sum_values
 
         a2 = a * a
         ratio2 = self.r2 / a2
@@ -258,7 +329,7 @@ class Gravity():
 
         return sum_values
 
-    def dcombo_da(self, a, factors):
+    def dcombo_da(self, a, factors, e=0., sin_i=0.):
         """Returns the radial derivative of a frequency combination, based on
         given coefficients for omega, kappa and nu. Unlike method combo(), this
         one does not guarantee full precision if the coefficients cancel to
@@ -266,13 +337,13 @@ class Gravity():
 
         sum_values = 0.
 
-        if factors[0]: sum_values += factors[0] * self.domega_da(a)
-        if factors[1]: sum_values += factors[1] * self.dkappa_da(a)
-        if factors[2]: sum_values += factors[2] * self.dnu_da(a)
+        if factors[0]: sum_values += factors[0] * self.domega_da(a, e, sin_i)
+        if factors[1]: sum_values += factors[1] * self.dkappa_da(a, e, sin_i)
+        if factors[2]: sum_values += factors[2] * self.dnu_da(a, e, sin_i)
 
         return sum_values
 
-    def solve_a(self, freq, factors=(1,0,0)):
+    def solve_a(self, freq, factors=(1,0,0), e=0., sin_i=0.):
         """Solves for the semimajor axis at which the frequency is equal to the
         given combination of factors on omega, kappa and nu. Solution is via
         Newton's method."""
@@ -317,7 +388,8 @@ class Gravity():
             # our f(x) = self.combo() - freq
             #     fp(x) = self.dcombo()
 
-            da = ((self.combo(a, factors) - freq) / self.dcombo_da(a, factors))
+            da = ((self.combo(a, factors, e, sin_i) - freq) / \
+                   self.dcombo_da(a, factors, e, sin_i))
             da_max = np.max(np.abs(da))
             if da_max == 0.: break
 
@@ -332,52 +404,52 @@ class Gravity():
         return a
 
     # Useful alternative names...
-    def n(self, a):
+    def n(self, a, e=0., sin_i=0.):
         """Returns the mean motion at semimajor axis a. Identical to omega(a).
         """
 
-        return self.omega(a)
+        return self.omega(a, e, sin_i)
 
-    def dmean_dt(self, a):
+    def dmean_dt(self, a, e=0., sin_i=0.):
         """Returns the mean motion at semimajor axis a. Identical to omega(a).
         """
 
-        return self.omega(a)
+        return self.omega(a, e, sin_i)
 
-    def dperi_dt(self, a):
+    def dperi_dt(self, a, e=0., sin_i=0.):
         """Returns the pericenter precession rate at semimajor axis a. Identical
         to combo(a, (1,-1,0)).
         """
 
-        return self.combo(a, (1,-1,0))
+        return self.combo(a, (1,-1,0), e, sin_i)
 
-    def dnode_dt(self, a):
+    def dnode_dt(self, a, e=0., sin_i=0.):
         """Returns the nodal regression rate (negative) at semimajor axis a.
         Identical to combo(a, (1,0,-1)).
         """
 
-        return self.combo(a, (1,0,-1))
+        return self.combo(a, (1,0,-1), e, sin_i)
 
-    def d_dmean_dt_da(self, a):
+    def d_dmean_dt_da(self, a, e=0., sin_i=0.):
         """Returns the radial derivative of the mean motion at semimajor axis a. 
         Identical to domega_da(a).
         """
 
-        return self.domega_da(a)
+        return self.domega_da(a, e, sin_i)
 
-    def d_dperi_dt_da(self, a):
+    def d_dperi_dt_da(self, a, e=0., sin_i=0.):
         """Returns the radial derivative of the pericenter precession rate at
         semimajor axis a. Identical to dcombo_da(a, (1,-1,0)).
         """
 
-        return self.dcombo_da(a, (1,-1,0))
+        return self.dcombo_da(a, (1,-1,0), e, sin_i)
 
-    def d_dnode_dt_da(self, a):
+    def d_dnode_dt_da(self, a, e=0., sin_i=0.):
         """Returns the radial derivative of the nodal regression rate (negative)
         at semimajor axis a. Identical to dcombo_da(a, (1,0,-1)).
         """
 
-        return self.dcombo_da(a, (1,0,-1))
+        return self.dcombo_da(a, (1,0,-1), e, sin_i)
 
     def ilr_pattern(self, n, m, p=1):
         """Returns the pattern speed of the m:m-p inner Lindblad resonance,
@@ -394,6 +466,10 @@ class Gravity():
 
         a = self.solve_a(n, (1,0,0))
         return (n - self.kappa(a) * p/(m+p))
+
+################################################################################
+# Orbital elements
+################################################################################
 
     def state_from_osc(self, elements, body_gm=0.):
         """Return position and velocity based on osculating orbital elements:
@@ -472,6 +548,10 @@ class Gravity():
         vel = np.stack([vx, vy, vz], axis=-1)
 
         return (pos,vel)
+
+    ############################################################################
+    # Orbital elements
+    ############################################################################
 
     def osc_from_state(self, pos, vel, body_gm=0.):
         """Return osculating orbital elements based on position and velocity.
@@ -827,6 +907,7 @@ class Gravity():
 
 ################################################################################
 # Planetary gravity fields defined...
+################################################################################
 
 # From http://ssd.jpl.nasa.gov/?planet_phys_par
 G_MKS = 6.67428e-11     # m^3 kg^-1 s^-2
@@ -989,6 +1070,8 @@ LOOKUP = {
 # UNIT TESTS
 ########################################
 
+import unittest
+
 ERROR_TOLERANCE = 1.e-15
 
 class Test_Gravity(unittest.TestCase):
@@ -1002,20 +1085,24 @@ class Test_Gravity(unittest.TestCase):
 
         for test in range(tests):
           for obj in planets:
-            a = obj.rp * 10. ** (np.random.rand() * 2.)
-            for f in factors:
-                b = obj.solve_a(obj.combo(a, f), f)
-                c = abs((b - a) / a)
-                self.assertTrue(c < ERROR_TOLERANCE)
+            for e in (0., 0.1):
+              for i in (0., 0.1):
+                a = obj.rp * 10. ** (np.random.rand() * 2.)
+                for f in factors:
+                    b = obj.solve_a(obj.combo(a,f,e,i), f, e, i)
+                    c = abs((b - a) / a)
+                    self.assertTrue(c < ERROR_TOLERANCE)
 
         # PLUTO_CHARON with factors (1,0,0) and (0,0,1)
         for test in range(tests):
           for obj in [PLUTO_CHARON]:
-            a = obj.rp * 10. ** (np.random.rand() * 2.)
-            for f in [(1,0,0),(0,0,1)]:
-                b = obj.solve_a(obj.combo(a, f), f)
-                c = abs((b - a) / a)
-                self.assertTrue(c < ERROR_TOLERANCE)
+            for e in (0., 0.1):
+              for i in (0., 0.1):
+                a = obj.rp * 10. ** (np.random.rand() * 2.)
+                for f in [(1,0,0),(0,0,1)]:
+                    b = obj.solve_a(obj.combo(a,f,e,i), f, e, i)
+                    c = abs((b - a) / a)
+                    self.assertTrue(c < ERROR_TOLERANCE)
 
         # PLUTO_CHARON with factors (0,1,0) can have duplicated values...
         for test in range(tests):
@@ -1032,9 +1119,11 @@ class Test_Gravity(unittest.TestCase):
 
         # Testing a 100x100 array
         for obj in planets:
-            a = obj.rp * 10. ** (np.random.rand(100,100) * 2.)
-            for f in factors:
-                b = obj.solve_a(obj.combo(a, f), f)
+          a = obj.rp * 10. ** (np.random.rand(100,100) * 2.)
+          for e in (0., 0.1):
+            for i in (0., 0.1):
+              for f in factors:
+                b = obj.solve_a(obj.combo(a,f,e,i), f, e, i)
                 c = abs((b - a) / a)
                 self.assertTrue(np.all(c < ERROR_TOLERANCE))
 
@@ -1063,6 +1152,4 @@ class Test_Gravity(unittest.TestCase):
 if __name__ == '__main__':
     unittest.main()
 
-################################################################################
-# End of file
 ################################################################################
