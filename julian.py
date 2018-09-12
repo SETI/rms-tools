@@ -650,21 +650,21 @@ class Test_Time_of_Day(unittest.TestCase):
 #
 # Extracted from naif0009.tls...
 #
-# [4]       ET - TAI  =  DELTA_T_A  + K sin E 
-# 
-# where DELTA_T_A and K are constant, and E is the eccentric anomaly of the 
-# heliocentric orbit of the Earth-Moon barycenter. Equation [4], which ignores 
+# [4]       ET - TAI  =  DELTA_T_A  + K sin E
+#
+# where DELTA_T_A and K are constant, and E is the eccentric anomaly of the
+# heliocentric orbit of the Earth-Moon barycenter. Equation [4], which ignores
 # small-period fluctuations, is accurate to about 0.000030 seconds.
-# 
-# The eccentric anomaly E is given by 
-# 
+#
+# The eccentric anomaly E is given by
+#
 # [5]       E = M + EB sin M
-# 
-# where M is the mean anomaly, which in turn is given by 
-# 
+#
+# where M is the mean anomaly, which in turn is given by
+#
 # [6]       M = M  +  M t
 #                0     1
-# 
+#
 # where t is the number of ephemeris seconds past J2000.
 #
 # in the end, subtract 12 hours as J2000 starts at noon on 1/1/2000, not
@@ -689,7 +689,7 @@ def tdb_from_tai(tai, iters=2):
     # Solve for
     #   x == DELTA + K sin(E)
     # by iteration. It's fast.
-    
+
     x = DELTET_T_A
     for iter in range(iters):
         m = DELTET_M0 + DELTET_M1 * (x + tai)
@@ -1390,21 +1390,21 @@ class Test_Formatting(unittest.TestCase):
 
         self.assertTrue(np.all(yd_format_from_day([-365,0,366]) ==
                         np.array([b"1999-001", b"2000-001", b"2001-001"])))
-        
+
         # Check if yd_format_from_day start from 2000-001
         self.assertEqual(yd_format_from_day(0), "2000-001")
-       
+
         # Check if one day is 86400 seconds
         self.assertEqual(hms_format_from_sec(86400), "23:59:60")
 
         # Check if hms_format_from_sec end with 86410
         self.assertEqual(hms_format_from_sec(86410), "23:59:70")
-        
+
         # Check if hms_format_from_sec returns the correct format.
         self.assertEqual(hms_format_from_sec(0), "00:00:00")
         self.assertEqual(hms_format_from_sec(0,3), "00:00:00.000")
         self.assertEqual(hms_format_from_sec(0,3,'Z'), "00:00:00.000Z")
-        
+
         # Check if hms_format_from_sec accepts seconds over 86410
         self.assertRaises(ValueError, hms_format_from_sec, 86411) #!!!
 
@@ -1451,7 +1451,7 @@ def day_from_iso(strings, validate=True, strip=False):
     # Give the list a zero month entry for the year and day-of-year case
     # list = [["MONTH",0]] + iso.ISO_DATE.parseString(string).asList()
     # dict = _dict_from_parselist(list)
-    # 
+    #
     # return _day_from_dict(dict)
 
     strings = np.array(strings).astype('S')
@@ -1527,7 +1527,7 @@ def day_from_iso(strings, validate=True, strip=False):
         return day_from_yd(y,d)
 
     # Invalid string length
-    raise ValueError("invalid ISO date format: " + strings.ravel()[0])
+    raise ValueError("invalid ISO date format: " + strings.ravel()[0].decode())
 
 ########################################
 
@@ -1548,7 +1548,7 @@ def sec_from_iso(strings, validate=True, strip=False):
     #
     # list = iso.ISO_TIME.parseString(string).asList()
     # dict = _dict_from_parselist(list)
-    # 
+    #
     # return _sec_from_dict(dict)
 
     # Convert to an array of strings
@@ -1676,7 +1676,7 @@ def day_sec_from_iso(strings, validate=True, strip=False):
     #
     # day = _day_from_dict(dict)
     # sec = _sec_from_dict(dict, day, True, validate)
-    # 
+    #
     # return (day, sec)
 
     strings = np.array(strings).astype('S')
@@ -2026,7 +2026,7 @@ class Test_General_Parsing(unittest.TestCase):
         # Check if day_from_string works like day_from_ymd
         self.assertEqual(day_from_string("2000-01-01"),
                          day_from_ymd(2000,1,1))
- 
+
         # Check if other parsers work
         self.assertEqual(day_from_string("01-02-2000", "MDY"),
                          day_from_ymd(2000,1,2))
@@ -2093,4 +2093,3 @@ if __name__ == '__main__':
     unittest.main()
 
 ################################################################################
-
