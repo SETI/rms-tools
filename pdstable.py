@@ -619,7 +619,8 @@ class PdsTable(object):
     ############################################################################
 
     def filename_key(self, filename):
-        """Convert a filename to a key for indexing the rows."""
+        """Convert a filename to a key for indexing the rows. The key is the
+        basename with the extension removed."""
 
         basename = os.path.basename(filename)
         key = os.path.splitext(basename)[0]
@@ -834,7 +835,7 @@ class PdsTable(object):
 
     def index_rows_by_filename_key(self):
         """A dictionary of row indices keyed by the file basename associated
-        with the row. The key has the file basename stripped away and is
+        with the row. The key has the file extension stripped away and is
         converted to lower case."""
 
         if self._rows_by_filename is None:
