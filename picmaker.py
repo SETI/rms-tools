@@ -15,18 +15,24 @@
 
 import os, sys, fnmatch
 import traceback
+import warnings
 from optparse import OptionParser, OptionGroup
 
 import numpy as np
+from scipy.ndimage.filters import median_filter
+from scipy.stats import rankdata
 from PIL import Image, ImageFilter
 
-import warnings
-import pyfits
 from vicar import VicarImage, VicarError
 from colornames import ColorNames
 from tiff16 import WriteTiff16, ReadTiff16
 from pdsparser import PdsLabel
 from tabulation import Tabulation
+
+try:
+    import astropy.io.fits as pyfits
+except ImportError:
+    import pyfits
 
 ################################################################################
 # Command-line program
@@ -91,11 +97,14 @@ def main():
         action="store_true", default=False,
         help="print out the name of each directory in a recursive search.")
 
-    # --noclobber
-    group.add_option("--noclobber", dest="clobber",
-        action="store_false", default=True,
-        help="raise an error condition if an output file already exists, and " +
-             "leave that file unchanged.")
+    # --replace
+    group.add_option("--replace", dest="replace",
+        action="store", type="string", default="all",
+        help='what to do when a file already exists. '                         +
+             '"all" (the default) to replace the file silently; '              +
+             '"none" to skip the file silently; '                              +
+             '"warn" to issue a warning and skip the file; '                   +
+             '"error" to raise an error condition.')
 
     # --proceed
     group.add_option("--proceed", dest="proceed",
@@ -290,6 +299,33 @@ def main():
              "computing a histogram. Sometimes edge pixels have bad values "   +
              "that could otherwise corrupt the scaling. Default is zero.")
 
+    # --trimzeros
+    group.add_option("--trimzeros", dest="trimzeros",
+        action="store_true", default=False,
+        help="ignore any exterior rows or columns that contain all zeros "     +
+             "before calculating the percentiles or limits.")
+
+    # --footprint
+    group.add_option("--footprint", dest="footprint",
+        action="store", type="int", nargs=1, default=0,
+        help="the diameter in pixels of a circular footprint for a median "    +
+             "filter. If specified, then this median filter is applied to "    +
+             "image and the resulting minimum and maximum values define the "  +
+             "limits of the scaling. This procedure can be useful for "        +
+             "suppressing localized bad pixels such as cosmic ray hits. It "   +
+             "can be more effective then the percentile approach for handling "+
+             "images that contain a large amount of dark sky. Zero is the "    +
+             "default value, in which case no median filter is applied. If a " +
+             "footprint is specified in addition to other limits, then the "   +
+             "greater of the lower limits and the lesser of the upper limits"  +
+             "are used.")
+
+    # --histogram
+    group.add_option("--histogram", dest="histogram",
+        action="store_true", default=False,
+        help="use a histogram stretch, in which case the returned images has " +
+             "a uniform distribution of shadings.")
+
     parser.add_option_group(group)
 
     ### Enhancement options
@@ -425,7 +461,10 @@ def main():
     pattern = options.pattern
     verbose = options.verbose
 
-    clobber = options.clobber
+    replace = options.replace
+    if replace not in ('all', 'none', 'warn', 'error'):
+        raise ValueError('unrecognized replace option: "%s"' % str(replace))
+
     proceed = options.proceed
 
     ############################################################################
@@ -460,7 +499,11 @@ def main():
             these_args = sys.argv[1:] + new_args
             options = parser.parse_args(args = these_args)[0]
 
-            options.clobber = clobber
+            options.replace = replace
+            if replace not in ('all', 'none', 'warn', 'error'):
+                raise ValueError('unrecognized replace option: "%s"' %
+                                 str(replace))
+
             options.proceed = proceed
 
             options_list.append(options)
@@ -568,7 +611,7 @@ def main():
 
         option_dict = {
             # control parameters
-            'clobber': clobber,
+            'replace': replace,
             'proceed': proceed,
 
             # output options
@@ -600,6 +643,9 @@ def main():
             'limits': options.limits,
             'percentiles': options.percentiles,
             'trim': options.trim,
+            'trimzeros': options.trimzeros,
+            'footprint': options.footprint,
+            'histogram': options.histogram,
 
             # enhancement options
             'colormap': options.colormap,
@@ -713,6 +759,24 @@ def FindCommonPath(directories):
     return longest[:last_slash]
 
 ################################################################################
+# Circular footprint mask for median filter
+################################################################################
+
+def CircleMask(diameter):
+
+    size = int(np.ceil(diameter))
+    center = size/2. - 0.5
+
+    r = np.arange(size) - center
+    r2 = r**2 + r[:,np.newaxis]**2
+    mask = (r2 <= diameter**2/4.)
+
+    if np.sum(mask[0]) == 0:
+        mask = mask[1:-1,1:-1]
+
+    return mask
+
+################################################################################
 # Function to process all the files in a directory
 ################################################################################
 
@@ -734,7 +798,6 @@ def ProcessImages(filenames, directory, movie, option_dicts):
 
         # Re-convert using a fixed stretch
         movie_dict = option_dicts[0].copy()
-        movie_dict['clobber'] = True
         movie_dict['limits'] = results[:2]
 
         _ = ImagesToPics(filenames, directory, reuse=None, **movie_dict)
@@ -763,12 +826,13 @@ def ProcessImages(filenames, directory, movie, option_dicts):
 ################################################################################
 
 def ImagesToPics(filenames, directory=None,
-        clobber=True, proceed=False,
+        replace='all', proceed=False,
         extension='jpg', suffix='', strip=[], quality=75, twobytes=False,
         bands=None, lines=None, samples=None, obj=None, pointer=['IMAGE'],
         size=None, scale=(100.,100.), frame=None, wrap=False, overlap=(0.,0.),
             gap_size=1, gap_color='white', hst=False,
-        valid=None, limits=None, percentiles=None, trim=0,
+        valid=None, limits=None, percentiles=None, trim=0, trimzeros=False,
+            footprint=0, histogram=False,
         colormap=None, below_color=None, above_color=None, invalid_color=None,
             gamma=1., tint=False,
         display_upward=False, display_downward=False, rotate=None,
@@ -786,9 +850,11 @@ def ImagesToPics(filenames, directory=None,
                         files will be written to the same directory in which
                         the image files were found.
 
-    clobber             True to replace a file of the same name that already
-                        exists; False to raise an error and leave the file
-                        unchanged.
+    replace             what to do when a file already exists.
+                        "all" (the default) to replace the file silently;
+                        "none" to skip the file silently;
+                        "warn" to issue a warning and skip the file;
+                        "error" to raise an error condition.
 
     proceed             True to print any IO error but continue processing
                         files; False to raise the first error and stop.
@@ -897,6 +963,24 @@ def ImagesToPics(filenames, directory=None,
                         have bad values that could otherwise corrupt the
                         scaling. Default is zero.
 
+    trimzeros           ignore any exterior rows or columns that contain all
+                        zeros before calculating the percentiles or limits.
+
+    footprint           diameter in pixels of a circular footprint for a median
+                        filter. If specified, then this median filter is applied
+                        to the image and the resulting minimum and maximum
+                        values define the limits of the scaling. This procedure
+                        can be useful for suppressing localized bad pixels such
+                        as cosmic ray hits. It can be more effective then the
+                        percentile approach for handling images that contain a
+                        large amount of dark sky. Zero for no median filtering.
+                        If a footprint is specified in addition to other limits,
+                        then the greater of the lower limits and the lesser of
+                        the upper limits are used.
+
+    histogram           True to use a histogram stretch, in which case the
+                        returned images has a uniform distribution of shadings.
+
     colormap            an optional string containing two or more colors
                         separated by dashes. These define the sequence of colors
                         that will be used to represent pixel values ranging from
@@ -1002,6 +1086,11 @@ def ImagesToPics(filenames, directory=None,
 
       # Don't stop on error!
       try:
+
+        # Construct the output file name
+        outfile = GetOutfile(infile, directory, strip, suffix, extension,
+                             replace)
+        if outfile == '': continue
 
         # Check for the reuse information
         if len(filenames) == 1 and reuse is not None:
@@ -1134,10 +1223,13 @@ def ImagesToPics(filenames, directory=None,
 
                 # Get the histogram limits
                 these_limits = GetLimits(array2d, limits, percentiles,
-                                         assume_int=is_int, trim=trim)
+                                         assume_int=is_int, trim=trim,
+                                         trimzeros=trimzeros,
+                                         footprint=footprint)
 
                 # Apply colormap
-                arrayRGB = ApplyColormap(array2d, these_limits, colormap, mask,
+                arrayRGB = ApplyColormap(array2d, these_limits, histogram,
+                                         colormap, mask,
                                          below_color, above_color,
                                          invalid_color)
 
@@ -1212,14 +1304,17 @@ def ImagesToPics(filenames, directory=None,
 
             # Get the histogram limits
             these_limits = GetLimits(array2d, limits, percentiles,
-                                     assume_int=is_int, trim=trim)
+                                     assume_int=is_int, trim=trim,
+                                     trimzeros=trimzeros,
+                                     footprint=footprint)
 
             # Save the current limits for movie mode
             min_limits.append(these_limits[0])
             max_limits.append(these_limits[1])
 
             # Apply colormap
-            arrayRGB = ApplyColormap(array2d, these_limits, colormap, mask,
+            arrayRGB = ApplyColormap(array2d, these_limits, histogram,
+                                     colormap, mask,
                                      below_color, above_color, invalid_color)
 
         # Apply rotation if necessary
@@ -1246,10 +1341,6 @@ def ImagesToPics(filenames, directory=None,
         if sections > 1:
             image = WrapImage(image, wrapped_size, sections, wrap_axis,
                                      gap_size, gap_color)
-
-        # Construct the output file name
-        outfile = GetOutfile(infile, directory, strip, suffix, extension,
-                             clobber)
 
         # Write PIL image via PIL or as a 16-bit TIFF
         WritePIL(image, outfile, quality)
@@ -1642,7 +1733,7 @@ def FillZebraStripes(array2d):
 HISTOGRAM_BINS = 1024
 
 def GetLimits(array2d, limits=None, percentiles=(0.,100.),
-              assume_int=False, trim=0):
+              assume_int=False, trim=0, trimzeros=False, footprint=0):
     """Determines the stretch limits of an image based on defined limits and/or
     percentiles.
     
@@ -1664,6 +1755,12 @@ def GetLimits(array2d, limits=None, percentiles=(0.,100.),
                         from the histogram. Sometimes the edge of an image can
                         contain bad pixels. Default 0.
 
+        trimzeros       trim any exterior rows or columns that contain all zeros
+                        before calculating the limits.
+
+        footprint       size of the 2-D median filter to apply as an alternative
+                        way to set the limits.
+
     Return: The derived limits for the stretch.
     """
 
@@ -1676,6 +1773,20 @@ def GetLimits(array2d, limits=None, percentiles=(0.,100.),
         trimmed = array2d[trim:-trim, trim:-trim]
     else:
         trimmed = array2d
+
+    trimmed_v1 = trimmed
+    if trimzeros:
+        while trimmed.size and np.all(trimmed[0] == 0):
+            trimmed = trimmed[1:]
+        while trimmed.size and np.all(trimmed[-1] == 0):
+            trimmed = trimmed[:-1]
+        while trimmed.size and np.all(trimmed[:,0] == 0):
+            trimmed = trimmed[:,1:]
+        while trimmed.size and np.all(trimmed[:,-1] == 0):
+            trimmed = trimmed[:,:-1]
+
+        if trimmed.size == 0:
+            trimmed = trimmed_v1
 
     # Identify the dn limits
     array_min = trimmed.min()
@@ -1741,6 +1852,12 @@ def GetLimits(array2d, limits=None, percentiles=(0.,100.),
                                     percentlist, dnlist, limits),
                   _PercentileLookup(percentiles[1],
                                     percentlist, dnlist, limits))
+
+    # Median-filter the array if necessary
+    if footprint:
+        filtered = median_filter(trimmed, footprint=CircleMask(footprint))
+        limits = (max(filtered.min(), limits[0]),
+                  min(filtered.max(), limits[1]))
 
     return limits
 
@@ -1955,7 +2072,7 @@ def RotateArrayRGB(arrayRGB, display_upward, rotation_name):
 # Apply colormap
 ################################################################################
 
-def ApplyColormap(array2d, limits, colormap=None, mask=None,
+def ApplyColormap(array2d, limits, histogram=False, colormap=None, mask=None,
                   below_color=None, above_color=None, invalid_color="black"):
     """Applies the colormap to a grayscale image, producing a 3-D array
     with either one band if grayscale or three bands (R,G,B) if color.
@@ -1964,6 +2081,9 @@ def ApplyColormap(array2d, limits, colormap=None, mask=None,
         array2d             a 2-D numpy array for colormapping.
         limits              the array values that correspond to the first and
                             last colors in the mapping.
+        histogram           True to use histogram shading, in which case the
+                            returned images has a uniform distribution of DNs,
+                            False otherwise.
         colormap            an N-tuple of colors to map from the lower to upper
                             limit.
         mask                a boolean mask of invalid pixels, or None if all
@@ -2033,16 +2153,42 @@ def ApplyColormap(array2d, limits, colormap=None, mask=None,
     if is_gray: channels = 1
     else:       channels = 3
 
+    # Apply the histogram scaling if necessary
+    if histogram:
+        normalized = rankdata(array2d)
+        normalized = normalized.reshape(array2d.shape)
+        mask = (array2d == limits[0])
+        if np.any(mask):
+            new_limit0 = normalized[mask][0]
+        else:
+            mask = (array2d < limits[0])
+            new_limit0 = 0.5 * (normalized[ mask].max() +
+                                normalized[~mask].min())
+
+        mask = (array2d == limits[1])
+        if np.any(mask):
+            new_limit1 = normalized[mask][0]
+        else:
+            mask = (array2d < limits[1])
+            new_limit1 = 0.5 * (normalized[ mask].max() +
+                                normalized[~mask].min())
+
+        limits = (new_limit0, new_limit1)
+    else:
+        normalized = array2d
+
     # Scale the image to the range zero to number of colors
-    scaled = array2d.astype("float")
-    scaled = (mapcolors-1) * ((scaled - limits[0]) / (limits[1] - limits[0]))
+    scaled = normalized.astype("float")
+    denom = limits[1] - limits[0]
+    if denom == 0: denom = 1.
+    scaled = (mapcolors-1) * ((scaled - limits[0]) / float(denom))
     scaled = scaled.clip(0, mapcolors-1)
 
     # Apply the lookup table if necessary
     if colormap is not None:
 
         # Extract the index and fractional bit of every pixel
-        (indices, fracs) = divmod(scaled, 1.)
+        (indices, fracs) = np.divmod(scaled, 1.)
         indices = indices.astype('int')
 
         # Map through the lookup table (tricky!)
@@ -2753,7 +2899,7 @@ def ReadArray(infile, rescale):
 ################################################################################
 
 def GetOutfile(infile, outdir=None, strip=[], suffix="", extension="jpg",
-               clobber=True):
+               replace='all'):
     """Derive the name of the output file.
     
     Input:
@@ -2767,7 +2913,11 @@ def GetOutfile(infile, outdir=None, strip=[], suffix="", extension="jpg",
         extension       the extension for the output file, which must be one of
                         the PIL supported types such as jpg, jpeg, gif, tif, or
                         tiff. Lower and uppercase extensions are acceptable.
-        clobber         False to raise an exception of the file already exists.
+        replace         what to do when a file already exists.
+                        "all" (the default) to replace the file silently;
+                        "none" to skip the file silently;
+                        "warn" to issue a warning and skip the file;
+                        "error" to raise an error condition.
 
     Return:             the name of the output file.
 
@@ -2801,8 +2951,13 @@ def GetOutfile(infile, outdir=None, strip=[], suffix="", extension="jpg",
     if path != "" and not os.path.exists(path): os.makedirs(path)
 
     # Raise an error if the file already exists
-    if not clobber and os.path.exists(outfile):
-        raise IOError("File already exists: " + outfile)
+    if os.path.exists(outfile):
+        if replace == 'none':
+            return ''
+        elif replace == 'error':
+            raise IOError("File already exists: " + outfile)
+        elif replace == 'warn':
+            warnings.warn("File overwritten: " + outfile)
 
     return outfile
 
