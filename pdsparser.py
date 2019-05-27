@@ -1414,7 +1414,7 @@ STATEMENT.setParseAction(PdsNode.parse)
 END_STATEMENT   = Suppress(Literal("END") + ZeroOrMore(NEWLINE))
 END_STATEMENT.setParseAction(PdsNode.parse_end)
 #-----------------------------------------------------------------------
-PDS_LABEL       = OneOrMore(STATEMENT) + END_STATEMENT
+PDS_LABEL       = ZeroOrMore(EOL) + OneOrMore(STATEMENT) + END_STATEMENT
 ################################################################################
 # PdsLabel
 ################################################################################
