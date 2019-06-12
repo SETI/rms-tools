@@ -39,6 +39,8 @@ class VicarImage():
         raw_header          the VICAR header exactly as it appeared in the file.
         extension_header    the VICAR extension header exactly as it appeared in
                             the file, or an empty string if not present.
+        extension_lblsize   the size in bytes of the VICAR extension header if
+                            present; otherwise 0.
         data_2d             the data as a 2-D array. If it is actually a 3-D
                             array, the leading two axes (bands and lines) are
                             merged into one. The data type and byte order of
@@ -283,6 +285,7 @@ class VicarImage():
 
         # Append the extension header, if present, and re-load the table
         this.extension_header = ""
+        this.extension_lblsize = 0
         if vicar_EOL == 1:
             offset = (vicar_LBLSIZE + vicar_RECSIZE * vicar_NLB
                                     + vicar_RECSIZE * vicar_N2 * vicar_N3)
@@ -299,12 +302,12 @@ class VicarImage():
                                  + filename)
 
             iblank = temp.index(" ",8)
-            extsize = int(temp[8:iblank])
+            this.extension_lblsize = int(temp[8:iblank])
 
             file.seek(offset)
-            this.extension_header = file.read(extsize)
+            this.extension_header = file.read(this.extension_lblsize)
 
-            this.header += this.extension_header[iblank:].rstrip("\0")
+            this.header += this.extension_header.rstrip("\0")
             this._load_table(this.header)
 
         # Look up the numpy dtype corresponding to the VICAR FORMAT

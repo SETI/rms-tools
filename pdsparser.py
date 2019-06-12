@@ -15,7 +15,7 @@
 #   that they return a tuple containing all the information required.
 #
 # 11/22/13 MRS - Added classes PdsSetPointer and PdsSequencePointer (and
-#   superclass PdsVectorPointer) to allow for a pointer to multiple file neames.
+#   superclass PdsVectorPointer) to allow for a pointer to multiple file names.
 #   This is used widely in DOCUMENT objects comprising multiple files. Surprise!
 ################################################################################
 # Tracking of comments has been stripped away.
@@ -873,10 +873,12 @@ DATE_TIME.setParseAction(PdsDateTime.parse)
 # PdsText: value is the contents of the text string, quoted or not.
 ################################################################################
 EMPTY_TEXT      = Combine('""')
+WHITE_TEXT      = Suppress('"') + White() + Literal('"')
 NONEMPTY_TEXT   = Suppress('"') + Combine(CharsNotIn('"')) + Literal('"')
 QUOTED_SYMBOL   = Suppress("'") + Combine(CharsNotIn("'\n")) + Literal("'")
 UNQUOTED_TEXT   = Combine(IDENTIFIER)
-TEXT_VALUE      = EMPTY_TEXT | NONEMPTY_TEXT | QUOTED_SYMBOL | UNQUOTED_TEXT
+TEXT_VALUE      = (EMPTY_TEXT | WHITE_TEXT | NONEMPTY_TEXT | QUOTED_SYMBOL |
+                   UNQUOTED_TEXT)
 TEXT_VALUE.setName("TEXT_VALUE")
 #-----------------------------------------------------------------------
 

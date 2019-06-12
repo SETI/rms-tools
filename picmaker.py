@@ -1934,8 +1934,10 @@ def TintedColormap(filter_info):
 
     global VOYAGER_ISS_DICT, NH_MVIC_DICT, RGB_BY_NM, RFUNC, GFUNC, BFUNC
 
-    (inst_host, inst_id, filter_name) = filter_info
+    if filter_info is None:
+        return None
 
+    (inst_host, inst_id, filter_name) = filter_info
     if filter_name is None:
         return None
 
