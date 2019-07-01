@@ -28,10 +28,15 @@ from colornames import ColorNames
 from tiff16 import WriteTiff16, ReadTiff16
 from pdsparser import PdsLabel
 from tabulation import Tabulation
+import pickle
 
-try:
-    import astropy.io.fits as pyfits
-except ImportError:
+# try:
+#     import astropy.io.fits as pyfits
+# except ImportError:
+#     import pyfits
+
+with warnings.catch_warnings():
+    warnings.filterwarnings('ignore')
     import pyfits
 
 ################################################################################
@@ -276,7 +281,8 @@ def main():
     # --valid
     group.add_option("-v", "--valid", dest="valid",
         action="store", type="float", nargs=2,
-        help="range of valid pixel values; outside values are ignored.")
+        help="range of valid pixel values; pixels outside this range are "     +
+             "ignored.")
 
     # -l, --limits
     group.add_option("-l", "--limits", dest="limits",
@@ -355,7 +361,8 @@ def main():
 
     group.add_option("--invalid", dest="invalid_color",
         action="store", type="string", default="black",
-        help="the color to use for invalid pixel values; default is black. "   +
+        help="the color to use for invalid pixel values (outside the range "   +
+             "specified by the --valid option) and NaNs; default is black. "   +
              "A color can be specified by X11 name or by (R,G,B) triplet.")
 
     # -g, --gamma
@@ -1215,21 +1222,23 @@ def ImagesToPics(filenames, directory=None,
             for b in range(array3d.shape[0]):
 
                 # Slice out the needed part of the image
-                (array2d, mask) = SliceArray(array3d, samples, lines, (b,b+1),
-                                                      valid)
+                (array2d,
+                 invalid_mask) = SliceArray(array3d, samples, lines, (b,b+1),
+                                                     valid)
 
                 # Fill in zebra stripes (converting to float if necessary)
                 if zebra: array2d = FillZebraStripes(array2d)
 
                 # Get the histogram limits
-                these_limits = GetLimits(array2d, limits, percentiles,
+                these_limits = GetLimits(array2d, invalid_mask,
+                                         limits, percentiles,
                                          assume_int=is_int, trim=trim,
                                          trimzeros=trimzeros,
                                          footprint=footprint)
 
                 # Apply colormap
                 arrayRGB = ApplyColormap(array2d, these_limits, histogram,
-                                         colormap, mask,
+                                         colormap, invalid_mask,
                                          below_color, above_color,
                                          invalid_color)
 
@@ -1297,13 +1306,14 @@ def ImagesToPics(filenames, directory=None,
         # Standard procedure, no mosaicking
         else:
             # Slice out the needed part of the image
-            (array2d, mask) = SliceArray(array3d, samples, lines, bands, valid)
+            (array2d,
+             invalid_mask) = SliceArray(array3d, samples, lines, bands, valid)
 
             # Fill in zebra stripes (converting to float if necessary)
             if zebra: array2d = FillZebraStripes(array2d)
 
             # Get the histogram limits
-            these_limits = GetLimits(array2d, limits, percentiles,
+            these_limits = GetLimits(array2d, invalid_mask, limits, percentiles,
                                      assume_int=is_int, trim=trim,
                                      trimzeros=trimzeros,
                                      footprint=footprint)
@@ -1314,7 +1324,7 @@ def ImagesToPics(filenames, directory=None,
 
             # Apply colormap
             arrayRGB = ApplyColormap(array2d, these_limits, histogram,
-                                     colormap, mask,
+                                     colormap, invalid_mask,
                                      below_color, above_color, invalid_color)
 
         # Apply rotation if necessary
@@ -1465,8 +1475,8 @@ def ReadImageArray1(filename, obj=None, hst=False):
         try:
             with warnings.catch_warnings(): # Error, not warning, if not FITS
                 warnings.filterwarnings('error')
-                fitsfile = pyfits.open(filename)
-                fitsobj = fitsfile[0]       # IndexError if not a FITS file
+                hdulist = pyfits.open(filename)
+                fitsobj = hdulist[0]       # IndexError if not a FITS file
 
                 # Get the filter info
                 inst_host = None
@@ -1474,40 +1484,40 @@ def ReadImageArray1(filename, obj=None, hst=False):
                 filter_name = None
 
                 try:
-                    inst_host = fitsfile[0].header['TELESCOP']  # For HST
+                    inst_host = hdulist[0].header['TELESCOP']  # For HST
                 except KeyError:
                   try:
-                    inst_host = fitsfile[0].header['HOSTNAME']  # For NH
+                    inst_host = hdulist[0].header['HOSTNAME']  # For NH
                   except KeyError:
                     pass
 
                 try:
-                    inst_id = fitsfile[0].header['INSTRUME']
-                    if 'DETECTOR' in fitsfile[0].header:
-                      inst_id += '/' + fitsfile[0].header['DETECTOR']  # For HST
+                    inst_id = hdulist[0].header['INSTRUME']
+                    if 'DETECTOR' in hdulist[0].header:
+                      inst_id += '/' + hdulist[0].header['DETECTOR']  # For HST
                 except KeyError:
                   try:
-                    inst_id = fitsfile[0].header['INSTRU']      # For NH
+                    inst_id = hdulist[0].header['INSTRU']      # For NH
                   except KeyError:
                     pass
 
                 # Get filter name for HST/WFC3 or HST/NICMOS or NH/MVIC
                 try:
-                    filter_name = fitsfile[0].header['FILTER'].upper()
+                    filter_name = hdulist[0].header['FILTER'].upper()
                 except KeyError:
                     pass
 
                 # Get filter name for HST/ACS
                 try:
-                    filter_name = (fitsfile[0].header['FILTER1'],
-                                   fitsfile[0].header['FILTER2'])
+                    filter_name = (hdulist[0].header['FILTER1'],
+                                   hdulist[0].header['FILTER2'])
                 except KeyError:
                     pass
 
                 # Get filter name for HST/WFPC2
                 try:
-                    filter_name = (fitsfile[0].header['FILTNAM1'],
-                                   fitsfile[0].header['FILTNAM2'])
+                    filter_name = (hdulist[0].header['FILTNAM1'],
+                                   hdulist[0].header['FILTNAM2'])
                 except KeyError:
                     pass
 
@@ -1516,9 +1526,9 @@ def ReadImageArray1(filename, obj=None, hst=False):
 
                 if obj is None:
                     if hst and inst_id == 'ACS/WFC':
-                        array = fitsfile[1].data    # WFC2
+                        array = hdulist[1].data    # WFC2
                         try:
-                            array2 = fitsfile[4].data
+                            array2 = hdulist[4].data
                             shape = (2,) + array.shape
                             array3d = np.empty(shape)
                             array3d[0] = array      # WFC2
@@ -1528,23 +1538,23 @@ def ReadImageArray1(filename, obj=None, hst=False):
 
                     elif hst and inst_id == 'WFPC2':
                         array3d = []
-                        for i in range(len(fitsfile)):
-                            array = fitsfile[i].data
+                        for i in range(len(hdulist)):
+                            array = hdulist[i].data
                             if type(array) != np.ndarray: continue
                             if len(array.shape) not in (2,3): continue
                             array3d.append(array)
                         array3d = np.array(array3d)
 
                     else:
-                        for i in range(len(fitsfile)):
-                            array3d = fitsfile[i].data
+                        for i in range(len(hdulist)):
+                            array3d = hdulist[i].data
                             if type(array3d) != np.ndarray: continue
                             if len(array3d.shape) in (2,3): break
 
                 elif isinstance(obj, (list,tuple)):
                     layers = []
                     for o in obj:
-                        array2d = fitsfile[o].data
+                        array2d = hdulist[o].data
                         layers.append(array2d)
 
                     array3d = np.stack(layers)
@@ -1555,8 +1565,8 @@ def ReadImageArray1(filename, obj=None, hst=False):
                     except ValueError:
                         pass
 
-                    print 11111, filename, obj, fitsfile[obj]
-                    array3d = fitsfile[obj].data.copy()
+                    print 11111, filename, obj, hdulist[obj]
+                    array3d = hdulist[obj].data.copy()
 
                 if array3d is None:
                     raise IOError("Image array not found in FITS file")
@@ -1564,7 +1574,7 @@ def ReadImageArray1(filename, obj=None, hst=False):
                 if len(array3d.shape) == 2: 
                     array3d = array3d.reshape((1,) + array3d.shape)
 
-                fitsfile.close()
+                hdulist.close()
 
                 return(array3d, True, (inst_host, inst_id, filter_name))
  
@@ -1615,12 +1625,18 @@ def SliceArray(array3d, samples=None, lines=None, bands=None, valid=None):
     if bands:   slice3d = slice3d[bands[0]:bands[1], :, :]
 
     # Create a masked array if some pixel values are invalid
-    if valid:
-        masked = np.ma.masked_outside(slice3d, valid[0], valid[1])
+    masked = slice3d
+    has_invalid_pixels = False
+
+    nan_mask = np.isnan(masked)
+    if np.any(nan_mask):
+        masked = np.ma.masked_invalid(masked)
+        masked.data[nan_mask] = 0.
         has_invalid_pixels = True
-    else:
-        masked = slice3d
-        has_invalid_pixels = False
+
+    if valid:
+        masked = np.ma.masked_outside(masked, valid[0], valid[1])
+        has_invalid_pixels = True
 
     # Derive mean of bands and convert to 2-D
     if bands[1] - bands[0] > 1:
@@ -1629,12 +1645,14 @@ def SliceArray(array3d, samples=None, lines=None, bands=None, valid=None):
         array2d = masked[0,:,:].copy()
 
     # Make a final search for invalid pixels
-    mask = None
+    invalid_mask = None
     if has_invalid_pixels:
-        if np.any(np.ma.getmaskarray(masked)):
-            mask = np.ma.getmaskarray(masked)[0,:,:]
+        mask = np.ma.getmaskarray(masked)
+        mask = masked.mask
+        if np.any(mask):
+            invalid_mask = mask[0,:,:]
 
-    return (array2d, mask)
+    return (array2d, invalid_mask)
 
 ################################################################################
 # Trim away missing data around the edges of an image
@@ -1643,7 +1661,7 @@ def SliceArray(array3d, samples=None, lines=None, bands=None, valid=None):
 def TrimArray(array2d, value=0., samples=True, lines=True):
     """Trims away constant values (typically zero) around the periphery of an
     image.
-    
+
     Input:
         array2d             a 2-D image array indexed (lines, samples).
         value               the constant value to trim away.
@@ -1681,7 +1699,7 @@ def FillZebraStripes(array2d):
     """Fills lines of zeros at the beginning and end of each row of nonzero
     values exist above and below them. This removes an artifact associated with
     some spacecraft compression procedures.
-    
+
     Input:
         array2d             a 2-D numpy array.
 
@@ -1732,13 +1750,15 @@ def FillZebraStripes(array2d):
 
 HISTOGRAM_BINS = 1024
 
-def GetLimits(array2d, limits=None, percentiles=(0.,100.),
+def GetLimits(array2d, mask, limits=None, percentiles=(0.,100.),
               assume_int=False, trim=0, trimzeros=False, footprint=0):
     """Determines the stretch limits of an image based on defined limits and/or
     percentiles.
     
     Input:
         array2d         the 2-D numpy array, which may be masked.
+        mask            the 2-D mask array, True for masked pixels. None if no
+                        pixels are masked
 
         limits          numeric limits within which to confine histogram, or
                         None for the full dynamic range of the array.
@@ -1771,26 +1791,42 @@ def GetLimits(array2d, limits=None, percentiles=(0.,100.),
     # Trim the array if necessary
     if trim != 0:
         trimmed = array2d[trim:-trim, trim:-trim]
+        tmask = mask[trim:-trim, trim:-trim]
     else:
         trimmed = array2d
+        tmask = mask
 
     trimmed_v1 = trimmed
+    tmask_v1 = tmask
     if trimzeros:
+        if tmask is None:
+            tmask = np.zeros(trimmed.shape, dtype='bool')
+
         while trimmed.size and np.all(trimmed[0] == 0):
             trimmed = trimmed[1:]
+            tmask = tmask[1:]
         while trimmed.size and np.all(trimmed[-1] == 0):
             trimmed = trimmed[:-1]
+            tmask = tmask[:-1]
         while trimmed.size and np.all(trimmed[:,0] == 0):
             trimmed = trimmed[:,1:]
+            tmask = tmask[:,1:]
         while trimmed.size and np.all(trimmed[:,-1] == 0):
             trimmed = trimmed[:,:-1]
+            tmask = tmask[:,:-1]
 
         if trimmed.size == 0:
             trimmed = trimmed_v1
+            tmask = tmask_v1
 
-    # Identify the dn limits
-    array_min = trimmed.min()
-    array_max = trimmed.max()
+    # Identify the dn limits, excluding NANs
+    if tmask is None:
+        non_nans = trimmed
+    else:
+        non_nans = trimmed[~tmask]
+
+    array_min = non_nans.min()
+    array_max = non_nans.max()
 
     # Deal with a single value
     if array_min == array_max:
@@ -1833,7 +1869,7 @@ def GetLimits(array2d, limits=None, percentiles=(0.,100.),
 
         # Create histogram
         hbins = int(hbins)
-        hist = np.histogram(trimmed, bins=hbins, range=hrange)
+        hist = np.histogram(non_nans, bins=hbins, range=hrange)
 
         # Generate the cumulative histogram with a leading 0.
         cumhist = np.array([0] * (hbins+1), "float64")
@@ -1848,16 +1884,22 @@ def GetLimits(array2d, limits=None, percentiles=(0.,100.),
                               (cumvals[1] - cumvals[0]))
 
         # Locate the percentiles
-        limits = (_PercentileLookup(percentiles[0],
-                                    percentlist, dnlist, limits),
-                  _PercentileLookup(percentiles[1],
-                                    percentlist, dnlist, limits))
+        limits = (_PercentileLookup(percentiles[0], percentlist, dnlist,
+                                                                 limits),
+                  _PercentileLookup(percentiles[1], percentlist, dnlist,
+                                                                 limits))
 
     # Median-filter the array if necessary
     if footprint:
-        filtered = median_filter(trimmed, footprint=CircleMask(footprint))
-        limits = (max(filtered.min(), limits[0]),
-                  min(filtered.max(), limits[1]))
+        circle_footprint = CircleMask(footprint)
+        filtered = median_filter(trimmed, footprint=circle_footprint)
+
+        if tmask is None:
+            limits = (max(filtered.min(), limits[0]),
+                      min(filtered.max(), limits[1]))
+        else:
+            limits = (max(filtered[~tmask].min(), limits[0]),
+                      min(filtered[~tmask].max(), limits[1]))
 
     return limits
 
@@ -2074,7 +2116,8 @@ def RotateArrayRGB(arrayRGB, display_upward, rotation_name):
 # Apply colormap
 ################################################################################
 
-def ApplyColormap(array2d, limits, histogram=False, colormap=None, mask=None,
+def ApplyColormap(array2d, limits, histogram=False, colormap=None,
+                  invalid_mask=None,
                   below_color=None, above_color=None, invalid_color="black"):
     """Applies the colormap to a grayscale image, producing a 3-D array
     with either one band if grayscale or three bands (R,G,B) if color.
@@ -2088,7 +2131,7 @@ def ApplyColormap(array2d, limits, histogram=False, colormap=None, mask=None,
                             False otherwise.
         colormap            an N-tuple of colors to map from the lower to upper
                             limit.
-        mask                a boolean mask of invalid pixels, or None if all
+        invalid_mask        a boolean mask of invalid pixels, or None if all
                             pixels are valid.
         below_color         the color to use for any pixels below the lower
                             limit. Default is the first color of the colormap.
@@ -2212,8 +2255,8 @@ def ApplyColormap(array2d, limits, histogram=False, colormap=None, mask=None,
         if highlights[1] is not None:
             slice[array2d > limits[1]] = highlights[1][c]
 
-        if mask is not None:
-            slice[mask] = highlights[2][c]
+        if invalid_mask is not None:
+            slice[invalid_mask] = highlights[2][c]
 
     return result
 
