@@ -1187,7 +1187,7 @@ def _yxdhms_format_from_day_sec(day, sec, ymd=True, sep="T", digits=None,
     else:
         lsec = 3 + digits
         factor = 10.**digits
-        sec = ((sec + 0.5)//1) / factor
+        sec = ((sec*factor + 0.5)//1) / factor
 
     # Return a scalar
     if np.shape(day) == () and np.shape(sec) == ():
@@ -1198,12 +1198,9 @@ def _yxdhms_format_from_day_sec(day, sec, ymd=True, sep="T", digits=None,
         return (_yxd_format_from_day(day, ymd) + sep +
                 hms_format_from_sec(sec, digits, suffix))
 
-    # Coerce the day and second arrays to the same shape
-    (day, sec) = np.broadcast_arrays(day, sec)
-
     # Check day boundaries
     secs_on_day = seconds_on_day(day)
-    crossovers = np.where(sec >= secs_on_day)
+    crossovers = (sec >= secs_on_day)
     day[crossovers] += 1
     sec[crossovers] -= secs_on_day[crossovers]
 
