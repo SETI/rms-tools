@@ -251,6 +251,7 @@ class VicarImage():
 
         iblank = header.index(" ", 8)
         vicar_LBLSIZE = int(header[8:iblank])
+        this.header_lblsize = vicar_LBLSIZE
 
         # Read the leading VICAR header
         file.seek(0)
@@ -1039,16 +1040,19 @@ class VicarImage():
         values exactly.
         """
 
-        dict = {}
+        mydict = {}
         for item in self.table:
             if type(item[1]) == dec.Decimal:
                 value = float(item[1])
             else:
                 value = item[1]
 
-            dict[item[0]] = value
+            mydict[item[0]] = value
 
-        return dict
+        # Don't let LBLSIZE be overridden by the extension
+        mydict['LBLSIZE'] = self.header_lblsize
+
+        return mydict
 
     def FindKeyword(self, keyword=".*", occurrence=0, start=0):
         """Deprecated, alternative name for find_keyword()"""
