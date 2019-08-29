@@ -43,6 +43,9 @@
 # 8/24/16 (MRS) - New leapsecond for 12/31/16.
 #
 # 3/29/18 (MRS) - Now compatible with both Python 2 and Python 3.
+#
+# 8/28/19 (MRS) - Eliminated returns of shapeless NumPy arrays; added minimal
+#   for SPICE TDT time.
 ################################################################################
 
 from __future__ import print_function, division
@@ -55,6 +58,26 @@ import unittest
 
 import textkernel as tk
 import julian_dateparser as jdp
+
+# Handy utilities...
+
+def INT(arg):
+    if np.shape(arg):
+        return arg.astype('int')
+    else:
+        return int(arg)
+
+################################################################################
+# Basic support for SPICE TDT times
+################################################################################
+
+JULIAN_TAI_MINUS_SPICE_TDT = 43167.816
+
+def tai_from_tdt(tdt):
+    return tdt + JULIAN_TAI_MINUS_SPICE_TDT
+
+def tdt_from_tai(tai):
+    return tai - JULIAN_TAI_MINUS_SPICE_TDT
 
 ################################################################################
 # Initialization
@@ -204,9 +227,6 @@ def day_from_ymd(y, m, d):
     """Day number from year, month and day. All must be integers. Supports
     scalar or array arguments."""
 
-    if np.shape(y) != () or np.shape(m) != () or np.shape(d) != ():
-        (y, m, d) = np.broadcast_arrays(y, m, d)
-
     m = (m + 9) % 12
     y = y - m//10
     return 365*y + y//4 - y//100 + y//400 + (m*306 + 5)//10 + d - 730426
@@ -214,27 +234,20 @@ def day_from_ymd(y, m, d):
 ########################################
 
 def ymd_from_day(day):
-    """Year, month and day from day number. Supports scalar or array arguments.
-    Inputs must be integers."""
-
-    # Coerce to array if necessary
-    shape = np.shape(day)
-    if shape != (): day = np.asarray(day)
+    """Year, month and day from day number. Inputs must be integers."""
 
     # Execute the magic algorithm
     g = day + 730425
-    y = np.int32((10000*np.int64(g) + 14780)//3652425)
+    y = (10000*g + 14780)//3652425
     ddd = g - (365*y + y//4 - y//100 + y//400)
 
     # Use scalar version of test...
-    if shape == ():
-        if ddd < 0:
-            y -= 1
-            ddd = g - (365*y + y//4 - y//100 + y//400)
-    # ...or array version of test
-    else:
+    if np.shape(day):
         y[ddd < 0] -= 1
-        ddd = g - (365*y + y//4 - y//100 + y//400)
+    elif ddd < 0:
+        y -= 1
+
+    ddd = g - (365*y + y//4 - y//100 + y//400)
 
     mi = (100*ddd + 52)//3060
     mm = (mi + 2)%12 + 1
@@ -246,8 +259,7 @@ def ymd_from_day(day):
 ########################################
 
 def yd_from_day(day):
-    """Year and day-of-year from day number. Supports scalar or array arguments.
-    """
+    """Year and day-of-year from day number."""
 
     (y,m,d) = ymd_from_day(day)
     return (y, day - day_from_ymd(y,1,1) + 1)
@@ -255,11 +267,7 @@ def yd_from_day(day):
 ########################################
 
 def day_from_yd(y, d):
-    """Day number from year and day-of-year. Supports scalar or array arguments.
-    """
-
-    if np.shape(y) != () or np.shape(d) != ():
-        (y, d) = np.broadcast_arrays(y, d)
+    """Day number from year and day-of-year."""
 
     return day_from_ymd(y,1,1) + d - 1
 
@@ -269,36 +277,24 @@ def month_from_ym(y, m):
     """Number of elapsed months since January 2000. Supports scalar or array
     arguments."""
 
-    if np.shape(y) != () or np.shape(m) != ():
-        (y,m) = np.broadcast_arrays(y, m)
-
     return 12*(y - 2000) + (m - 1)
 
 ########################################
 
 def ym_from_month(month):
-    """Year and month from the number of elapsed months since January 2000.
-    Supports scalar or array arguments."""
+    """Year and month from the number of elapsed months since January 2000."""
 
-    # Coerce to an array if necessary
-    if np.shape(month) != (): month = np.asarray(month)
-
-    y = np.floor(month//12).astype("int")
+    y = INT(month//12)
     m = month - 12*y
-
     y += 2000
     m += 1
 
-    # Convert back to scalar if necessary
     return (y, m)
 
 ########################################
 
 def days_in_month(month):
-    """Number of days in month. Supports scalar or array arguments.
-    """
-
-    if np.shape(month) != (): month = np.asarray(month)
+    """Number of days in month."""
 
     (y, m) = ym_from_month(month)
     day0 = day_from_ymd(y, m, 1)
@@ -311,10 +307,7 @@ def days_in_month(month):
 ########################################
 
 def days_in_year(year):
-    """Number of days in year. Supports scalar or array arguments.
-    """
-
-    if np.shape(year) != (): year = np.asarray(year)
+    """Number of days in year."""
 
     return day_from_ymd(year+1, 1, 1) - day_from_ymd(year, 1, 1)
 
@@ -328,10 +321,9 @@ class Test_Calendar(unittest.TestCase):
 
         # day_from_ymd()
         self.assertEqual(day_from_ymd(2000,1,1), 0)
-        self.assertEqual(day_from_ymd(2000,2,[27,28,29]).tolist(), [57,58,59])
-        self.assertEqual(day_from_ymd(2000,[1,2,3],1).tolist(),    [ 0,31,60])
-        self.assertEqual(day_from_ymd([2000,2001,2002],1,1).tolist(),
-                                                                   [0,366,731])
+        self.assertEqual(day_from_ymd(2000,2,np.array([27,28,29])).tolist(),    [57,58,59])
+        self.assertEqual(day_from_ymd(2000,np.array([1,2,3]),1).tolist(),       [ 0,31,60])
+        self.assertEqual(day_from_ymd(np.array([2000,2001,2002]),1,1).tolist(), [0,366,731])
 
         # ymd_from_day()
         self.assertEqual(ymd_from_day(0),   (2000,1,1))
@@ -344,7 +336,7 @@ class Test_Calendar(unittest.TestCase):
         self.assertEqual(yd_from_day(365), (2000,366))
 
         # A large number of dates, spanning > 200 years
-        daylist = range(-40000,40000,83)
+        daylist = np.arange(-40000,40000,83)
 
         # Convert to ymd and back
         (ylist, mlist, dlist) = ymd_from_day(daylist)
@@ -362,7 +354,7 @@ class Test_Calendar(unittest.TestCase):
         self.assertTrue(np.all(dlist <= 31), "Day > 31 found")
 
         # Another large number of dates, spanning > 200 years
-        daylist = range(-40001,40000,79)
+        daylist = np.arange(-40001,40000,79)
 
         # Convert to yd and back
         (ylist, dlist) = yd_from_day(daylist)
@@ -375,7 +367,7 @@ class Test_Calendar(unittest.TestCase):
         self.assertTrue(np.all(dlist <= 366), "Day > 366 found")
 
         # A large number of months, spanning > 200 years
-        monthlist = range(-15002,15000,19)
+        monthlist = np.arange(-15002,15000,19)
 
         # Convert to ym and back
         (ylist, mlist) = ym_from_month(monthlist)
@@ -388,12 +380,12 @@ class Test_Calendar(unittest.TestCase):
         self.assertTrue(np.all(mlist <= 12), "Month-of-year > 12 found")
 
         # Check the days in each January
-        mlist = range(month_from_ym(1980,1),month_from_ym(2220,1),12)
+        mlist = np.arange(month_from_ym(1980,1),month_from_ym(2220,1),12)
         self.assertTrue(np.all(days_in_month(mlist) == 31),
             "Not every January has 31 days")
 
         # Check the days in each April
-        mlist = range(month_from_ym(1980,4),month_from_ym(2220,4),12)
+        mlist = np.arange(month_from_ym(1980,4),month_from_ym(2220,4),12)
         self.assertTrue(np.all(days_in_month(mlist) == 30),
             "Not every April has 30 days")
 
@@ -422,8 +414,7 @@ class Test_Calendar(unittest.TestCase):
 ################################################################################
 
 def leapsecs_from_ym(y, m):
-    """Returns the number of elapsed leapseconds for a given year and month.
-    Supports scalar or array arguments."""
+    """Returns the number of elapsed leapseconds for a given year and month."""
 
     # Scalar version...
     if np.shape(y) == () and np.shape(m) == ():
@@ -433,8 +424,6 @@ def leapsecs_from_ym(y, m):
         return LS_ARRAY1D[index]
 
     # Array version...
-    (y,m) = np.broadcast_arrays(y,m)
-
     index = 2*(y - LS_YEAR0) + (m-1)//6
     index[index < 0] = 0
     index[index >= LS_ARRAY1D.size] = LS_ARRAY1D.size - 1
@@ -444,7 +433,7 @@ def leapsecs_from_ym(y, m):
 
 def leapsecs_from_day(day):
     """Returns the number of elapsed leapseconds for a given number of days
-    elapsed since January 1, 2000. Supports scalar or array arguments."""
+    elapsed since January 1, 2000."""
 
     (y,m,d) = ymd_from_day(day)
     return leapsecs_from_ym(y,m)
@@ -453,10 +442,9 @@ def leapsecs_from_day(day):
 
 def seconds_on_day(day, leapseconds=True):
     """Returns the number of seconds duration for the given day number since
-    January 1, 2000. Supports scalar or array arguments."""
+    January 1, 2000."""
 
-    if not leapseconds: return 86400    # This can be a scalar because it will
-                                        # be casted to whatever shape is needed
+    if not leapseconds: return 86400
 
     shape = np.shape(day)
     if shape != (): day = np.asarray(day)
@@ -491,30 +479,21 @@ class Test_Leapseconds(unittest.TestCase):
 
 def day_sec_from_tai(tai):
     """Returns a number of integer days and the number of elapsed seconds into
-    that day, given the number of elapsed seconds since January 1, 2000 TAI.
-    Works for scalars or arrays."""
-
-    # Coerce to array if necessary
-    shape = np.shape(tai)
-    if shape != (): tai = np.asfarray(tai)
+    that day, given the number of elapsed seconds since January 1, 2000 TAI."""
 
     # Make an initial guess at the day and seconds
-    day = np.floor(tai//86400).astype("int")     # Must round down
+    day = INT(tai//86400)
     leapsecs = leapsecs_from_day(day)
     sec = tai - 86400. * day - leapsecs
 
     # Update the day and seconds if necessary
-    # ...scalar version...
-    if shape == ():
-        if sec < 0.:
-            day -= 1
-            sec += seconds_on_day(day)
-
-    # ...array version...
-    else:
-        select = np.where(sec < 0.)
-        day[select] -= 1
-        sec[select] += seconds_on_day(day[select])
+    if np.shape(tai):
+        mask = (sec < 0.)
+        day[mask] -= 1
+        sec[mask] += seconds_on_day(day[mask])
+    elif sec < 0.:
+        day -= 1
+        sec += seconds_on_day(day)
 
     return (day, sec)
 
@@ -522,10 +501,7 @@ def day_sec_from_tai(tai):
 
 def tai_from_day(day):
     """Returns a number of elapsed seconds since January 1, 2000 TAI, at the
-    beginning of the specified day since January 1, 2000 UTC. Works for scalars
-    or arrays."""
-
-    if np.shape(day) != (): day = np.asarray(day)
+    beginning of the specified day since January 1, 2000 UTC."""
 
     (y,m,d) = ymd_from_day(day)
     leapsecs = leapsecs_from_ym(y,m)
@@ -542,18 +518,18 @@ class Test_TAI_UTC(unittest.TestCase):
 
         # Check tai_from_day
         self.assertEqual(tai_from_day(0), 32)
-        self.assertEqual(tai_from_day([0,1])[0],    32)
-        self.assertEqual(tai_from_day([0,1])[1], 86432)
+        self.assertEqual(tai_from_day(np.array([0,1]))[0],    32)
+        self.assertEqual(tai_from_day(np.array([0,1]))[1], 86432)
 
         #Check day_sec_from_tai
         self.assertEqual(day_sec_from_tai(32.), (0, 0.))
-        self.assertEqual(day_sec_from_tai([35.,86435.])[0][0], 0)
-        self.assertEqual(day_sec_from_tai([35.,86435.])[0][1], 1)
-        self.assertEqual(day_sec_from_tai([35.,86435.])[1][0], 3.)
-        self.assertEqual(day_sec_from_tai([35.,86435.])[1][1], 3.)
+        self.assertEqual(day_sec_from_tai(np.array([35.,86435.]))[0][0], 0)
+        self.assertEqual(day_sec_from_tai(np.array([35.,86435.]))[0][1], 1)
+        self.assertEqual(day_sec_from_tai(np.array([35.,86435.]))[1][0], 3.)
+        self.assertEqual(day_sec_from_tai(np.array([35.,86435.]))[1][1], 3.)
 
         # A large number of dates, spanning > 200 years
-        daylist = range(-40000,40000,83)
+        daylist = np.arange(-40000,40000,83)
 
         # Test as a loop
         for day in daylist:
@@ -575,18 +551,14 @@ def hms_from_sec(sec):
     arguments. Input must be between 0 and 86410, where numbers above 86400 are
     treated as leap seconds."""
 
-    # Coerce to an array if necessary
-    shape = np.shape(sec)
-    if shape != (): sec = np.asarray(sec)
-
     # Test for valid range
     if (np.any(sec < 0.)):     raise ValueError("seconds < 0")
     if (np.any(sec > 86410.)): raise ValueError("seconds > 86410")
 
-    h = np.minimum(np.floor(sec//3600).astype("int"), 23)
+    h = np.minimum(INT(sec//3600), 23)
     t = sec - 3600*h
 
-    m = np.minimum(np.floor(t//60).astype("int"), 59)
+    m = np.minimum(INT(t//60), 59)
     t -= 60*m
 
     return (h, m, t)
@@ -596,9 +568,6 @@ def hms_from_sec(sec):
 def sec_from_hms(h, m, s):
     """Seconds into day from hour, minute and second. Supports scalar or array
     arguments."""
-
-    if np.shape(h) != () or np.shape(m) != () or np.shape(s) != 0:
-        (h,m,s) = np.broadcast_arrays(h, m, s)
 
     return 3600*h + 60*m + s
 
@@ -636,7 +605,7 @@ class Test_Time_of_Day(unittest.TestCase):
         self.assertTrue(np.all(errors == 0.))
 
         # Test all seconds
-        seclist = range(0,86410)
+        seclist = np.arange(0,86410)
 
         # Convert to hms and back
         (h, m, t) = hms_from_sec(seclist)
@@ -679,8 +648,6 @@ def tdb_from_tai(tai, iters=2):
     The default value of 2 iterations appears to give full double-precision
     convergencec for every possible case."""
 
-    if np.shape(tai) != (): tai = np.asfarray(tai)
-
     # Solve:
     #   tdb = tai + DELTA + K sin(E)
     #   E = M + EB sin(M)
@@ -702,9 +669,8 @@ def tdb_from_tai(tai, iters=2):
 
 def tai_from_tdb(tdb):
     """Converts from TDB to TAI. Operates on either a single scalar or an
-    arbitrary array of values. An exact solution(); no iteration required."""
+    arbitrary array of values. An exact solution; no iteration required."""
 
-    if np.shape(tdb) != (): tdb = np.asfarray(tdb)
     tdb = tdb + 43200.   # add 12 hours as tdb is respect to noon on 1/1/2000
 
     #   tai = tdb - DELTA - K sin(E)
@@ -772,14 +738,12 @@ def mjd_from_day(day):
     """Returns the Modified Julian Date for a specified day number relative to
     January 1, 2000. Works for scalars or arrays, expected to be integers."""
 
-    if np.shape(day) != (): day = np.asarray(day)
     return day + MJD_OF_EPOCH_2000
 
 def day_from_mjd(mjd):
     """Returns the day number relative to January 1, 2000 for the given Modified
     Julian Day. Works for scalars or arrays, expected to be integers."""
 
-    if np.shape(mjd) != (): mjd = np.asarray(mjd)
     return mjd - MJD_OF_EPOCH_2000
 
 # Floating-point versions
@@ -790,7 +754,6 @@ def jd_from_time(time):
     Julian Date assumes every day contains 86400 seconds; it ignores leap
     seconds."""
 
-    if np.shape(time) != (): tai = np.asfarray(time)
     return time/86400. + JD_OF_EPOCH_2000
 
 def mjd_from_time(time):
@@ -799,7 +762,6 @@ def mjd_from_time(time):
      definition of Julian Date assumes every day contains 86400 seconds; it
     ignores leap seconds."""
 
-    if np.shape(time) != (): time = np.asfarray(time)
     return time/86400. + MJD_OF_EPOCH_2000
 
 def time_from_jd(jd):
@@ -807,7 +769,6 @@ def time_from_jd(jd):
     the Julian Date. Works for scalars or arrays. This definition of Julian Date
     assumes every day contains 86400 seconds; it ignores leap seconds."""
 
-    if np.shape(jd) != (): jd = np.asfarray(jd)
     return (jd - JD_OF_EPOCH_2000) * 86400.
 
 def time_from_mjd(mjd):
@@ -815,7 +776,6 @@ def time_from_mjd(mjd):
     the Modified Julian Date. Works for scalars or arrays. This definition of
     MJD assumes every day contains 86400 seconds; it ignores leap seconds."""
 
-    if np.shape(mjd) != (): mjd = np.asfarray(mjd)
     return (mjd - MJD_OF_EPOCH_2000) * 86400.
 
 # Floating-point UTC versions
@@ -825,35 +785,23 @@ def jd_from_day_sec(day, sec, leapseconds=True):
     scalars or arrays. This definition of Julian Date includes leap seconds, so
     some days are longer than others."""
 
-    # Broadcast arrays to the same shape if necessary
-    if np.shape(day) != () or np.shape(sec) != ():
-        (day, sec) = np.broadcast_arrays(day, sec)
-        sec = sec.astype("float")
-
-    return day + sec/seconds_on_day(day, leapseconds) + JD_OF_EPOCH_2000
+    # Add zero to force conversion to float
+    return day + (sec + 0.)/seconds_on_day(day, leapseconds) + JD_OF_EPOCH_2000
 
 def mjd_from_day_sec(day, sec, leapseconds=True):
     """Returns the Modified Julian Date for a given UTC day and seconds. Works
     for scalars or arrays. This definition of MJD includes leap seconds, so some
     days are longer than others."""
 
-    # Broadcast arrays to the same shape if necessary
-    if np.shape(day) != () or np.shape(sec) != ():
-        (day, sec) = np.broadcast_arrays(day, sec)
-        sec = sec.astype("float")
-
-    return day + sec/seconds_on_day(day, leapseconds) + MJD_OF_EPOCH_2000
+    return day + (sec + 0.)/seconds_on_day(day, leapseconds) + MJD_OF_EPOCH_2000
 
 def day_sec_from_jd(jd, leapseconds=True):
     """Returns a UTC day number and seconds based on a Julian Date. Works for
     scalars or arrays. This definition of Julian Date allows for leap seconds,
     so some days are longer than others."""
 
-    # Coerce to array if array-like
-    if np.shape(jd) != (): jd = np.asfarray(jd)
-
     delta = jd - JD_OF_EPOCH_2000
-    day = np.floor(delta).astype("int")
+    day = INT(delta//1)
     sec = seconds_on_day(day, leapseconds) * (delta - day)
 
     return (day, sec)
@@ -863,11 +811,8 @@ def day_sec_from_mjd(mjd, leapseconds=True):
     scalars or arrays. This definition of Julian Date allows for leap seconds,
     so some days are longer than others."""
 
-    # Coerce to array if array-like
-    if np.shape(mjd) != (): mjd = np.asfarray(mjd)
-
     delta = mjd - MJD_OF_EPOCH_2000
-    day = np.floor(delta).astype("int")
+    day = INT(delta//1)
     sec = seconds_on_day(day, leapseconds) * (delta - day)
 
     return (day, sec)
@@ -884,10 +829,10 @@ class Test_JD_MJD(unittest.TestCase):
         self.assertEqual(mjd_from_day(0), 51544)
         self.assertEqual(day_from_mjd(51545), 1)
 
-        self.assertTrue(np.all(mjd_from_day(range(10)) ==
+        self.assertTrue(np.all(mjd_from_day(np.arange(10)) ==
                                np.arange(10) + 51544))
 
-        self.assertTrue(np.all(day_from_mjd(range(10)) ==
+        self.assertTrue(np.all(day_from_mjd(np.arange(10)) ==
                                np.arange(10) - 51544))
 
         # Test MJD floating-point conversions spanning 1000 years
@@ -948,10 +893,6 @@ def utc_from_day_sec_as_type(day, sec, time_type="UTC"):
     # Conversion UTC to UCT is easy
     if time_type == "UTC": return (day, sec)
 
-    # Broadcast to arrays of the same shape if necessary
-    if np.shape(day) != () or np.shape(sec) != ():
-        (day,sec) = np.broadcast_arrays(day,sec)
-
     # Conversion from day and second to TAI ignores leap seconds
     if time_type == "TAI":
         tai = 86400. * day + sec
@@ -970,14 +911,10 @@ def day_sec_as_type_from_utc(day, sec, time_type="UTC"):
     # Conversion UTC to UCT is easy
     if time_type == "UTC": return (day, sec)
 
-    # Broadcast to arrays of the same shape if necessary
-    if np.shape(day) != () or np.shape(sec) != ():
-        (day,sec) = np.broadcast_arrays(day,sec)
-
     # Conversion from TAI to day and second ignores leap seconds
     if time_type == "TAI":
         tai = tai_from_day(day) + sec
-        day = np.floor(tai / 86400.)
+        day = tai // 86400.
         sec = tai - 86400. * day
         return (day, sec)
 
@@ -985,7 +922,7 @@ def day_sec_as_type_from_utc(day, sec, time_type="UTC"):
     if time_type == "TDB":
         tai = tai_from_day(day) + sec
         tdb = tdb_from_tai(tai)
-        day = np.floor(tdb / 86400.)
+        day = tdb // 86400.
         sec = tdb - 86400. * day
         return (day, sec)
 
@@ -1002,12 +939,12 @@ class Test_Conversions(unittest.TestCase):
         # TAI tests...
 
         # TAI was 31-32 seconds ahead of UTC in 1999,2000,2001
-        (day,sec) = day_sec_as_type_from_utc((-366,0,366),0.,"TAI")
+        (day,sec) = day_sec_as_type_from_utc(np.array((-366,0,366)),0.,"TAI")
         self.assertTrue(np.all(day == (-366,0,366)))
         self.assertTrue(np.all(sec == (31.,32.,32.)))
 
         # Inverse of the above
-        (day,sec) = utc_from_day_sec_as_type((-366,0,366),32.,"TAI")
+        (day,sec) = utc_from_day_sec_as_type(np.array((-366,0,366)),32.,"TAI")
         self.assertTrue(np.all(day == (-366,0,366)))
         self.assertTrue(np.all(sec == (1.,0.,0.)))
 
@@ -1024,7 +961,7 @@ class Test_Conversions(unittest.TestCase):
         self.assertEqual(sec,0)
 
         # Now do a batch test 1971-2012. Conversions should be exact.
-        daylist = range(day_from_ymd(1971,1,1),day_from_ymd(2012,1,1))
+        daylist = np.arange(day_from_ymd(1971,1,1),day_from_ymd(2012,1,1))
 
         (day,sec) = day_sec_as_type_from_utc(daylist,43200.,"TAI")
         (dtest,stest) = utc_from_day_sec_as_type(day,sec,"TAI")
@@ -1149,14 +1086,7 @@ def hms_format_from_sec(sec, digits=None, suffix="", buffer=None):
     if digits is None or digits < 0:
         secfmt = "{:02d}"
         lsec = 2
-
-        # Round seconds to int if necessary
-        if np.shape(s) == ():
-            if type(s) != type(0):
-                s = int((s + 0.5) // 1)
-        else:
-            if s.dtype != np.dtype("int"):
-                s = np.floor(s + 0.5).astype("int")
+        s = INT((s + 0.5) // 1)
     else:
         secfmt = "{:0" + str(digits+3) + "." + str(digits) + "f}"
         lsec = 3 + digits
@@ -1253,11 +1183,11 @@ def _yxdhms_format_from_day_sec(day, sec, ymd=True, sep="T", digits=None,
     # Round the seconds
     if digits is None or digits < 0:
         lsec = 2
-        sec = np.floor(sec + 0.5)
+        sec = (sec + 0.5)//1
     else:
         lsec = 3 + digits
         factor = 10.**digits
-        sec = np.floor(sec * factor + 0.5) / factor
+        sec = ((sec + 0.5)//1) / factor
 
     # Return a scalar
     if np.shape(day) == () and np.shape(sec) == ():
@@ -1382,13 +1312,13 @@ class Test_Formatting(unittest.TestCase):
         # ymd_format_from_day()
         self.assertEqual(ymd_format_from_day(0), "2000-01-01")
 
-        self.assertTrue(np.all(ymd_format_from_day([-365,0,366]) ==
+        self.assertTrue(np.all(ymd_format_from_day(np.array([-365,0,366])) ==
                         np.array([b"1999-01-01", b"2000-01-01", b"2001-01-01"])))
 
         # yd_format_from_day()
         self.assertEqual(yd_format_from_day(0), "2000-001")
 
-        self.assertTrue(np.all(yd_format_from_day([-365,0,366]) ==
+        self.assertTrue(np.all(yd_format_from_day(np.array([-365,0,366])) ==
                         np.array([b"1999-001", b"2000-001", b"2001-001"])))
 
         # Check if yd_format_from_day start from 2000-001
@@ -1420,14 +1350,14 @@ class Test_Formatting(unittest.TestCase):
         self.assertEqual(ymdhms_format_from_day_sec(0,0,'T',None,'Z'),
                          "2000-01-01T00:00:00Z")
 
-        ymdhms = ymdhms_format_from_day_sec(np.array([0,366]),
-                                            np.array([0,43200]))
+        ymdhms = ymdhms_format_from_day_sec(np.array(np.array([0,366])),
+                                            np.array(np.array([0,43200])))
         self.assertTrue(np.all(ymdhms == np.array((b"2000-01-01T00:00:00",
                                                    b"2001-01-01T12:00:00"))))
 
         # Check TAI formatting
         # The 32's below are for the offset between TAI and UTC
-        self.assertTrue(np.all(ydhms_format_from_tai([32.,366.*86400.+32.]) ==
+        self.assertTrue(np.all(ydhms_format_from_tai(np.array([32.,366.*86400.+32.])) ==
                     np.array((b"2000-001T00:00:00", b"2001-001T00:00:00"))))
 
 ################################################################################
