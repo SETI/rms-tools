@@ -143,7 +143,10 @@ class Tabulation(object):
             self.func = interp1d(self.x, self.y, kind="linear",
                                  bounds_error=False, fill_value=0.)
 
-        return self.func(x)
+        if np.shape(x):
+            return self.func(x)
+        else:
+            return float(self.func(x)[()])
 
     def __mul__(self, other):
 
