@@ -1,0 +1,7 @@
+include LICENSE.txt
+include README.txt
+include cspice/*.bat
+include cspice/*.i
+include cspice/*.pyd
+include cspice/*.sh
+include cspice/*.so

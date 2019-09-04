@@ -1,2 +1,5 @@
+numpy==1.16.5
+Pillow==6.1.0
+pyfits==3.5
 pyparsing==2.0.1
-numpy==1.7.0
+scipy==1.2.2
