@@ -10,3 +10,6 @@ cspice/_cspice.pyd
 cspice-w32/
 cspice-w64/
 cspyce/cspyce0/cspice
+MANIFEST
+dist/
+venv/
