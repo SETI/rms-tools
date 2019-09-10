@@ -1,4 +1,4 @@
-.PHONY: clean
+.PHONY: clean test
 
 ACTIVATE = source venv/bin/activate
 
@@ -9,6 +9,9 @@ dist : venv
 	# enough to be able to start work on pds-webtools, so I'm
 	# intentionally publishing incomplete work, with this warning.
 	$(ACTIVATE) && python setup.py sdist
+
+test  : venv
+	$(ACTIVATE) && pytest ./tests
 
 venv : requirements.txt
 	virtualenv --no-site-packages -p python2.7 $@
