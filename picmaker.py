@@ -1437,7 +1437,7 @@ def ReadImageArray1(filename, obj=None, hst=False):
 
     # Attempt to read a Numpy save file
     try:
-        array3d = np.load(filename)
+        array3d = np.load(filename, allow_pickle=True)
         if len(array3d.shape) == 2:
             array3d = array3d.reshape((1,) + array3d.shape)
         return (array3d, False, None)
