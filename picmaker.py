@@ -1441,7 +1441,7 @@ def ReadImageArray1(filename, obj=None, hst=False):
         if len(array3d.shape) == 2:
             array3d = array3d.reshape((1,) + array3d.shape)
         return (array3d, False, None)
-    except IOError:
+    except (IOError, ValueError):
         pass
 
     # Attempt to read a VICAR image
