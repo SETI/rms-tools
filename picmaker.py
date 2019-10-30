@@ -1437,11 +1437,11 @@ def ReadImageArray1(filename, obj=None, hst=False):
 
     # Attempt to read a Numpy save file
     try:
-        array3d = np.load(filename, allow_pickle=True)
+        array3d = np.load(filename)
         if len(array3d.shape) == 2:
             array3d = array3d.reshape((1,) + array3d.shape)
         return (array3d, False, None)
-    except IOError:
+    except (IOError, ValueError):
         pass
 
     # Attempt to read a VICAR image
@@ -1494,7 +1494,7 @@ def ReadImageArray1(filename, obj=None, hst=False):
                 try:
                     inst_id = hdulist[0].header['INSTRUME']
                     if 'DETECTOR' in hdulist[0].header:
-                      inst_id += '/' + hdulist[0].header['DETECTOR']  # For HST
+                      inst_id += '/' + str(hdulist[0].header['DETECTOR'])  # For HST
                 except KeyError:
                   try:
                     inst_id = hdulist[0].header['INSTRU']      # For NH
