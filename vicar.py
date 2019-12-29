@@ -1,4 +1,3 @@
-#!/usr/bin/python
 ################################################################################
 # vicar.py -- classes and methods to read and write VICAR image files.
 #
@@ -17,12 +16,14 @@
 # 8/23/13 MRS - added support for returning binary headers, prefix bytes,
 #   the raw VICAR header, and the raw VICAR extension header, from input files.
 # 9/19/13 MRS - added method get_values().
+# 12/29/19 MRS - compatible with Python 3 as well as Python 2.
 ################################################################################
 
 import numpy as np
 import re
 import sys
 import decimal as dec
+import numbers
 
 ################################################################################
 # VicarImage class
@@ -36,9 +37,11 @@ class VicarImage():
         header              complete VICAR header (including extension if
                             present) as a text string. Trailing null characters
                             have been removed.
-        raw_header          the VICAR header exactly as it appeared in the file.
-        extension_header    the VICAR extension header exactly as it appeared in
-                            the file, or an empty string if not present.
+        header_bytes        the VICAR header bytes exactly as they appeared in
+                            the file.
+        extension_bytes     the VICAR extension header bytes exactly as they
+                            appeared in the file, or an empty bytestring if not
+                            present.
         extension_lblsize   the size in bytes of the VICAR extension header if
                             present; otherwise 0.
         data_2d             the data as a 2-D array. If it is actually a 3-D
@@ -244,7 +247,7 @@ class VicarImage():
 
         # Read the beginning of the VICAR file to get the label size
         file.seek(0)
-        header = file.read(40)
+        header = str(file.read(40).decode())                    # Python 2 and 3
 
         if header[0:8] != "LBLSIZE=":
             raise VicarError("Missing LBLSIZE keyword, file: " + filename)
@@ -255,9 +258,10 @@ class VicarImage():
 
         # Read the leading VICAR header
         file.seek(0)
-        this.raw_header = file.read(vicar_LBLSIZE)
+        this.header_bytes = file.read(vicar_LBLSIZE)
 
-        this.header = this.raw_header.rstrip("\0")
+        this.header = str(this.header_bytes.rstrip(b"\0").decode())
+                                                                # Python 2 and 3
 
         # Interpret the header
         this._load_table(this.header)
@@ -285,19 +289,19 @@ class VicarImage():
                              + filename)
 
         # Append the extension header, if present, and re-load the table
-        this.extension_header = ""
+        this.extension_bytes = b""
         this.extension_lblsize = 0
-        if vicar_EOL == 1:
+        if vicar_EOL != 0:
             offset = (vicar_LBLSIZE + vicar_RECSIZE * vicar_NLB
                                     + vicar_RECSIZE * vicar_N2 * vicar_N3)
             file.seek(offset)
-            temp = file.read(40)
+            temp = str(file.read(40).decode())                  # Python 2 and 3
 
             # Sometime EOL = 1 but the file has no extension
             if len(temp) == 0:
                 vicar_EOL = 0
 
-        if vicar_EOL == 1:
+        if vicar_EOL != 0:
             if temp[0:8] != "LBLSIZE=":
                 raise VicarError("Missing LBLSIZE keyword in extension, file: "
                                  + filename)
@@ -306,9 +310,10 @@ class VicarImage():
             this.extension_lblsize = int(temp[8:iblank])
 
             file.seek(offset)
-            this.extension_header = file.read(this.extension_lblsize)
+            this.extension_bytes = file.read(this.extension_lblsize)
 
-            this.header += this.extension_header.rstrip("\0")
+            this.header += str(this.extension_bytes.rstrip(b"\0").decode())
+                                                                # Python 2 and 3
             this._load_table(this.header)
 
         # Look up the numpy dtype corresponding to the VICAR FORMAT
@@ -436,8 +441,8 @@ class VicarImage():
             self.is_from_file = False
 
         # Write the header
-        file.write(self.get_header())
-        
+        file.write(self.get_header().encode('ascii'))
+
         # Write the array
         self.data_3d.tofile(file, sep="")
 
@@ -458,11 +463,11 @@ class VicarImage():
         return self.keyword_count()
 
     def __getitem__(self, key):
-        if type(key) == type(""):
+        if isinstance(key, str):
             return self.get_value(keyword=key)
-        if type(key) == type(0):
+        if isinstance(key, numbers.Integral):
             return self.get_value(occurrence=key)
-        if type(key) == type(()):
+        if isinstance(key, (list,tuple)):
             if len(key) != 2:
                 raise ValueError("Tuple must contain keyword and index")
             return self.get_value(keyword=key[0], occurrence=key[1])
@@ -470,13 +475,13 @@ class VicarImage():
         raise TypeError("Invalid index type")
 
     def __setitem__(self, key, value):
-        if type(key) == type(""):
+        if isinstance(key, str):
             i = self.keyword_index(keyword=key)
             self.set_value_by_index(i, value)
-        if type(key) == type(0):
+        if isinstance(key, numbers.Integral):
             i = self.keyword_index(occurrence=key)
             self.set_value_by_index(i, value)
-        if type(key) == type(()):
+        if isinstance(key, (list,tuple)):
             if len(key) != 2:
                 raise ValueError("Tuple must contain keyword and index")
             i = self.keyword_index(keyword=key[0], occurrence=key[1])
@@ -485,13 +490,13 @@ class VicarImage():
         raise TypeError("Invalid index type")
 
     def __delitem__(self, key):
-        if type(key) == type(""):
+        if isinstance(key, str):
             i = self.keyword_index(keyword=key)
             self.delete_by_index(i)
-        if type(key) == type(0):
+        if isinstance(key, numbers.Integral):
             i = self.keyword_index(occurrence=key)
             self.delete_by_index(i)
-        if type(key) == type(()):
+        if isinstance(key, (list,tuple)):
             if len(key) != 2:
                 raise ValueError("Tuple must contain keyword and index")
             i = self.keyword_index(keyword=key[0], occurrence=key[1])
@@ -648,7 +653,7 @@ class VicarImage():
         if immutable and ignore: return
 
         # Convert tuples to lists
-        if type(value) == type(()): value = list(value)
+        if isinstance(value, tuple): value = list(value)
 
         # Replace the value
         self.table[index][1] = value
@@ -753,7 +758,7 @@ class VicarImage():
             # Replace the values of required keywords
             if required:
                 destination.set_value(keyword, value, ignore=True,
-                                                     override=override)
+                                                      override=override)
             # Otherwise just append a new keyword
             else:
                 destination.append_keyword(keyword, value)
@@ -781,7 +786,7 @@ class VicarImage():
                                + " cannot be inserted")
 
         # Convert tuples to lists
-        if type(value) == type(()): value = list(value)
+        if isinstance(value, tuple): value = list(value)
 
         # Insert the keyword at the specified location
         if index != -1:
@@ -810,7 +815,7 @@ class VicarImage():
                                + " cannot be appended")
 
         # Convert tuples to lists
-        if type(value) == type(()): value = list(value)
+        if isinstance(value, tuple): value = list(value)
 
         # Append keyword and set value
         self.table.append([keyword.upper(), value])
@@ -946,8 +951,8 @@ class VicarImage():
         ### Internal method returns a value in VICAR header format
         def _value_string(value):
 
-            # Anything but list
-            if type(value) != type([]): return _value_string1(value)
+            # Anything but list or tuple
+            if not isinstance(value, (list,tuple)): return _value_string1(value)
 
             # Add the individual elements to a list
             result = ["("]
@@ -965,21 +970,13 @@ class VicarImage():
         ### deal with lists
         def _value_string1(value):
 
-            typestr = str(type(value))
+            if isinstance(value, str): return "'" + value + "'"
+            if isinstance(value, dec.Decimal): return str(value)
+            if isinstance(value, numbers.Integral): return str(value)
+            if isinstance(value, numbers.Real): return repr(value)
 
-            # Integer
-            if "int" in typestr or "long" in typestr: return str(value)
-
-            # Float
-            if "float" in typestr: return repr(value)
-
-            # Decimal
-            if type(value) == type(dec.Decimal("0.")): return str(value)
-
-            # String
-            if type(value) == type(""): return "'" + value + "'"
-
-            raise VicarError("Illegal value type for a VICAR keyword: " + value)
+            raise VicarError("Illegal value type for a VICAR keyword: " +
+                             str(value) + " (" + str(type(value)) + ")")
 
         ### Actual method begins here
         # Prepare the header string as a list of short strings, then join them
@@ -1012,7 +1009,7 @@ class VicarImage():
         digits = 8      # A practical upper limit on the digits of LBLSIZE!
         vicar_RECSIZE = self.get_value("RECSIZE")
         vicar_LBLSIZE = vicar_RECSIZE * ((length + digits + vicar_RECSIZE - 1)
-                                        / vicar_RECSIZE)
+                                        // vicar_RECSIZE)
 
         self.table[0] = ["LBLSIZE", vicar_LBLSIZE]
         result[1] = _value_string(vicar_LBLSIZE)
@@ -1021,7 +1018,7 @@ class VicarImage():
         # LBLSIZE by one whole record
         digits = len(result[1])
         self.LBLSIZE = vicar_RECSIZE * ((length + digits + vicar_RECSIZE - 1)
-                                       / vicar_RECSIZE)
+                                       // vicar_RECSIZE)
 
         self.table[0] = ["LBLSIZE", vicar_LBLSIZE]
         result[1] = _value_string(vicar_LBLSIZE)
