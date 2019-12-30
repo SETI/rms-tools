@@ -45,7 +45,7 @@
 # 3/29/18 (MRS) - Now compatible with both Python 2 and Python 3.
 #
 # 8/28/19 (MRS) - Eliminated returns of shapeless NumPy arrays; added minimal
-#   for SPICE TDT time.
+#   support for SPICE TDT time.
 ################################################################################
 
 from __future__ import print_function, division
@@ -1363,7 +1363,9 @@ class Test_Formatting(unittest.TestCase):
 
 def day_from_iso(strings, validate=True, strip=False):
     """Returns a day number based on a parsing of a date string in ISO format.
-    The format is strictly required to be either yyyy-mm-dd or yyyy-ddd.
+    The format is strictly required to be either "yyyy-mm-dd" or "yyyy-ddd".
+    It works on bytestring arrays in addition to individual strings or
+    bytestrings.
 
     Now revised to avoid the slow julian_isoparser routines. It should be very
     fast. It also works for lists or arrays of arbitrary shape, provided every
@@ -1372,6 +1374,10 @@ def day_from_iso(strings, validate=True, strip=False):
     If validate=True, then the syntax and year/month/day values are checked more
     carefully.
     """
+
+    # Convert to bytestring if necessary
+    if isinstance(strings, str):
+        strings = strings.encode()
 
     # Old, slow procedure...
     #
@@ -1386,7 +1392,7 @@ def day_from_iso(strings, validate=True, strip=False):
     first_index = len(strings.shape) * (0,)
     first = strings[first_index]
 
-    # Skip over leading and trailing blanks
+    # Locate indices that skip over leading and trailing blanks
     if strip:
         for k0 in range(len(first)):
             if first[k0:k0+1] != b' ':
@@ -1460,7 +1466,8 @@ def day_from_iso(strings, validate=True, strip=False):
 
 def sec_from_iso(strings, validate=True, strip=False):
     """Returns a second value based on a parsing of a time string in ISO format.
-    The format is strictly required to be hh:mm:ss[.s...][Z].
+    The format is strictly required to be "hh:mm:ss[.s...][Z]". It works on
+    bytestring arrays in addition to individual strings or bytestrings.
 
     Now revised to avoid the slow julian_isoparser routines. It should be very
     fast. It also works for lists or arrays of arbitrary shape, provided every
@@ -1478,7 +1485,7 @@ def sec_from_iso(strings, validate=True, strip=False):
     #
     # return _sec_from_dict(dict)
 
-    # Convert to an array of strings
+    # Convert to an array of strings, replace Unicode
     strings = np.array(strings).astype('S')
 
     first_index = len(strings.shape) * (0,)
@@ -1593,7 +1600,8 @@ def sec_from_iso(strings, validate=True, strip=False):
 def day_sec_from_iso(strings, validate=True, strip=False):
     """Returns a day and second based on a parsing of the string in ISO
     date-time format. The format is strictly enforced to be an ISO date plus an
-    ISO time, separated by a single space or a "T"."""
+    ISO time, separated by a single space or a "T". It works for bytestring
+    arrays in addition to individual strings or bytestrings."""
 
     # Old, slow procedure...
     #
@@ -1606,6 +1614,7 @@ def day_sec_from_iso(strings, validate=True, strip=False):
     #
     # return (day, sec)
 
+    # Convert to an array of strings, replace Unicode
     strings = np.array(strings).astype('S')
 
     first_index = len(strings.shape) * (0,)
@@ -1654,7 +1663,8 @@ def day_sec_from_iso(strings, validate=True, strip=False):
 
 def tai_from_iso(strings, validate=True, strip=False):
     """Returns the elapsed seconds TAI from January 1, 2000 given an ISO date
-    or date-time string. Works for scalars or arrays."""
+    or date-time string. Works for individual strings or bytestrings and also
+    for arrays of bytestrings."""
 
     (day, sec) = day_sec_from_iso(strings, validate, strip)
     return tai_from_day(day) + sec
@@ -1795,7 +1805,7 @@ class Test_ISO_Parsing(unittest.TestCase):
 # The grammar is defined in julian_dateparser.py, abbreviated jdp here.
 #
 # Note: Unlike all other julian library routines, these do not support
-# array or arry-like arguments.
+# array or array-like arguments.
 ################################################################################
 
 global DATE_PARSER_DICT, DATETIME_PARSER_DICT

@@ -247,7 +247,7 @@ class VicarImage():
 
         # Read the beginning of the VICAR file to get the label size
         file.seek(0)
-        header = str(file.read(40).decode())                    # Python 2 and 3
+        header = str(file.read(40).decode('latin1'))            # Python 2 and 3
 
         if header[0:8] != "LBLSIZE=":
             raise VicarError("Missing LBLSIZE keyword, file: " + filename)
@@ -260,7 +260,7 @@ class VicarImage():
         file.seek(0)
         this.header_bytes = file.read(vicar_LBLSIZE)
 
-        this.header = str(this.header_bytes.rstrip(b"\0").decode())
+        this.header = str(this.header_bytes.rstrip(b"\0").decode('latin1'))
                                                                 # Python 2 and 3
 
         # Interpret the header
@@ -295,7 +295,7 @@ class VicarImage():
             offset = (vicar_LBLSIZE + vicar_RECSIZE * vicar_NLB
                                     + vicar_RECSIZE * vicar_N2 * vicar_N3)
             file.seek(offset)
-            temp = str(file.read(40).decode())                  # Python 2 and 3
+            temp = str(file.read(40).decode('latin1'))          # Python 2 and 3
 
             # Sometime EOL = 1 but the file has no extension
             if len(temp) == 0:
@@ -312,7 +312,8 @@ class VicarImage():
             file.seek(offset)
             this.extension_bytes = file.read(this.extension_lblsize)
 
-            this.header += str(this.extension_bytes.rstrip(b"\0").decode())
+            this.header += \
+                str(this.extension_bytes.rstrip(b"\0").decode('latin1'))
                                                                 # Python 2 and 3
             this._load_table(this.header)
 

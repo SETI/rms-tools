@@ -40,8 +40,6 @@
 #   - Lots of new unit tests.
 ################################################################################
 
-from __future__ import print_function
-
 import sys
 import os
 import datetime as dt
@@ -1383,8 +1381,8 @@ class Test_PdsTable(unittest.TestCase):
     inst_cmprs_rate = test_table.get_column('INST_CMPRS_RATE')
     icr_mask = test_table.get_column_mask('INST_CMPRS_RATE')
     for (value, flag) in zip(inst_cmprs_rate, icr_mask):
-        self.assertTrue(flag == (value[0] < 2 or value[0] > 3 or
-                                 value[1] < 2 or value[1] > 3))
+        self.assertTrue(flag[0] == (value[0] < 2 or value[0] > 3))
+        self.assertTrue(flag[1] == (value[1] < 2 or value[1] > 3))
 
     filter_temperature = test_table.get_column('FILTER_TEMPERATURE')
     ft_mask = test_table.get_column_mask('FILTER_TEMPERATURE')

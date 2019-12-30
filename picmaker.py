@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 ################################################################################
 # picmaker.py
 #
@@ -704,7 +704,7 @@ def main():
                 filtered = fnmatch.filter(filenames_in_this_dir, pattern)
                 if filtered == []: continue
 
-                if verbose: print this_dir
+                if verbose: print(this_dir)
 
                 filepaths = [os.path.join(this_dir,f) for f in filtered]
 
@@ -717,7 +717,7 @@ def main():
 
         # Non-recursive case
         else:
-            if verbose: print dirpath
+            if verbose: print(dirpath)
 
             filenames_in_dir = os.listdir(dirpath)
             filtered = fnmatch.filter(filenames_in_dir, pattern)
@@ -737,7 +737,7 @@ def main():
     sys.exit(1)
 
   except KeyboardInterrupt:
-    print '*** KeyboardInterrupt ***'
+    print('*** KeyboardInterrupt ***')
     sys.exit(2)
 
 ################################################################################
@@ -1359,7 +1359,7 @@ def ImagesToPics(filenames, directory=None,
         if proceed:
             info = sys.exc_info()
             traceback.print_tb(info[2])
-            print infile, '**** %s: %s' % (info[0].__name__, info[1][0])
+            print(infile, '**** %s: %s' % (info[0].__name__, info[1][0]))
         else:
             raise
 
@@ -1430,7 +1430,7 @@ def ReadImageArray1(filename, obj=None, hst=False):
         if len(array3d.shape) == 2:
             array3d = array3d.reshape((1,) + array3d.shape)
         return (array3d, False, None)
-    except IOError, e:      # Problem reading file
+    except IOError as e:    # Problem reading file
         raise e
     except Exception:       # Not a pickle file
         pass
@@ -1468,10 +1468,10 @@ def ReadImageArray1(filename, obj=None, hst=False):
         pass
 
     # Attempt to read a FITS image
-    with open(filename, 'r') as f:
+    with open(filename, 'rb') as f:
         test = f.read(9)
 
-    if test == 'SIMPLE  =':
+    if test == b'SIMPLE  =':
         try:
             with warnings.catch_warnings(): # Error, not warning, if not FITS
                 warnings.filterwarnings('error')
@@ -1565,7 +1565,6 @@ def ReadImageArray1(filename, obj=None, hst=False):
                     except ValueError:
                         pass
 
-                    print 11111, filename, obj, hdulist[obj]
                     array3d = hdulist[obj].data.copy()
 
                 if array3d is None:
@@ -2027,7 +2026,7 @@ def TintedColormap(filter_info):
                 wavelength = 220 * 3.5
 
             if wavelength == 0:
-                print '******UNKNOWN FILTER:', inst_id, filter_name
+                print('******UNKNOWN FILTER:', inst_id, filter_name)
                 return None
 
             wavelength = max(wavelength, RGB_BY_NM[ 0,0])

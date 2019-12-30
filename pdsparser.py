@@ -58,8 +58,6 @@
 # MRS, July 26, 2009
 ################################################################################
 
-from __future__ import print_function
-
 from pyparsing import *
 import decimal as dec
 import datetime as dt
