@@ -93,7 +93,8 @@ class PdsTable(object):
             label_file      the path to the PDS label of the table file. Must be
                             supplied to get proper relative path resolution.
             label_contents  The contents of the label as a list of strings if
-                            we shouldn't read it from the file.
+                            we shouldn't read it from the file. Alternatively, a
+                            PdsLabel object to avoid label parsing entirely.
             columns         an optional list of the names of the columns to
                             return. If the list is empty, then every column is
                             returned.
@@ -448,6 +449,13 @@ class PdsTable(object):
 
         self._rows_by_filename = None
         self.filename_keys     = None
+
+    @property
+    def pdslabel(self):
+        """Property to return the PdsLabel object, so that it can be used as a
+        label_contents input parameter in subsequent calls."""
+
+        return self.info.label
 
     ############################################################################
     # Support for extracting rows and columns
@@ -1482,6 +1490,13 @@ class Test_PdsTable(unittest.TestCase):
             'coiss_2039', 'data/1573186009_1573197826/N1573186041_1.IMG'), 0)
     self.assertEqual(partial_table.find_row_indices_by_volume_filespec(
             'coiss_2039', 'data/1573186009_1573197826/N1573186041_1.IMG'), [0])
+
+    ####################################
+    # PdsLabel input option
+    ####################################
+
+    test = PdsTable(INDEX_PATH, label_contents=partial_table.pdslabel)
+    self.assertTrue(test.pdslabel is partial_table.pdslabel)
 
 ########################################
 
