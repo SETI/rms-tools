@@ -38,6 +38,8 @@
 #     in the PDS3 label.
 #   - Invalid values (e.g., -1.e32) can also be defined globally.
 #   - Lots of new unit tests.
+# 3/15/20 MRS - Added row_range option for quick access to a few rows of an
+#   index.
 ################################################################################
 
 import sys
@@ -54,6 +56,11 @@ import julian
 STR_DTYPE = np.array(['x']).dtype.kind
 PYTHON2 = (sys.version_info[0] == 2)
 PYTHON3 = not PYTHON2
+
+if PYTHON3:
+    ENCODING = {'encoding': 'latin-1'}  # For open() of ASCII files in Python 3
+else:
+    ENCODING = {}
 
 # This is an exhaustive tuple of string-like types
 STRING_TYPES = (str, bytes, bytearray, np.str_, np.bytes_, np.unicode_)
@@ -79,14 +86,15 @@ class PdsTable(object):
     def __init__(self, label_file, label_contents=None, times=[], columns=[],
                        nostrip=[], callbacks={}, ascii=False, replacements={},
                        invalid={}, valid_ranges={}, table_callback=None,
-                       merge_masks=False, filename_keylen=0):
+                       merge_masks=False, filename_keylen=0, row_range=None):
         """Constructor for a PdsTable object.
 
         Input:
             label_file      the path to the PDS label of the table file. Must be
                             supplied to get proper relative path resolution.
             label_contents  The contents of the label as a list of strings if
-                            we shouldn't read it from the file.
+                            we shouldn't read it from the file. Alternatively, a
+                            PdsLabel object to avoid label parsing entirely.
             columns         an optional list of the names of the columns to
                             return. If the list is empty, then every column is
                             returned.
@@ -136,6 +144,9 @@ class PdsTable(object):
                             key of the index if this table is to be indexed by
                             filename. Zero to use the entire file basename after
                             stripping off the extension.
+            row_range       a tuple or list integers containing the index of the
+                            first row to read and the first row to omit. If not
+                            specified, then all the rows are read.
 
         Notes: If both a replacement and a callback are provided for the same
         column, the callback is applied first. The invalid and valid_ranges
@@ -164,17 +175,42 @@ class PdsTable(object):
         self.keys_lc = [k.lower() for k in self.keys]
 
         # Load the table data in binary
-        with open(self.info.table_file_path, "rb") as f:
-            lines = f.readlines()
+        if row_range is None:
+            self.first = 0
+            self.rows = self.info.rows
+
+            with open(self.info.table_file_path, "rb") as f:
+                lines = f.readlines()
+
+            # Check line count
+            if len(lines) != self.info.rows:
+                raise ValueError('row count mismatch: ' +
+                                 '%d rows in file; ' % len(lines) +
+                                 'label says ROWS = %d' % self.info.rows)
+
+        else:
+            self.first = row_range[0]
+            self.rows = row_range[1] - row_range[0]
+
+            record_bytes = self.info.label['RECORD_BYTES'].value
+            with open(self.info.table_file_path, "rb") as f:
+                f.seek(row_range[0] * record_bytes)
+                lines = f.readlines(self.rows * record_bytes - 1)
+
+            # Check line count
+            if len(lines) > self.rows:
+                lines = lines[:self.rows]
+
+            if len(lines) != self.rows:
+                raise ValueError(
+                    'row count mismatch: ' +
+                    '%d row%s read; ' % (len(lines),
+                                        '' if len(lines) == 1 else 's') +
+                    '%d row%s requested' % (count,
+                                            '' if count == 1 else 's'))
 
         if table_callback is not None:
             lines = table_callback(lines)
-
-        # Check line count
-        if len(lines) != self.info.rows:
-            raise ValueError('row count mismatch: ' +
-                             '%d rows in file; ' % len(lines) +
-                             'label says ROWS = %d' % self.info.rows)
 
         table = np.array(lines, dtype='S')
         table.dtype = np.dtype(self.info.dtype0)
@@ -264,10 +300,10 @@ class PdsTable(object):
                     # to be applied as ASCII byte strings
 
                     if PYTHON3 and isinstance(before, (str, np.str_)):
-                        before = before.encode()
+                        before = before.encode(**ENCODING)
 
                     if PYTHON3 and isinstance(after, (str, np.str_)):
-                        after  = after.encode()
+                        after  = after.encode(**ENCODING)
 
                     # Replace values (suppressing FutureWarning)
                     items = items.astype('S')
@@ -324,7 +360,7 @@ class PdsTable(object):
 
                                 error_count += 1
                                 if not isinstance(item, str):
-                                    item = item.decode()
+                                    item = item.decode(**ENCODING)
 
                                 if strip:
                                     item = item.strip()
@@ -414,6 +450,13 @@ class PdsTable(object):
         self._rows_by_filename = None
         self.filename_keys     = None
 
+    @property
+    def pdslabel(self):
+        """Property to return the PdsLabel object, so that it can be used as a
+        label_contents input parameter in subsequent calls."""
+
+        return self.info.label
+
     ############################################################################
     # Support for extracting rows and columns
     ############################################################################
@@ -443,7 +486,7 @@ class PdsTable(object):
 
         # For each row...
         row_dicts = []
-        for row in range(self.info.rows):
+        for row in range(self.rows):
 
             # Create and append the dictionary
             row_dict = {}
@@ -644,7 +687,7 @@ class PdsTable(object):
                     self._volume_colname = self.keys[k]
                     return k
 
-        return -1
+        return self._volume_colname_index
 
     def filespec_column_index(self):
         """The index of the column containing file specification name, or -1 if
@@ -666,7 +709,7 @@ class PdsTable(object):
                     self._filespec_colname = self.keys[k]
                     return k
 
-        return -1
+        return self._filespec_colname_index
 
     def find_row_indices_by_volume_filespec(self, volume_id, filespec=None,
                                                   limit=None, substring=False):
@@ -712,7 +755,7 @@ class PdsTable(object):
             filespec_colname = self._filespec_colname_lc + '_lower'
 
         # Convert to VMS format for really old indices
-        example = dicts_by_row[0][self.filespec_colname_lc]
+        example = dicts_by_row[0][self._filespec_colname_lc]
         if '[' in example:
             parts = filespec.split('/')
             filespec = '[' + '.'.join(parts[:-1]) + ']' + parts[-1]
@@ -917,8 +960,12 @@ class PdsTableInfo(object):
 
         Input:
             label_file_path path to the label file
-            label_list      if provided, a list containing all the records of
-                            the PDS label; otherwise, the label file is read.
+            label_list      an option to override the parsing of the label.
+                            If this is a list, it is interpreted as containing
+                            all the records of the PDS label, in which case the
+                            overrides the contents of the label file.
+                            Alternatively, this can be a PdsLabel object that
+                            was already parsed.
             invalid         an optional dictionary keyed by column name. The
                             returned value must be a list or set of values that
                             are to be treated as invalid, missing or unknown.
@@ -931,6 +978,8 @@ class PdsTableInfo(object):
         # Parse the label
         if label_list is None:
             self.label = pdsparser.PdsLabel.from_file(label_file_path)
+        elif isinstance(label_list, pdsparser.PdsLabel):
+            self.label = label_list
         else:
             self.label = pdsparser.PdsLabel.from_string(label_list)
 
@@ -1401,6 +1450,60 @@ class Test_PdsTable(unittest.TestCase):
     self.assertTrue(np.sum(instrument_data_rate == 1.) == 99)
     self.assertTrue(np.all(instrument_data_rate != 182.783997))
     self.assertTrue(not np.any(idr_mask))
+
+    ####################################
+    # Row lookups
+    ####################################
+
+    self.assertEqual(test_table_basic.filespec_column_index(), 1)
+    self.assertEqual(test_table_basic.volume_column_index(), 2)
+
+    self.assertEqual(test_table_basic.find_row_index_by_volume_filespec(
+            '', 'data/1573186009_1573197826/N1573186041_1.IMG'), 2)
+    self.assertEqual(test_table_basic.find_row_indices_by_volume_filespec(
+            '', 'data/1573186009_1573197826/N1573186041_1.IMG'), [2])
+
+    self.assertEqual(test_table_basic.find_row_index_by_volume_filespec(
+            'COISS_2039', 'data/1573186009_1573197826/N1573186041_1.IMG'), 2)
+    self.assertEqual(test_table_basic.find_row_indices_by_volume_filespec(
+            'COISS_2039', 'data/1573186009_1573197826/N1573186041_1.IMG'), [2])
+
+    self.assertEqual(test_table_basic.find_row_index_by_volume_filespec(
+            'coiss_2039', 'data/1573186009_1573197826/N1573186041_1.IMG'), 2)
+    self.assertEqual(test_table_basic.find_row_indices_by_volume_filespec(
+            'coiss_2039', 'data/1573186009_1573197826/N1573186041_1.IMG'), [2])
+
+    ####################################
+    # Row ranges
+    ####################################
+
+    partial_table = PdsTable(INDEX_PATH, row_range=(2,4))
+    self.assertEqual(partial_table.rows, 2)
+
+    self.assertEqual(partial_table.filespec_column_index(), 1)
+    self.assertEqual(partial_table.volume_column_index(), 2)
+
+    self.assertEqual(partial_table.find_row_index_by_volume_filespec(
+            '', 'data/1573186009_1573197826/N1573186041_1.IMG'), 0)
+    self.assertEqual(partial_table.find_row_indices_by_volume_filespec(
+            '', 'data/1573186009_1573197826/N1573186041_1.IMG'), [0])
+
+    self.assertEqual(partial_table.find_row_index_by_volume_filespec(
+            'COISS_2039', 'data/1573186009_1573197826/N1573186041_1.IMG'), 0)
+    self.assertEqual(partial_table.find_row_indices_by_volume_filespec(
+            'COISS_2039', 'data/1573186009_1573197826/N1573186041_1.IMG'), [0])
+
+    self.assertEqual(partial_table.find_row_index_by_volume_filespec(
+            'coiss_2039', 'data/1573186009_1573197826/N1573186041_1.IMG'), 0)
+    self.assertEqual(partial_table.find_row_indices_by_volume_filespec(
+            'coiss_2039', 'data/1573186009_1573197826/N1573186041_1.IMG'), [0])
+
+    ####################################
+    # PdsLabel input option
+    ####################################
+
+    test = PdsTable(INDEX_PATH, label_contents=partial_table.pdslabel)
+    self.assertTrue(test.pdslabel is partial_table.pdslabel)
 
 ########################################
 
