@@ -944,8 +944,15 @@ class PdsTableInfo(object):
         for node in self.label:
             if node.name[0] == "^":
                 pointer_name = node.name[1:]
-                assert isinstance(node.pdsvalue, pdsparser.PdsSimplePointer)
-                self.table_file_name = node.pdsvalue.value
+                if isinstance(node.pdsvalue, pdsparser.PdsOffsetPointer):
+                    self.table_file_name = node.pdsvalue.value
+                    msg = ("Table file pointer '" + str(node.pdsvalue) +
+                           " is not a Simple Pointer and isn't fully "+
+                           "supported")
+                    warnings.warn(msg)
+                else:
+                    assert isinstance(node.pdsvalue, pdsparser.PdsSimplePointer)
+                    self.table_file_name = node.pdsvalue.value
 
         if self.table_file_name is None:
             raise IOerror("Pointer to a data file was not found in PDS label")
