@@ -61,6 +61,14 @@
 from pyparsing import *
 import decimal as dec
 import datetime as dt
+import sys
+
+# We need to specify encoding when we open labels in Python 3; we can't in
+# Python 2
+if sys.version_info >= (3,0):
+    ENCODING = {'encoding': 'latin-1'}  # Needed for open() of ASCII files
+else:
+    ENCODING = {}
 
 ################################################################################
 ################################################################################
@@ -1458,7 +1466,7 @@ class PdsLabel():
         """
 
         # Open file for read; could be binary but if so pretend it isn't
-        file = open(filename, "r")
+        file = open(filename, "r", **ENCODING)
 
         # Create a list of lines
         lines = []

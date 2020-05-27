@@ -184,7 +184,7 @@ class PdsTable(object):
 
             # Check line count
             if len(lines) != self.info.rows:
-                raise ValueError('row count mismatch: ' +
+                raise ValueError('row count mismatch: %s' % label_file +
                                  '%d rows in file; ' % len(lines) +
                                  'label says ROWS = %d' % self.info.rows)
 
@@ -213,7 +213,12 @@ class PdsTable(object):
             lines = table_callback(lines)
 
         table = np.array(lines, dtype='S')
-        table.dtype = np.dtype(self.info.dtype0)
+        try:
+            table.dtype = np.dtype(self.info.dtype0)
+        except ValueError:
+            raise ValueError('Error in PDS3 row description:\n' +
+                             'old dtype = ' + str(table.dtype) +
+                             ';\nnew dtype = ' + str(np.dtype(self.info.dtype0)))
         # table is now a 1-D array in which the ASCII content of each column
         # can be accessed by name. In Python 3, these are bytes, not strings
 
@@ -246,8 +251,8 @@ class PdsTable(object):
             else:
                 self.column_values[key] = [column]
 
-        # self.column_values now contains a list with one element for each item in
-        # that column. Each element is a 1-D array of ASCII strings, one for
+        # self.column_values now contains a list with one element for each item
+        # in that column. Each element is a 1-D array of ASCII strings, one for
         # each row.
 
         if STR_DTYPE == 'S': ascii = False
