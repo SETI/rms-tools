@@ -30,14 +30,13 @@ from pdsparser import PdsLabel
 from tabulation import Tabulation
 import pickle
 
-# try:
-#     import astropy.io.fits as pyfits
-# except ImportError:
-#     import pyfits
-
-with warnings.catch_warnings():
-    warnings.filterwarnings('ignore')
-    import pyfits
+# Use astropy.io.fits if possible
+try:
+    import astropy.io.fits as pyfits
+except ImportError:
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore')
+        import pyfits
 
 ################################################################################
 # Command-line program
