@@ -1443,6 +1443,12 @@ class PdsLabel():
 
     def __len__(self): return len(self.root)
 
+    def __contains__(self, key):
+        return key in {n.name for n in self.root.children}
+
+    def keys(self):
+        return [n.name for n in self.root.children]
+
     def as_dict(self):
         """Returns the contents of the label as a standard Python dictionary
         containing standard Python types of int, float, string, list, etc. It

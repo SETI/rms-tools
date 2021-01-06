@@ -26,11 +26,11 @@ from PIL import Image, ImageFilter
 from vicar import VicarImage, VicarError
 from colornames import ColorNames
 from tiff16 import WriteTiff16, ReadTiff16
-from pdsparser import PdsLabel
+import pdsparser
 from tabulation import Tabulation
 import pickle
 
-# Use astropy.io.fits if possible
+# Use astropy.io.fits if possible; old pyfits is a backup option
 try:
     import astropy.io.fits as pyfits
 except ImportError:
@@ -555,9 +555,6 @@ def main():
         if options.overlap is not None and options.overlaps is not None:
             raise ValueError("overlap and overlaps options are incompatible")
 
-        if options.overlap is not None:
-            options.overlaps = (options.overlap, options.overlap)
-
         # up, down
         if options.display_upward and options.display_downward:
             raise ValueError("--up and --down options are incompatible")
@@ -612,8 +609,11 @@ def main():
             options.strip = [options.strip, options.alt_strip]
 
         # Interpret overlaps
-        if options.overlap is not None:
-            options.overlaps = (options.overlap, options.overlap)
+        if options.overlaps is None:
+            if options.overlap is None:
+                options.overlaps = (0., 0.)
+            else:
+                options.overlaps = (options.overlap, options.overlap)
 
         option_dict = {
             # control parameters
@@ -1109,7 +1109,7 @@ def ImagesToPics(filenames, directory=None,
             filter_info = None
             upperfile = infile.upper()
             if upperfile.endswith('.LBL'):
-                labeldict = PdsLabel.from_file(infile).as_dict()
+                labeldict = pdsparser.PdsLabel.from_file(infile).as_dict()
 
                 # Get the instrument info if available
                 filter_info = None
@@ -1379,7 +1379,7 @@ def ImagesToPics(filenames, directory=None,
 def ReadImageArray(filename, obj=None, hst=False):
     """Return the 3D pixel array and the default display orientation, given the
     file and optional object number.
-    
+
     Input:
         filename            input file name, which could be in Vicar, FITS,
                             TIFF, or .npy format. Alternatively, a list of
@@ -1587,7 +1587,145 @@ def ReadImageArray1(filename, obj=None, hst=False):
     except IOError:
         pass
 
+    # Attempt to read a PDS3 label
+    result = ReadPDSLabeledImageArray(filename, obj)
+    if result is not None:
+        return result
+
     raise IOError("Unrecognized image file format: " + filename)
+
+################################################################################
+# Support for PDS-labeled images
+################################################################################
+
+def ReadPDSLabeledImageArray(filename, obj=None):
+
+    label = None
+    try:
+        label = pdsparser.PdsLabel.from_file(filename)
+    except pdsparser.ParseException:
+        (head,ext) = os.path.splitext(filename)
+        if ext.lower() != '.lbl':
+            if os.path.exists(head + '.lbl'):
+                try:
+                    label = pdsparser.PdsLabel.from_file(head + '.lbl')
+                except pdsparser.ParseException:
+                    pass
+            elif os.path.exists(head + '.LBL'):
+                try:
+                    label = pdsparser.PdsLabel.from_file(head + '.LBL')
+                except pdsparser.ParseException:
+                    pass
+
+    if not label:
+        return None
+
+    if isinstance(obj, str):
+        pname = '^' + obj
+        if pname not in label:
+            raise KeyError('Object %s not found in %s' % (obj, filename))
+
+    else:
+        pnames = [node.name for node in label
+                  if node.name.startswith('^') and node.name.endswith('IMAGE')]
+        if not pnames:
+            raise KeyError('No IMAGE objects found in %s' % filename)
+
+        if obj is None:
+            obj = 0
+
+        try:
+            pname = pnames[obj]
+        except IndexError:
+            raise IndexError('Object index %s is out of range in %s' %
+                             (str(obj), filename))
+        except TypeError:
+            raise TypeError('Invalid index type %s for %s' %
+                             (str(obj), filename))
+
+    node = label[pname]
+    if isinstance(node, pdsparser.PdsOffsetPointer):
+        imagefile = node.value
+        offset = node.offset - 1
+        if node.unit == 'RECORDS':
+            offset *= label['FILE_RECORDS'].value
+    else:
+        imagefile = node.value
+        offset = 0
+
+    imagefile = os.path.join(os.path.split(filename)[0], imagefile)
+
+    image = label[pname[1:]]
+    lines = image['LINES'].value
+    samples = image['LINE_SAMPLES'].value
+    bytes = image['SAMPLE_BITS'].value // 8
+    fmt = image['SAMPLE_TYPE'].value
+
+    try:
+        prefix_bytes = image['PREFIX_BYTES'].value
+    except KeyError:
+        prefix_bytes = 0
+
+    try:
+        suffix_bytes = image['SUFFIX_BYTES'].value
+    except KeyError:
+        suffix_bytes = 0
+
+    prefix_samples = prefix_bytes // bytes
+    if prefix_samples * bytes != prefix_bytes:
+        raise ValueError('PREFIX_BYTES and SAMPLE_BITS values are '
+                         'incompatible in ' + imagefile)
+
+    suffix_samples = suffix_bytes // bytes
+    if suffix_samples * bytes != suffix_bytes:
+        raise ValueError('SUFFIX_BYTES and SAMPLE_BITS values are '
+                         'incompatible in ' + imagefile)
+
+    row_samples = prefix_samples + samples + suffix_samples
+
+    offset_samples = offset // bytes
+    if suffix_samples * bytes != suffix_bytes:
+        raise ValueError('SAMPLE_BITS and file offset values are '
+                         'incompatible in ' + imagefile)
+
+    char1 = '>'
+    if 'PC_' in fmt or 'LSB_' in fmt:
+        char1 = '<'
+
+    char2 = 'i'
+    if 'UNSIGNED' in fmt:
+        char2 = 'u'
+    if 'REAL' in fmt:
+        char2 = 'f'
+
+    dtype = char1 + char2 + str(bytes)
+
+    data = np.fromfile(imagefile, dtype=dtype)
+    data = data[offset_samples:]
+    data = data[:lines * row_samples]
+    array3d = data.reshape(1, lines, row_samples)
+    array3d = array3d[..., prefix_samples:prefix_samples + samples]
+
+    # Get supplemental info
+    try:
+        inst_host = label['INSTRUMENT_NAME'].value
+    except KeyError:
+        try:
+            inst_host = label['SPACECRAFT_NAME'].value
+        except KeyError:
+            inst_host = ''
+
+    try:
+        inst_name = label['INSTRUMENT_HOST_NAME'].value
+    except KeyError:
+        inst_name = ''
+
+    try:
+        filter_name = label['FILTER_NAME'].value
+    except KeyError:
+        filter_name = ''
+
+    return (array3d, False, (inst_host, inst_name, filter_name))
 
 ################################################################################
 # Slice out the 2-D subarray of a 3-D array
@@ -2200,23 +2338,9 @@ def ApplyColormap(array2d, limits, histogram=False, colormap=None,
     if histogram:
         normalized = rankdata(array2d)
         normalized = normalized.reshape(array2d.shape)
-        mask = (array2d == limits[0])
-        if np.any(mask):
-            new_limit0 = normalized[mask][0]
-        else:
-            mask = (array2d < limits[0])
-            new_limit0 = 0.5 * (normalized[ mask].max() +
-                                normalized[~mask].min())
-
-        mask = (array2d == limits[1])
-        if np.any(mask):
-            new_limit1 = normalized[mask][0]
-        else:
-            mask = (array2d < limits[1])
-            new_limit1 = 0.5 * (normalized[ mask].max() +
-                                normalized[~mask].min())
-
-        limits = (new_limit0, new_limit1)
+        mask = (limits[0] <= array2d) & (array2d <= limits[1])
+        limits = (np.min(normalized[mask]),
+                  np.max(normalized[mask]))
     else:
         normalized = array2d
 
