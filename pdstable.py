@@ -69,6 +69,29 @@ STRING_TYPES = (str, bytes, bytearray, np.str_, np.bytes_, np.unicode_)
 def tai_from_iso(string):
     return julian.tai_from_iso(string, strip=True)
 
+FILE_SPECIFICATION_COLUMN_NAMES = (
+    'FILE_SPECIFICATION_NAME',
+    'FILE SPECIFICATION NAME',
+    'FILE_NAME',
+    'FILE NAME',
+    'FILENAME',
+    'PRODUCT_ID',
+    'PRODUCT ID',
+    'STSCI_GROUP_ID'
+)
+
+FILE_SPECIFICATION_COLUMN_NAMES_lc = [x.lower() for x in
+                                      FILE_SPECIFICATION_COLUMN_NAMES]
+
+VOLUME_ID_COLUMN_NAMES = (
+    'VOLUME_ID',
+    'VOLUME ID',
+    'VOLUME_NAME',
+    'VOLUME NAME'
+)
+
+VOLUME_ID_COLUMN_NAMES_lc = [x.lower() for x in VOLUME_ID_COLUMN_NAMES]
+
 class PdsTable(object):
     """The PdsTable class holds the contents of a PDS-labeled table. It is
     represented by a list of Numpy arrays, one for each column.
@@ -184,7 +207,7 @@ class PdsTable(object):
 
             # Check line count
             if len(lines) != self.info.rows:
-                raise ValueError('row count mismatch: %s' % label_file +
+                raise ValueError('row count mismatch in %s: ' % label_file +
                                  '%d rows in file; ' % len(lines) +
                                  'label says ROWS = %d' % self.info.rows)
 
@@ -683,8 +706,7 @@ class PdsTable(object):
             self._volume_colname = ''
             self._volume_colname_lc = ''
 
-            for guess in ('volume_id', 'volume id', 'volume_name',
-                                                    'volume name'):
+            for guess in VOLUME_ID_COLUMN_NAMES_lc:
                 if guess in self.keys_lc:
                     k = self.keys_lc.index(guess)
                     self._volume_colname_index = k
@@ -703,10 +725,7 @@ class PdsTable(object):
             self.filespec_colname = ''
             self.filespec_colname_lc = ''
 
-            for guess in ('file_specification_name', 'file specification name',
-                          'file_name', 'file name', 'filename', 'product_id',
-                          'product id', 'stsci_group_id'):
-
+            for guess in FILE_SPECIFICATION_COLUMN_NAMES_lc:
                 if guess in self.keys_lc:
                     k = self.keys_lc.index(guess)
                     self._filespec_colname_index = k

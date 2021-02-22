@@ -278,7 +278,7 @@ class PdsValue(PdsItem):
     def __init__(self, value=None, parser=None):
         PdsItem.__init__(self)
         self.value = value      # A representation for the value of the object
-        self.parser = parser    # Currently unused
+#         self.parser = parser    # Currently unused
 
     # Default string is just a default formatting of the value
     def __str__(self): return str(self.value)
@@ -868,7 +868,7 @@ class PdsDateTime(PdsScalar):
         struct.pdsdate = pdsdate
         struct.pdstime = pdstime
 
-        struct.elapsed = pdsdate.value * 86400 + pdstime.value
+        struct.elapsed = pdsdate.elapsed * 86400 + pdstime.elapsed
         struct.value = str(struct)
 
         return struct

@@ -74,7 +74,7 @@ def main():
     # --pattern
     group.add_option("--pattern", dest="pattern", 
         action="store", type="string", default="*",
-        help="pattern describing file names to match, e.g., \*.IMG")
+        help="pattern describing file names to match, e.g., \*.IMG.")
 
     # --movie
     group.add_option("--movie", dest="movie",
@@ -1108,7 +1108,9 @@ def ImagesToPics(filenames, directory=None,
             # the filter name
             filter_info = None
             upperfile = infile.upper()
+            labelfile = ''
             if upperfile.endswith('.LBL'):
+                labelfile = infile
                 labeldict = pdsparser.PdsLabel.from_file(infile).as_dict()
 
                 # Get the instrument info if available
@@ -1152,7 +1154,7 @@ def ImagesToPics(filenames, directory=None,
                     if pname in labeldict:
                         pds_obj = labeldict[pname]
                         if type(pds_obj) == tuple:
-                            pds_obj = pdsobj[0]
+                            pds_obj = pds_obj[0]
                         break
 
                 if pds_obj is None:
@@ -1185,7 +1187,8 @@ def ImagesToPics(filenames, directory=None,
 
             # Read the image array, select up, try to find the filter
             (array3d, default_is_up,
-                      filter_info2) = ReadImageArray(imagefile, obj, hst)
+                      filter_info2) = ReadImageArray(imagefile, labelfile,
+                                                     obj, hst)
             filter_info = filter_info or filter_info2
 
         # Now construct the picture...
@@ -1376,7 +1379,7 @@ def ImagesToPics(filenames, directory=None,
 # Read the 3-D image array from a data file
 ################################################################################
 
-def ReadImageArray(filename, obj=None, hst=False):
+def ReadImageArray(filename, labelfile, obj=None, hst=False):
     """Return the 3D pixel array and the default display orientation, given the
     file and optional object number.
 
@@ -1384,6 +1387,7 @@ def ReadImageArray(filename, obj=None, hst=False):
         filename            input file name, which could be in Vicar, FITS,
                             TIFF, or .npy format. Alternatively, a list of
                             filenames whose arrays are stacked together.
+        labelfile           optional name of a PDS3 label file.
         obj                 index or name of the object to load; only used if
                             the file contains multiple image objects. Default is
                             to return the first image object. If obj is a list
@@ -1400,12 +1404,12 @@ def ReadImageArray(filename, obj=None, hst=False):
     """
 
     if type(filename) == str:
-        return ReadImageArray1(filename, obj, hst)
+        return ReadImageArray1(filename, labelfile, obj, hst)
 
     # In the case of multiple filenames
     results = []
     for k in range(len(filename)):
-        results.append(ReadImageArray1(filename[k], None, hst))
+        results.append(ReadImageArray1(filename[k], labelfile, None, hst))
 
     arrays = [r[0] for r in results]
     for k in range(len(arrays)):
@@ -1416,7 +1420,7 @@ def ReadImageArray(filename, obj=None, hst=False):
     array = np.vstack(arrays)
     return (array,) + results[0][1:]
 
-def ReadImageArray1(filename, obj=None, hst=False):
+def ReadImageArray1(filename, labelfile, obj=None, hst=False):
     """Return the 3D pixel array and the default display orientation, given the
     file and optional object number.
     """
@@ -1576,7 +1580,7 @@ def ReadImageArray1(filename, obj=None, hst=False):
 
                 return(array3d, True, (inst_host, inst_id, filter_name))
  
-        except UserWarning:         # If not a FITS file
+        except (UserWarning, OSError):          # If not a FITS file
             pass
 
     # Attempt to read a PIL-compatible file or 16-bit TIFF
@@ -1588,9 +1592,10 @@ def ReadImageArray1(filename, obj=None, hst=False):
         pass
 
     # Attempt to read a PDS3 label
-    result = ReadPDSLabeledImageArray(filename, obj)
-    if result is not None:
-        return result
+    if labelfile:
+        result = ReadPDSLabeledImageArray(labelfile, obj)
+        if result is not None:
+            return result
 
     raise IOError("Unrecognized image file format: " + filename)
 
