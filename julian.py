@@ -60,6 +60,11 @@
 #   results are returned.
 #
 #   The Julian Library is compatible with both Python 2 and Python 3.
+#
+# Mark R. Showalter
+# PDS Ring-Moon Systems Node, SETI Institute
+# This software is licensed under Academic Free License ("AFL") v. 3.0.
+# See https://opensource.org/licenses/afl-3.0.php
 ################################################################################
 
 from __future__ import print_function, division
@@ -155,7 +160,7 @@ LS_YEARS = 0
 LS_ARRAY1D = None
 LS_ARRAY2D = None
 
-def load_from_dict(dict):
+def load_from_dict(spicedict):
     """Loads the SPICE LSK parameters from the given dictionary. The dictionary
     is that returned by textkernel.from_file()["DELTET"].
     """
@@ -164,17 +169,17 @@ def load_from_dict(dict):
     global LS_YEAR0, LS_YEARS, LS_ARRAY1D, LS_ARRAY2D
 
     # Look up the needed variables and save them as globals
-    DELTET_T_A = dict["DELTA_T_A"]
-    DELTET_K   = dict["K"]
-    DELTET_EB  = dict["EB"]
+    DELTET_T_A = spicedict["DELTA_T_A"]
+    DELTET_K   = spicedict["K"]
+    DELTET_EB  = spicedict["EB"]
 
-    (DELTET_M0, DELTET_M1) = dict["M"]
+    (DELTET_M0, DELTET_M1) = spicedict["M"]
 
     # Construct a static array of (TAI minus UTC), the number of elapsed leap
     # seconds, and save them indexed by [year,halfyear]...
 
     # Get the list of leapseconds from the kernel
-    delta_at = dict["DELTA_AT"]
+    delta_at = spicedict["DELTA_AT"]
     LS_YEAR0 = delta_at[1].year - 1     # subtract one so the first tabulated
                                         # year has zero leapseconds.
     LS_YEARS = delta_at[-1].year - LS_YEAR0 + 1
@@ -441,7 +446,7 @@ class Test_Calendar(unittest.TestCase):
 ################################################################################
 
 def leapsecs_from_ym(y, m):
-    """Returns the number of elapsed leapseconds for a given year and month."""
+    """Number of elapsed leapseconds for a given year and month."""
 
     # Scalar version...
     if np.shape(y) == () and np.shape(m) == ():
@@ -459,8 +464,8 @@ def leapsecs_from_ym(y, m):
 ########################################
 
 def leapsecs_from_day(day):
-    """Returns the number of elapsed leapseconds for a given number of days
-    elapsed since January 1, 2000."""
+    """Number of elapsed leapseconds for a given number of days elapsed since
+    January 1, 2000."""
 
     (y,m,d) = ymd_from_day(day)
     return leapsecs_from_ym(y,m)
@@ -468,8 +473,8 @@ def leapsecs_from_day(day):
 ########################################
 
 def seconds_on_day(day, leapseconds=True):
-    """Returns the number of seconds duration for the given day number since
-    January 1, 2000."""
+    """Number of seconds duration for the given day number since January 1,
+    2000."""
 
     if not leapseconds: return 86400
 
@@ -505,8 +510,8 @@ class Test_Leapseconds(unittest.TestCase):
 ################################################################################
 
 def day_sec_from_tai(tai):
-    """Returns a number of integer days and the number of elapsed seconds into
-    that day, given the number of elapsed seconds since January 1, 2000 TAI."""
+    """Number of integer days and the number of elapsed seconds into that day,
+    given the number of elapsed seconds since January 1, 2000 TAI."""
 
     # Make an initial guess at the day and seconds
     tai = _FLOAT(tai)
@@ -1110,7 +1115,7 @@ class Test_Conversions(unittest.TestCase):
 ################################################################################
 
 def ymd_format_from_day(day, buffer=None):
-    """Returns a date in 'yyyy-mm-dd' format. Supports scalars or arrays.
+    """Date in 'yyyy-mm-dd' format. Supports scalars or arrays.
 
     Input:
         day         integer or arbitrary array of integers defining day numbers
@@ -1122,7 +1127,7 @@ def ymd_format_from_day(day, buffer=None):
     return _yxd_format_from_day(day, True, buffer)
 
 def yd_format_from_day(day, buffer=None):
-    """Returns a date in 'yyyy-ddd' format. Supports scalars or arrays.
+    """Date in 'yyyy-ddd' format. Supports scalars or arrays.
 
     Input:
         day         integer or arbitrary array of integers defining day numbers
@@ -1176,7 +1181,7 @@ def _yxd_format_from_day(day, ymd=True, buffer=None):
 ########################################
 
 def hms_format_from_sec(sec, digits=None, suffix="", buffer=None):
-    """Returns a time in 'hh:mm:ss[.mmm][Z]' format. Supports scalars or arrays.
+    """Time in 'hh:mm:ss[.mmm][Z]' format. Supports scalars or arrays.
 
     Input:
         day         integer or arbitrary array of integers defining day numbers
@@ -1226,8 +1231,8 @@ def hms_format_from_sec(sec, digits=None, suffix="", buffer=None):
 
 def ymdhms_format_from_day_sec(day, sec, sep="T", digits=None, suffix="",
                                buffer=None):
-    """Returns a date and time in ISO format 'yyyy-mm-ddThh:mm:ss....'. Works
-    for both scalars and arrays.
+    """Date and time in ISO format 'yyyy-mm-ddThh:mm:ss....'. Works for both
+    scalars and arrays.
 
     Input:
         day         integer or arbitrary array of integers defining day numbers
@@ -1252,8 +1257,8 @@ def ymdhms_format_from_day_sec(day, sec, sep="T", digits=None, suffix="",
 
 def ydhms_format_from_day_sec(day, sec, sep="T", digits=None, suffix="",
                               buffer=None):
-    """Returns a date and time in ISO format 'yyyy-dddThh:mm:ss....'. Works
-    for both scalars and arrays.
+    """Date and time in ISO format 'yyyy-dddThh:mm:ss....'. Works for both
+    scalars and arrays.
 
     Input:
         day         integer or arbitrary array of integers defining day numbers
@@ -1351,8 +1356,8 @@ def _yxdhms_format_from_day_sec(day, sec, ymd=True, sep="T", digits=None,
 
 def ymdhms_format_from_tai(tai, sep="T", digits=None, suffix="",
                            buffer=None):
-    """Returns a date and time in ISO format 'yyyy-mm-ddThh:mm:ss....' given
-    seconds TAI. Works for both scalars and arrays.
+    """Date and time in ISO format 'yyyy-mm-ddThh:mm:ss....' given seconds TAI.
+    Works for both scalars and arrays.
 
     Input:
         tai         number of elapsed seconds from TAI January 1, 2000.
@@ -1373,8 +1378,8 @@ def ymdhms_format_from_tai(tai, sep="T", digits=None, suffix="",
 
 def ydhms_format_from_tai(tai, sep="T", digits=None, suffix="",
                           buffer=None):
-    """Returns a date and time in ISO format 'yyyy-dddThh:mm:ss....' given
-    seconds TAI. Works for both scalars and arrays.
+    """Date and time in ISO format 'yyyy-dddThh:mm:ss....' given seconds TAI.
+    Works for both scalars and arrays.
 
     Input:
         tai         number of elapsed seconds from TAI January 1, 2000.
@@ -1394,7 +1399,7 @@ def ydhms_format_from_tai(tai, sep="T", digits=None, suffix="",
                                        buffer)
 
 def iso_from_tai(tai, digits=None, ymd=True, suffix=""):
-    """Return a date and time in ISO format given seconds tai.
+    """Date and time in ISO format given seconds tai.
 
     Input:
         tai         number of elapsed seconds from TAI January 1, 2000.
@@ -1474,10 +1479,9 @@ class Test_Formatting(unittest.TestCase):
 ################################################################################
 
 def day_from_iso(strings, validate=True, strip=False):
-    """Returns a day number based on a parsing of a date string in ISO format.
-    The format is strictly required to be either "yyyy-mm-dd" or "yyyy-ddd".
-    It works on bytestring arrays in addition to individual strings or
-    bytestrings.
+    """Day number based on a parsing of a date string in ISO format. The format
+    is strictly required to be either "yyyy-mm-dd" or "yyyy-ddd". It works on
+    bytestring arrays in addition to individual strings or bytestrings.
 
     Now revised to avoid the slow julian_isoparser routines. It should be very
     fast. It also works for lists or arrays of arbitrary shape, provided every
@@ -1494,10 +1498,10 @@ def day_from_iso(strings, validate=True, strip=False):
     # Old, slow procedure...
     #
     # Give the list a zero month entry for the year and day-of-year case
-    # list = [["MONTH",0]] + iso.ISO_DATE.parseString(string).asList()
-    # dict = _dict_from_parselist(list)
+    # parselist = [["MONTH",0]] + iso.ISO_DATE.parseString(string).asList()
+    # parsedict = _dict_from_parselist(parselist)
     #
-    # return _day_from_dict(dict)
+    # return _day_from_dict(parsedict)
 
     strings = np.array(strings).astype('S')
 
@@ -1577,8 +1581,8 @@ def day_from_iso(strings, validate=True, strip=False):
 ########################################
 
 def sec_from_iso(strings, validate=True, strip=False):
-    """Returns a second value based on a parsing of a time string in ISO format.
-    The format is strictly required to be "hh:mm:ss[.s...][Z]". It works on
+    """Second value based on a parsing of a time string in ISO format. The
+    format is strictly required to be "hh:mm:ss[.s...][Z]". It works on
     bytestring arrays in addition to individual strings or bytestrings.
 
     Now revised to avoid the slow julian_isoparser routines. It should be very
@@ -1592,10 +1596,10 @@ def sec_from_iso(strings, validate=True, strip=False):
 
     # Old, slow procedure...
     #
-    # list = iso.ISO_TIME.parseString(string).asList()
-    # dict = _dict_from_parselist(list)
+    # parselist = iso.ISO_TIME.parseString(string).asList()
+    # parsedict = _dict_from_parselist(parselist)
     #
-    # return _sec_from_dict(dict)
+    # return _sec_from_dict(parsedict)
 
     # Convert to an array of strings, replace Unicode
     strings = np.array(strings).astype('S')
@@ -1710,19 +1714,19 @@ def sec_from_iso(strings, validate=True, strip=False):
 ########################################
 
 def day_sec_from_iso(strings, validate=True, strip=False):
-    """Returns a day and second based on a parsing of the string in ISO
-    date-time format. The format is strictly enforced to be an ISO date plus an
-    ISO time, separated by a single space or a "T". It works for bytestring
-    arrays in addition to individual strings or bytestrings."""
+    """Day and second based on a parsing of the string in ISO date-time format.
+    The format is strictly enforced to be an ISO date plus an ISO time,
+    separated by a single space or a "T". It works for bytestring arrays in
+    addition to individual strings or bytestrings."""
 
     # Old, slow procedure...
     #
     # Give the default entries in case they are needed
-    # list = [["MONTH",0]] + iso.ISO_DATETIME.parseString(string).asList()
-    # dict = _dict_from_parselist(list)
+    # parselist = [["MONTH",0]] + iso.ISO_DATETIME.parseString(string).asList()
+    # parsedict = _dict_from_parselist(parselist)
     #
-    # day = _day_from_dict(dict)
-    # sec = _sec_from_dict(dict, day, True, validate)
+    # day = _day_from_dict(parsedict)
+    # sec = _sec_from_dict(parsedict, day, True, validate)
     #
     # return (day, sec)
 
@@ -1774,9 +1778,9 @@ def day_sec_from_iso(strings, validate=True, strip=False):
 ########################################
 
 def tai_from_iso(strings, validate=True, strip=False):
-    """Returns the elapsed seconds TAI from January 1, 2000 given an ISO date
-    or date-time string. Works for individual strings or bytestrings and also
-    for arrays of bytestrings."""
+    """Elapsed seconds TAI from January 1, 2000 given an ISO date or date-time
+    string. Works for individual strings or bytestrings and also for arrays of
+    bytestrings."""
 
     (day, sec) = day_sec_from_iso(strings, validate, strip)
     return tai_from_day(day) + sec
@@ -1920,111 +1924,123 @@ class Test_ISO_Parsing(unittest.TestCase):
 # array or array-like arguments.
 ################################################################################
 
-global DATE_PARSER_DICT, DATETIME_PARSER_DICT
+DATE_PARSER_DICT = {"YMD": jdp.YMD_PREF_DATE + pyparsing.StringEnd(),
+                    "MDY": jdp.MDY_PREF_DATE + pyparsing.StringEnd(),
+                    "DMY": jdp.DMY_PREF_DATE + pyparsing.StringEnd(),
+                   }
 
-DATE_PARSER_DICT = {"YMD":jdp.YMD_PREF_DATE + pyparsing.StringEnd(),
-                    "MDY":jdp.MDY_PREF_DATE + pyparsing.StringEnd(),
-                    "DMY":jdp.DMY_PREF_DATE + pyparsing.StringEnd()}
-
-DATETIME_PARSER_DICT = {"YMD":jdp.YMD_PREF_DATETIME + pyparsing.StringEnd(),
-                        "MDY":jdp.MDY_PREF_DATETIME + pyparsing.StringEnd(),
-                        "DMY":jdp.DMY_PREF_DATETIME + pyparsing.StringEnd()}
+DATETIME_PARSER_DICT = {"YMD": jdp.YMD_PREF_DATETIME + pyparsing.StringEnd(),
+                        "MDY": jdp.MDY_PREF_DATETIME + pyparsing.StringEnd(),
+                        "DMY": jdp.DMY_PREF_DATETIME + pyparsing.StringEnd(),
+                       }
 
 ########################################
 
 def day_from_string(string, order="YMD"):
-    """Returns a day number based on a parsing of the string. Input parameter
-    order is one of 'YMD', 'MDY' or 'DMY', and defines the preferred order for
-    date, month and year in situations where it might be ambiguous."""
+    """Day number based on a parsing of the string. Input parameter order is one
+    'YMD', 'MDY' or 'DMY', and defines the preferred order for date, month, and
+    year in situations where it might be ambiguous."""
 
     parser = DATE_PARSER_DICT[order]
 
     # Give the list a zero month entry for the year and day-of-year case
-    list = [["MONTH",0]] + parser.parseString(string).asList()
-    dict = _dict_from_parselist(list)
+    parselist = [["MONTH",0]] + parser.parseString(string).asList()
+    parsedict = _dict_from_parselist(parselist)
 
-    return _day_from_dict(dict)
+    return _day_from_dict(parsedict)
 
 ########################################
 
 def sec_from_string(string):
-    """Returns a second value based on a parsing of a time string."""
+    """Second value based on a parsing of a time string."""
 
     # Give the list zero values for each parameter, in case they are missing
     # from the list returned
     parser = jdp.TIME + pyparsing.StringEnd()
-    list = ([["HOUR",0],["MINUTE",0],["SECOND",0]] +
-            parser.parseString(string).asList())
-    dict = _dict_from_parselist(list)
+    parselist = ([["HOUR",0],["MINUTE",0],["SECOND",0]] +
+                 parser.parseString(string).asList())
+    parsedict = _dict_from_parselist(parselist)
 
-    return _sec_from_dict(dict)
+    return _sec_from_dict(parsedict)
 
 ########################################
 
+TO_TAI_FUNC = {
+    "JD"    : tai_from_jd,
+    "MJD"   : tai_from_mjd,
+    "JED"   : tai_from_jed,
+    "MJED"  : tai_from_mjed,
+    "TDB"   : tai_from_tdb,
+    "TDT"   : tai_from_tdt,
+}
+
 def day_sec_type_from_string(string, order="YMD", validate=True):
-    """Returns a day and second based on a parsing of the string. Input
-    parameter order is one of 'YMD', 'MDY' or 'DMY', and defines the preferred
-    order for date, month and year in situations where it might be ambiguous.
+    """Day and second based on a parsing of the string. Input parameter order is
+    one of 'YMD', 'MDY' or 'DMY', and defines the preferred order for date,
+    month and year in situations where it might be ambiguous.
+
+    Note: time_types are parsed but are not currently supported. Days and
+    seconds are always expressed in UTC.
     """
 
     parser = DATETIME_PARSER_DICT[order]
 
     # Give the default entries in case they are needed
-    list = ([["TYPE","UTC"],["MONTH",0],["HOUR",0],["MINUTE",0],["SECOND",0]] +
-            parser.parseString(string).asList())
-    dict = _dict_from_parselist(list)
+    parselist = ([["TYPE","UTC"], ["MONTH",0], ["HOUR",0], ["MINUTE",0],
+                  ["SECOND",0]] + parser.parseString(string).asList())
+    parsedict = _dict_from_parselist(parselist)
 
     # Get the time type
-    time_type = dict["TYPE"]
-    leapseconds = (time_type == "UTC")
+    time_type = parsedict["TYPE"]
 
-    # Handle the case of a Julian date
-    try:
-        mjd = dict["MJD"]
-        (day, sec) = day_sec_from_mjd(mjd)
-        return (day, sec, time_type)
-    except KeyError: pass
+    # Handle the case of a numeric date format
+    if "UNIT" in parsedict:
+        if parsedict["UNIT"] == "TAI":
+            tai = parsedict["NUMBER"]
+        else:
+            tai = TO_TAI_FUNC[parsedict["UNIT"]](parsedict["NUMBER"])
+        return day_sec_from_tai(tai) + ("UTC",)
 
     # Handle the case of a fractional day
-    dvalue = dict["DAY"]
-    if type(dvalue) == type(0.):
-        day = _day_from_dict(dict)
+    dvalue = parsedict["DAY"]
+    if isinstance(dvalue, float):
+        day = _day_from_dict(parsedict)
         dfrac = dvalue - day
-        sec = (dvalue - day) * seconds_of_day(day, leapseconds)
+        sec = (dvalue - day) * seconds_of_day(day)
         return (day, sec, time_type)
 
     # Otherwise, it is a calendar date plus time
-    day = _day_from_dict(dict)
-    sec = _sec_from_dict(dict, day, leapseconds, validate)
+    day = _day_from_dict(parsedict)
+    sec = _sec_from_dict(parsedict, day, validate)
 
-    return (day, sec, time_type)
+    return (day, sec, "UTC")
 
 ####################
 # internals...
 ####################
 
-def _dict_from_parselist(list):
-    dict = {}
-    for pair in list:
-        dict[pair[0]] = pair[1]
+def _dict_from_parselist(parselist):
+    parsedict = {}
+    for pair in parselist:
+        parsedict[pair[0]] = pair[1]
 
-    return dict
+    return parsedict
 
 ####################
 
-def _day_from_dict(dict):
-    """Returns a day number based on the contents of a dictionary."""
+def _day_from_dict(parsedict):
+    """Day number based on the contents of a dictionary."""
 
     # First check for MJD date
     try:
-        mjd = dict["MJD"]
+        mjd = parsedict["MJD"]
         return day_from_mjd(mjd)
     except KeyError: pass
 
     # Look up year, month and day
-    y = dict["YEAR"]
-    m = dict["MONTH"]
-    d = dict["DAY"]
+    y = parsedict["YEAR"]
+    m = parsedict["MONTH"]
+    d = parsedict["DAY"]
     d = int(d)
 
     # Year and day-of-year case
@@ -2046,17 +2062,17 @@ def _day_from_dict(dict):
 
 #####################
 
-def _sec_from_dict(dict, day=None, leapseconds=True, validate=True):
-    """Returns a seconds value based on the contents of a dictionary."""
+def _sec_from_dict(parsedict, day=None, validate=True):
+    """Seconds value based on the contents of a dictionary."""
 
-    h = dict["HOUR"]
-    m = dict["MINUTE"]
-    s = dict["SECOND"]
+    h = parsedict["HOUR"]
+    m = parsedict["MINUTE"]
+    s = parsedict["SECOND"]
 
     sec = h * 3600 + m * 60 + s
 
     if validate and (day is not None):
-        if sec >= seconds_on_day(day, leapseconds):
+        if sec >= seconds_on_day(day):
             raise ValueError("Seconds value out of range on day " +
                              ymd_format_from_day(day) + ": " + str(sec))
 
@@ -2108,11 +2124,11 @@ class Test_General_Parsing(unittest.TestCase):
         self.assertEqual(day_sec_type_from_string("2000-01-01 00:00:00.00"),
                          (0, 0.0, "UTC"))
         self.assertEqual(day_sec_type_from_string("2000-01-01 00:00:00.00 tai"),
-                         (0, 0.0, "TAI"))
+                         (0, 0.0, "UTC"))
         self.assertEqual(day_sec_type_from_string("2000-01-01 00:00:00.00 Z"),
                          (0, 0.0, "UTC"))
         self.assertEqual(day_sec_type_from_string("2000-01-01 00:00:00.00 TDB"),
-                         (0, 0.0, "TDB"))
+                         (0, 0.0, "UTC"))
 
         # Check if DMY is same as MDY
         self.assertEqual(day_sec_type_from_string("31-12-2000 12:34:56", "DMY"),
@@ -2125,14 +2141,29 @@ class Test_General_Parsing(unittest.TestCase):
                          (-366, 86400.99, "UTC"))
 
         self.assertRaises(ValueError, day_sec_type_from_string,
-                                      "1998-12-31 23:59:60 TDB")
-        self.assertRaises(ValueError, day_sec_type_from_string,
-                                      "1998-12-31 23:59:60.99 TAI")
-
-        self.assertRaises(ValueError, day_sec_type_from_string,
                                       "2000-01-01 23:59:60")
         self.assertRaises(ValueError, day_sec_type_from_string,
                                       "1999-12-31 23:59:61")
+
+        # Numeric times
+        self.assertEqual(day_sec_type_from_string("2000-01-01"),
+                         (0, 0, "UTC"))
+        self.assertEqual(day_sec_type_from_string("MJD 51544"),
+                         (0, 0, "UTC"))
+        self.assertEqual(day_sec_type_from_string("51544 (MJD )"),
+                         (0, 0, "UTC"))
+        self.assertEqual(day_sec_type_from_string("JD 2451545"),
+                         (0, 43200, "UTC"))
+        self.assertEqual(day_sec_type_from_string("2451545.  jd"),
+                         (0, 43200, "UTC"))
+        self.assertEqual(day_sec_type_from_string("2451545.  jed"),
+                         day_sec_type_from_string("0.  TDB"))
+        self.assertEqual(day_sec_type_from_string("51544.5  mjed"),
+                         day_sec_type_from_string("0.  TDB"))
+        self.assertEqual(day_sec_type_from_string("1234567.89 TAI")[:2],
+                         day_sec_from_tai(1234567.89))
+        self.assertEqual(day_sec_type_from_string("1234567.89 Tdt")[:2],
+                         day_sec_from_tai(tai_from_tdt(1234567.89)))
 
 ################################################################################
 # Perform unit testing if executed from the command line

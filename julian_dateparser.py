@@ -38,8 +38,8 @@
 #                   <minutes> M
 #                   <seconds> S
 #
-#   TYPED_TIME  as above, but with an optional TDB, TDT, TAI, UT, UTC, or Z
-#   suffix.
+#   TYPED_TIME  as above, but with an optional suffix of Z, UT, UTC, TAI, TDB,
+#               ET, or TDT.
 #
 # The am/pm suffix is optional and implies a 12-hour clock; otherwise, a 24-hour
 # clock is assumed. Seconds can have a fractional component. If seconds are not
@@ -72,13 +72,13 @@
 # time. In year-month-day or year-day formats, the day can be fractional in this
 # case; otherwise the time is interpreted as midnight.
 #
-# Alternatively, the date and time may be expressed as a Julian Date or Modified
-# Julian Date, using "JD" or "MJD" followed by a number with optional fractional
-# part.
-#
 # Date-times can also have a suffix "TDB", "TDT", "TAI", "UTC", "UT" or "Z" to
-# indicate the time system. Here, TDT is treated as an alias for TDB, and UT and
+# indicate the time system. Here, ET is treated as an alias for TDB, and UT and
 # Z are aliases for UTC.
+#
+# Alternatively, the date and time can be expressed as a number, with explicit
+# units of "JD", "MJD", "JED", "MJED", "ET", "TDB", "TDT", or "TAI". These units
+# can appear before or after the number.
 #
 # The parsers return a list of 2-item lists, where the first item is the name
 # of a component and the second is its value. The names are "YEAR", "MONTH",
@@ -86,16 +86,14 @@
 # times. Numeric values can be integer or float, depending on what the string
 # contained. Weekdays are given as upper case strings, abbreviated to three
 # characters. "TYPE" indicates the time type if present; it is always one of
-# "TDB", "TAI" or "UTC". When a Julian Date or Modified Julian Date is given,
-# the list contains "MJD" and its value, instead of the date and time
-# components.
+# "TDB", "TDT", "TAI" or "UTC". Numeric date-times are defined by a "UNIT" (one
+# of "MJD", "JD", "MJED", "JED", "TAI", "ET", "TDB", or "TDT") and "NUMBER", a
+# floating-point value.
 #
 # Mark R. Showalter
-# PDS Rings Node
-# August 2011
-#
-# Modified 4/4/18 to allow a period after the three-letter abbreviations for a
-# month or a weekday.--MRS
+# PDS Ring-Moon Systems Node, SETI Institute
+# This software is licensed under Academic Free License ("AFL") v. 3.0.
+# See https://opensource.org/licenses/afl-3.0.php
 ################################################################################
 
 from pyparsing import *
@@ -416,7 +414,7 @@ YEAR_2DIGIT     = Word(nums,exact=2)
 # Parse actions save a list pair ["YEAR", number]
 YEAR_4DIGIT.setParseAction(lambda s,l,t: [["YEAR", int(t[0])]])
 YEAR_2DIGIT.setParseAction(lambda s,l,t: [["YEAR", 2000 + int(t[0])
-                                                  - 100 * (int(t[0])/70)]])
+                                                  - 100 * (int(t[0])//70)]])
 # Two-digit years are interpreted as 1970-2069
 
 YEAR            = (YEAR_4DIGIT | YEAR_2DIGIT) + WordEnd(nums)
@@ -933,12 +931,12 @@ HOUR23_W_FRAC   = HOUR23_FLOAT | HOUR23
 #-----------------------------------------------------------------------
 HOUR12_AM       = ONE_12.copy()
 HOUR12_AM.setParseAction(lambda s,l,t: [["HOUR", int(t[0])
-                                                 - 12*(int(t[0])/12)]])
+                                                 - 12*(int(t[0])//12)]])
 # HOUR12_AM = 12 gets converted to 0
 
 HOUR12_PM       = ONE_12.copy()
 HOUR12_PM.setParseAction(lambda s,l,t: [["HOUR", 12 + int(t[0])
-                                                 - 12*(int(t[0])/12)]])
+                                                 - 12*(int(t[0])//12)]])
 # HOUR12_PM = 12 gets converted to 12+0, not 12+12
 
 ########################################
@@ -1285,7 +1283,7 @@ class Test_Time_Parts(unittest.TestCase):
 # TIME_TYPE
 #
 # Times can be in UTC, TAI or TDB. A suffix of "UTC", "UT" or "Z" implies UTC;
-# "TAI" implies TAI, "TDB", "TDT" or "ET" implies TDB.
+# "TAI" implies TAI, "TDB" or "ET" implies TDB, "TDT" implies TDT.
 ################################################################################
 
 UTC_TYPE        = (CaselessKeyword("UTC") |
@@ -1297,11 +1295,13 @@ TAI_TYPE        = CaselessKeyword("TAI")
 TAI_TYPE.setParseAction(lambda s, l, t: [["TYPE", "TAI"]])
 
 TDB_TYPE        = (CaselessKeyword("TDB") |
-                    CaselessKeyword("TDT") |
                     CaselessKeyword("ET"))
 TDB_TYPE.setParseAction(lambda s, l, t: [["TYPE", "TDB"]])
 
-TIME_TYPE       = UTC_TYPE | TDB_TYPE | TAI_TYPE
+TDT_TYPE        = CaselessKeyword("TDT")
+TDT_TYPE.setParseAction(lambda s, l, t: [["TYPE", "TDT"]])
+
+TIME_TYPE       = UTC_TYPE | TDB_TYPE | TDT_TYPE | TAI_TYPE
 
 ########################################
 # UNIT TESTS
@@ -1322,7 +1322,7 @@ class Test_TIME_TYPE(unittest.TestCase):
         self.assertEqual(parser.parseString("tai").asList(),  [["TYPE", "TAI"]])
         self.assertEqual(parser.parseString(" TDB").asList(), [["TYPE", "TDB"]])
         self.assertEqual(parser.parseString("ET").asList(),   [["TYPE", "TDB"]])
-        self.assertEqual(parser.parseString("tdt").asList(),  [["TYPE", "TDB"]])
+        self.assertEqual(parser.parseString("tdt").asList(),  [["TYPE", "TDT"]])
         self.assertEqual(parser.parseString("et").asList(),   [["TYPE", "TDB"]])
 
         # Doesn't complete...
@@ -1347,10 +1347,10 @@ class Test_TIME_TYPE(unittest.TestCase):
 # Useful definitions...
 AM              = Suppress(CaselessLiteral("AM"))
 PM              = Suppress(CaselessLiteral("PM"))
-S               = Suppress(CaselessKeyword("S"))
-M               = Suppress(CaselessKeyword("M"))
-H               = Suppress(CaselessKeyword("H"))
-D               = Suppress(CaselessKeyword("D"))
+S               = Suppress(CaselessLiteral("S"))
+M               = Suppress(CaselessLiteral("M"))
+H               = Suppress(CaselessLiteral("H"))
+D               = Suppress(CaselessLiteral("D"))
 
 ELEVEN          = Suppress(Literal("11"))
 TWENTYTHREE     = Suppress(Literal("23"))
@@ -1462,91 +1462,68 @@ class Test_TYPED_TIME(unittest.TestCase):
         self.assertRaises(ParseException, parser.parseString, "23:59:70")
 
 ################################################################################
-# MJD_DATE
+# NUMERIC_DATE
 #
-# Either a Julian date or a Modified Julian Date, including an optional
-# fractional part and optional type. Internally, it is converted to MJD.
+# A number combined with one of "MJD", "JD", MJED", "JED", "TAI", "TDB", "ET",
+# or "TDT".
 ################################################################################
 
-MJD_OF_EPOCH_2000 = 51544
-JD_OF_EPOCH_2000 = 2451544.5
-JD_MINUS_MJD = JD_OF_EPOCH_2000 - MJD_OF_EPOCH_2000
+DOT_FLOAT       = Combine(Optional("-") + Optional(Word(nums)) + Literal(".") +
+                          Word(nums))
+INT_FLOAT       = Combine(Optional("-") + Word(nums) + Optional("."))
+FLOAT           = DOT_FLOAT | INT_FLOAT
+FLOAT.setParseAction(lambda s,l,t: [["NUMBER", float(t[0])]])
 
-INT_FLOAT       = Combine(Word(nums) + Optional("." + Word(nums)))
-DOT_FLOAT       = Combine(Literal(".") + Word(nums))
-FLOAT           = INT_FLOAT | DOT_FLOAT
+DATE_UNIT_ET    = CaselessLiteral("ET")
+DATE_UNIT_ET.setParseAction(lambda s,l,t: [["UNIT", "TDB"]])
 
-JD_FLOAT        = Suppress(CaselessLiteral("JD")) + FLOAT
-JD_FLOAT.setParseAction(lambda s,l,t: [["MJD", float(t[0]) - JD_MINUS_MJD]])
+DATE_UNIT_NOT_ET  = (CaselessLiteral("MJD")
+                    | CaselessLiteral("JD")
+                    | CaselessLiteral("MJED")
+                    | CaselessLiteral("JED")
+                    | CaselessLiteral("TAI")
+                    | CaselessLiteral("TDB")
+                    | CaselessLiteral("TDT")
+                  )
+DATE_UNIT_NOT_ET.setParseAction(lambda s,l,t: [["UNIT", t[0]]])
 
-MJD_FLOAT       = Suppress(CaselessLiteral("MJD")) + FLOAT
-MJD_FLOAT.setParseAction(lambda s,l,t: [["MJD", float(t[0])]])
+DATE_UNIT       = DATE_UNIT_NOT_ET | DATE_UNIT_ET
 
-MJD_DATE        = (JD_FLOAT | MJD_FLOAT) + Optional(TIME_TYPE)
+NUMERIC_DATE    = (DATE_UNIT + FLOAT
+                    | FLOAT + DATE_UNIT
+                    | FLOAT + Suppress(Literal("(")) + DATE_UNIT +
+                        Suppress(Literal(")"))
+                  )
 
 ########################################
 # UNIT TESTS
 ########################################
 
-class Test_MJD_DATE(unittest.TestCase):
+class Test_NUMERIC_DATE(unittest.TestCase):
 
     def runTest(self):
 
-        self.assertEqual(MJD_OF_EPOCH_2000, 51544)
-        self.assertEqual(JD_OF_EPOCH_2000, 2451544.5)
-        self.assertEqual(JD_MINUS_MJD, JD_OF_EPOCH_2000 - MJD_OF_EPOCH_2000)
-
-        # Test MJD_DATE
-        parser = MJD_DATE
-
-        self.assertEqual(parser.parseString(" JD0").asList(),
-                         [["MJD", -2400000.5]])
-        self.assertEqual(parser.parseString("JD .5 ").asList(),
-                         [["MJD", -2400000.0]])
-        self.assertEqual(parser.parseString(" JD0.5 ").asList(),
-                         [["MJD", -2400000.0]])
+        # Test NUMERIC_DATE
+        parser = NUMERIC_DATE + StringEnd()
 
         self.assertEqual(parser.parseString(" MJD0").asList(),
-                         [["MJD", 0]])
-        self.assertEqual(parser.parseString("MJD .5 ").asList(),
-                         [["MJD", 0.5]])
-        self.assertEqual(parser.parseString(" MJD0.5").asList(),
-                         [["MJD", 0.5]])
-
-        self.assertEqual(parser.parseString("JD0.0 UtC").asList(),
-                         [["MJD", -2400000.5], ["TYPE", "UTC"]])
-        self.assertEqual(parser.parseString("JD0UT").asList(),
-                         [["MJD", -2400000.5], ["TYPE", "UTC"]])
-        self.assertEqual(parser.parseString("JD0 Z").asList(),
-                         [["MJD", -2400000.5], ["TYPE", "UTC"]])
-        self.assertEqual(parser.parseString("JD0 TaI").asList(),
-                         [["MJD", -2400000.5], ["TYPE", "TAI"]])
-        self.assertEqual(parser.parseString("JD0 TDb").asList(),
-                         [["MJD", -2400000.5], ["TYPE", "TDB"]])
-
-        self.assertEqual(parser.parseString("MJD0 UtC").asList(),
-                         [["MJD", 0], ["TYPE", "UTC"]])
-        self.assertEqual(parser.parseString("MJD.5Ut").asList(),
-                         [["MJD", 0.5], ["TYPE", "UTC"]])
-        self.assertEqual(parser.parseString("MJD0.5 Z").asList(),
-                         [["MJD", 0.5], ["TYPE", "UTC"]])
-        self.assertEqual(parser.parseString("MJD0 tAI").asList(),
-                         [["MJD", 0], ["TYPE", "TAI"]])
-        self.assertEqual(parser.parseString("MJD0TdT").asList(),
-                         [["MJD", 0], ["TYPE", "TDB"]])
-
-        # Doesn't complete...
-        self.assertEqual(parser.parseString("JD 0-").asList(),
-                         [["MJD", -2400000.5]])
-        self.assertEqual(parser.parseString("MJD 0-").asList(),
-                         [["MJD", 0]])
+                         [['UNIT', 'MJD'], ['NUMBER', 0.]])
+        self.assertEqual(parser.parseString("JD .5 ").asList(),
+                         [['UNIT', 'JD'], ['NUMBER', 0.5]])
+        self.assertEqual(parser.parseString(" JED0.5 ").asList(),
+                         [['UNIT', 'JED'], ['NUMBER', 0.5]])
+        self.assertEqual(parser.parseString(" 1234567 JED ").asList(),
+                         [['NUMBER', 1234567.], ['UNIT', 'JED']])
+        self.assertEqual(parser.parseString(" -1234567 (TAI ) ").asList(),
+                         [['NUMBER', -1234567.], ['UNIT', 'TAI']])
+        self.assertEqual(parser.parseString("TDT-0  ").asList(),
+                         [['UNIT', 'TDT'], ['NUMBER', 0.]])
 
         # Doesn't recognize...
         self.assertRaises(ParseException, parser.parseString, " ")
         self.assertRaises(ParseException, parser.parseString, "a")
         self.assertRaises(ParseException, parser.parseString, "0")
-        self.assertRaises(ParseException, parser.parseString, "JD-0")
-        self.assertRaises(ParseException, parser.parseString, "MJD-0")
+        self.assertRaises(ParseException, parser.parseString, "MJED 0-")
 
 ################################################################################
 # FRACTIONAL_DATE
@@ -1653,7 +1630,7 @@ class Test_FRACTIONAL_DATE(unittest.TestCase):
                          ["TYPE", "TAI"]])
         self.assertEqual(parser.parseString("2000 01 01. TDT").asList(),
                         [["YEAR", 2000], ["MONTH", 1], ["DAY", 1.0],
-                         ["TYPE", "TDB"]])
+                         ["TYPE", "TDT"]])
         self.assertEqual(parser.parseString("2000-1.Z").asList(),
                         [["YEAR", 2000], ["DAY", 1.0], ["TYPE", "UTC"]])
 
@@ -1691,21 +1668,21 @@ T               = Suppress(Literal("T"))
 YMD_PREF_DATETIME = ( (YMD_PREF_DATE + Optional(SEPARATOR) + TYPED_TIME)
                     | (TYPED_TIME + Optional(SEPARATOR) + YMD_PREF_DATE)
                     | ((YMD_REQ_DATE | YD_REQ_DATE) + T + TYPED_TIME)
-                    | FRACTIONAL_DATE | MJD_DATE
+                    | FRACTIONAL_DATE | NUMERIC_DATE
                     | YMD_PREF_DATE
                     )
 
 MDY_PREF_DATETIME = ( (MDY_PREF_DATE + Optional(SEPARATOR) + TYPED_TIME)
                     | (TYPED_TIME + Optional(SEPARATOR) + MDY_PREF_DATE)
                     | ((YMD_REQ_DATE | YD_REQ_DATE) + T + TYPED_TIME)
-                    | FRACTIONAL_DATE | MJD_DATE
+                    | FRACTIONAL_DATE | NUMERIC_DATE
                     | MDY_PREF_DATE
                     )
 
 DMY_PREF_DATETIME = ( (DMY_PREF_DATE + Optional(SEPARATOR) + TYPED_TIME)
                     | (TYPED_TIME + Optional(SEPARATOR) + DMY_PREF_DATE)
                     | ((YMD_REQ_DATE | YD_REQ_DATE) + T + TYPED_TIME)
-                    | FRACTIONAL_DATE | MJD_DATE
+                    | FRACTIONAL_DATE | NUMERIC_DATE
                     | DMY_PREF_DATE
                     )
 
@@ -1766,7 +1743,7 @@ class Test_DATETIME(unittest.TestCase):
                     [['YEAR', 2000], ['DAY', 1],
                      ['HOUR', 0], ['MINUTE', 0], ['SECOND', 0.0]])
 
-        # Test FRACTIONAL_DATE and MJD_DATE
+        # Test FRACTIONAL_DATE and NUMERIC_DATE
         self.assertEqual(parser.parseString("2000-01-01.UTC").asList(),
                     [["YEAR", 2000], ["MONTH", 1], ["DAY", 1.0],
                      ["TYPE", "UTC"]])
