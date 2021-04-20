@@ -2,15 +2,44 @@
 # julian.py - The Julian Library
 #
 # This is a set of routines for handing date and time conversions. It handles
-# three time systems:
-#   UTC = Universal Coordinates Time, similar to Grenwich Mean Time
-#   TAI = International Atomic Time, which is the same as UTC except that it
-#         ignores leap seconds. UTC and TAI always differ by a whole number of
-#         seconds. The SPICE LS kernel is read at run time to get the lastest
-#         list of leap seconds.
-#   TDB = Terrestrial Barycentric Time, which is adjusted for the relativistic
-#         effects that cause a clock on the Earth to vary in speed relative to
-#         one at the solar system barycenter.
+# these time systems:
+#   UTC = Universal Coordinates Time, similar to Grenwich Mean Time, expressed
+#         by integer days since January 1, 2000 plus floating-point seconds
+#         since beginning of day. UTC can also be represented in various
+#         standard formats for a calendar date plus an optional time.
+#   TAI = International Atomic Time, which is number of actual elapsed seconds
+#         since December 31, 1999 at 23:59:28. This running tally accounts for
+#         all leap seconds.
+#   TDB = Terrestrial Barycentric Time, which is the number of elapsed seconds
+#         since noon (not midnight!) on January 1, 2000, and adjusted for
+#         relativistic effects that cause a clock on the Earth to vary in speed
+#         relative to one at the solar system barycenter. This quantity is
+#         equivalent to "ephemeris time" in the SPICE time system, although
+#         differences at the level of milliseconds can occur.
+#   TDT = Terrestrial Dynamical Time, which is the preferred time system for
+#         Earth-centered orbits. This is also defined in a manner consistent
+#         with that in the SPICE toolkit.
+#   JD  = Julian Date as a number of elapsed days since noon (not midnight!) on
+#         Monday, January 1, 4713 BCE. Each period from one noon to the next
+#         counts as one day, regardless of whether that day contains leap
+#         seconds. As a result, some days are longer than others. (Note that
+#         leap seconds always occur at midnight, and therefore at the middle of
+#         a Julian day.)
+#   MJD = Modified Julian Date, defined to be JD minus 2400000.5.
+#   JED = Julian Ephmeris Date, defined to be TDB/86400 + 2451545. It is
+#         compatible with SPICE ephemeris time but in units of days rather than
+#         seconds.
+#   MJED = Modified Julian Ephmeris Date, defined as JED minus 2400000.5.
+#
+#   Throughout the library, TAI is the intermediary time relative to which all
+#   others are defined. Note: The term "TAI" is also used infrequently in the
+#   SPICE Toolkit, but the SPICE value is smaller by exactly 43200 seconds. All
+#   other terms used here are essentially identical in meaning to their SPICE
+#   Toolkit equivlents.
+#
+#   If the environment variable SPICE_LSK_FILEPATH is defined, then this SPICE
+#   leapseconds kernel is read at startup. Otherwise, leap seconds through 2020
+#   are always included, as defined in NAIF00012.TLS.
 #
 #   The library also handles calendar conversions and both parses and formats
 #   strings that express time in UTC.
@@ -19,33 +48,18 @@
 #   datetime library, but is separate from them because the datetime library
 #   cannot handle leap seconds.
 #
+#   This library duplicates some of the SPICE toolkit, but has the advantage of
+#   supporting array-based time operations, which can be much faster when
+#   processing large amounts of data. It is also pure Python, and so does not
+#   need to be linked with C or FORTRAN libraries.
+#
 #   Aside from the I/O routines, every argument to every function can be either
-#   a scalar or something array-like, i.e, a numpy array, a tuple or a list.
-#   Arguments other than scalars are converted to numpy arrays, the arrays are
+#   a scalar or something array-like, i.e, a NumPy array, a tuple or a list.
+#   Arguments other than scalars are converted to NumPy arrays, the arrays are
 #   broadcasted to the same shape if necessary, and the complete array(s) of
-#   results is/are returned.
+#   results are returned.
 #
-# Mark R. Showalter
-# PDS Rings Node
-# August 2011
-#
-# 12/31/11 (MRS) - Removed julian_isoparser based on indications that its
-#   performance was unacceptably slow. New ISO routines parse the strings
-#   without resorting to pyparsing, and also support array-like arguments. Also
-#   added routine tai_from_iso().
-#
-# 1/11/12 (MRS) - Added the new leap second for July 1, 2012.
-#
-# 1/17/12 (BSW) - subtracted 12 hours from tdb on tdb_from_tai (and added 12
-#   hours for the reverse in tai_from_tdb) to deal with J2000 starting from
-#   noon on 1/1/2000, not midnight.
-#
-# 8/24/16 (MRS) - New leapsecond for 12/31/16.
-#
-# 3/29/18 (MRS) - Now compatible with both Python 2 and Python 3.
-#
-# 8/28/19 (MRS) - Eliminated returns of shapeless NumPy arrays; added minimal
-#   support for SPICE TDT time.
+#   The Julian Library is compatible with both Python 2 and Python 3.
 ################################################################################
 
 from __future__ import print_function, division
@@ -55,29 +69,33 @@ import datetime as dt
 import numpy as np
 import pyparsing
 import unittest
+import numbers
 
 import textkernel as tk
 import julian_dateparser as jdp
 
-# Handy utilities...
-
-def INT(arg):
-    if np.shape(arg):
+def _INT(arg):
+    """Convert to int, works for for scalar, array, or array-like."""
+    if isinstance(arg, np.ndarray):
         return arg.astype('int')
+    elif np.shape(arg):
+        return np.array(arg).astype('int')
     else:
         return int(arg)
 
-################################################################################
-# Basic support for SPICE TDT times
-################################################################################
+def _FLOAT(arg):
+    """Convert to floating-point, works for scalar, array, or array-like."""
+    if np.shape(arg):
+        return np.asfarray(arg)
+    else:
+        return float(arg)
 
-JULIAN_TAI_MINUS_SPICE_TDT = 43167.816
-
-def tai_from_tdt(tdt):
-    return tdt + JULIAN_TAI_MINUS_SPICE_TDT
-
-def tdt_from_tai(tai):
-    return tai - JULIAN_TAI_MINUS_SPICE_TDT
+def _ZEROS(arg):
+    """Array of floating-point zeros matching the shape of arg."""
+    if np.shape(arg):
+        return np.zeros(np.shape(arg))
+    else:
+        return 0.
 
 ################################################################################
 # Initialization
@@ -87,7 +105,7 @@ def tdt_from_tai(tai):
 # defined internally as SPICE_LSK_TEXT is used.
 ################################################################################
 
-# Define the text from the latest LSK file, naif0009.tls
+# Define the text from the latest LSK file, NAIF00012.TLS
 SPICE_LSK_DICT = {
     "DELTA_T_A": 32.184,
     "K": 1.657e-3,
@@ -187,7 +205,8 @@ load_from_dict(SPICE_LSK_DICT)
 try:
     filespec = os.environ["SPICE_LSK_FILEPATH"]
     load_from_kernel(filespec)
-except KeyError: pass
+except KeyError:
+    pass
 
 ########################################
 # UNIT TESTS
@@ -227,6 +246,10 @@ def day_from_ymd(y, m, d):
     """Day number from year, month and day. All must be integers. Supports
     scalar or array arguments."""
 
+    y = _INT(y)
+    m = _INT(m)
+    d = _INT(d)
+
     m = (m + 9) % 12
     y = y - m//10
     return 365*y + y//4 - y//100 + y//400 + (m*306 + 5)//10 + d - 730426
@@ -235,6 +258,8 @@ def day_from_ymd(y, m, d):
 
 def ymd_from_day(day):
     """Year, month and day from day number. Inputs must be integers."""
+
+    day = _INT(day)
 
     # Execute the magic algorithm
     g = day + 730425
@@ -262,14 +287,14 @@ def yd_from_day(day):
     """Year and day-of-year from day number."""
 
     (y,m,d) = ymd_from_day(day)
-    return (y, day - day_from_ymd(y,1,1) + 1)
+    return (y, _INT(day) - day_from_ymd(y,1,1) + 1)
 
 ########################################
 
 def day_from_yd(y, d):
     """Day number from year and day-of-year."""
 
-    return day_from_ymd(y,1,1) + d - 1
+    return day_from_ymd(y,1,1) + _INT(d) - 1
 
 ########################################
 
@@ -277,14 +302,16 @@ def month_from_ym(y, m):
     """Number of elapsed months since January 2000. Supports scalar or array
     arguments."""
 
-    return 12*(y - 2000) + (m - 1)
+    return 12*(_INT(y) - 2000) + (_INT(m) - 1)
 
 ########################################
 
 def ym_from_month(month):
     """Year and month from the number of elapsed months since January 2000."""
 
-    y = INT(month//12)
+    month = _INT(month)
+
+    y = _INT(month//12)
     m = month - 12*y
     y += 2000
     m += 1
@@ -321,9 +348,9 @@ class Test_Calendar(unittest.TestCase):
 
         # day_from_ymd()
         self.assertEqual(day_from_ymd(2000,1,1), 0)
-        self.assertEqual(day_from_ymd(2000,2,np.array([27,28,29])).tolist(),    [57,58,59])
-        self.assertEqual(day_from_ymd(2000,np.array([1,2,3]),1).tolist(),       [ 0,31,60])
-        self.assertEqual(day_from_ymd(np.array([2000,2001,2002]),1,1).tolist(), [0,366,731])
+        self.assertEqual(day_from_ymd(2000,2,[27,28,29]).tolist(),    [57,58,59])
+        self.assertEqual(day_from_ymd(2000,[1,2,3],1).tolist(),       [ 0,31,60])
+        self.assertEqual(day_from_ymd([2000,2001,2002],1,1).tolist(), [0,366,731])
 
         # ymd_from_day()
         self.assertEqual(ymd_from_day(0),   (2000,1,1))
@@ -482,7 +509,8 @@ def day_sec_from_tai(tai):
     that day, given the number of elapsed seconds since January 1, 2000 TAI."""
 
     # Make an initial guess at the day and seconds
-    day = INT(tai//86400)
+    tai = _FLOAT(tai)
+    day = _INT(tai//86400)
     leapsecs = leapsecs_from_day(day)
     sec = tai - 86400. * day - leapsecs
 
@@ -500,13 +528,22 @@ def day_sec_from_tai(tai):
 ########################################
 
 def tai_from_day(day):
-    """Returns a number of elapsed seconds since January 1, 2000 TAI, at the
-    beginning of the specified day since January 1, 2000 UTC."""
+    """Number of elapsed seconds since January 1, 2000 TAI, at the beginning of
+    the specified day since January 1, 2000 UTC."""
 
     (y,m,d) = ymd_from_day(day)
     leapsecs = leapsecs_from_ym(y,m)
 
-    return 86400. * day + leapsecs
+    return 86400. * _INT(day) + leapsecs
+
+def tai_from_day_sec(day, sec):
+    """Number of elapsed seconds since January 1, 2000 TAI, at the specified day
+    since January 1, 2000 UTC, plus the specified number of seconds."""
+
+    (y,m,d) = ymd_from_day(day)
+    leapsecs = leapsecs_from_ym(y,m)
+
+    return 86400. * _INT(day) + leapsecs + sec
 
 ########################################
 # UNIT TESTS
@@ -518,15 +555,15 @@ class Test_TAI_UTC(unittest.TestCase):
 
         # Check tai_from_day
         self.assertEqual(tai_from_day(0), 32)
-        self.assertEqual(tai_from_day(np.array([0,1]))[0],    32)
-        self.assertEqual(tai_from_day(np.array([0,1]))[1], 86432)
+        self.assertEqual(tai_from_day([0,1])[0],    32)
+        self.assertEqual(tai_from_day([0,1])[1], 86432)
 
-        #Check day_sec_from_tai
+        # Check day_sec_from_tai
         self.assertEqual(day_sec_from_tai(32.), (0, 0.))
-        self.assertEqual(day_sec_from_tai(np.array([35.,86435.]))[0][0], 0)
-        self.assertEqual(day_sec_from_tai(np.array([35.,86435.]))[0][1], 1)
-        self.assertEqual(day_sec_from_tai(np.array([35.,86435.]))[1][0], 3.)
-        self.assertEqual(day_sec_from_tai(np.array([35.,86435.]))[1][1], 3.)
+        self.assertEqual(day_sec_from_tai([35.,86435.])[0][0], 0)
+        self.assertEqual(day_sec_from_tai([35.,86435.])[0][1], 1)
+        self.assertEqual(day_sec_from_tai([35.,86435.])[1][0], 3.)
+        self.assertEqual(day_sec_from_tai([35.,86435.])[1][1], 3.)
 
         # A large number of dates, spanning > 200 years
         daylist = np.arange(-40000,40000,83)
@@ -551,14 +588,16 @@ def hms_from_sec(sec):
     arguments. Input must be between 0 and 86410, where numbers above 86400 are
     treated as leap seconds."""
 
+    sec = _FLOAT(sec)
+
     # Test for valid range
     if (np.any(sec < 0.)):     raise ValueError("seconds < 0")
     if (np.any(sec > 86410.)): raise ValueError("seconds > 86410")
 
-    h = np.minimum(INT(sec//3600), 23)
+    h = np.minimum(_INT(sec//3600), 23)
     t = sec - 3600*h
 
-    m = np.minimum(INT(t//60), 59)
+    m = np.minimum(_INT(t//60), 59)
     t -= 60*m
 
     return (h, m, t)
@@ -569,7 +608,7 @@ def sec_from_hms(h, m, s):
     """Seconds into day from hour, minute and second. Supports scalar or array
     arguments."""
 
-    return 3600*h + 60*m + s
+    return 3600*_INT(h) + 60*_INT(m) + _FLOAT(s)
 
 ########################################
 # UNIT TESTS
@@ -671,7 +710,8 @@ def tai_from_tdb(tdb):
     """Converts from TDB to TAI. Operates on either a single scalar or an
     arbitrary array of values. An exact solution; no iteration required."""
 
-    tdb = tdb + 43200.   # add 12 hours as tdb is respect to noon on 1/1/2000
+    tdb = _FLOAT(tdb) + 43200.  # add 12 hours as tdb is respect to noon on
+                                # 1/1/2000
 
     #   tai = tdb - DELTA - K sin(E)
     #   E = M + EB sin(M)
@@ -725,7 +765,19 @@ class Test_TDB_TAI(unittest.TestCase):
         self.assertTrue(np.all(errors > -1.e-15 * secs))
 
 ################################################################################
-# Julian Date conversions
+# Basic support for SPICE TDT times
+################################################################################
+
+JULIAN_TAI_MINUS_SPICE_TDT = 43167.816
+
+def tai_from_tdt(tdt):
+    return _FLOAT(tdt) + JULIAN_TAI_MINUS_SPICE_TDT
+
+def tdt_from_tai(tai):
+    return _FLOAT(tai) - JULIAN_TAI_MINUS_SPICE_TDT
+
+################################################################################
+# Julian Date and Modified Julian Date conversions
 ################################################################################
 
 MJD_OF_EPOCH_2000 = 51544
@@ -735,87 +787,97 @@ JD_MINUS_MJD = JD_OF_EPOCH_2000 - MJD_OF_EPOCH_2000
 # Integer versions
 
 def mjd_from_day(day):
-    """Returns the Modified Julian Date for a specified day number relative to
-    January 1, 2000. Works for scalars or arrays, expected to be integers."""
+    """Modified Julian Date for a specified day number after January 1, 2000.
+    Works for scalars or arrays."""
 
-    return day + MJD_OF_EPOCH_2000
+    return _INT(day) + MJD_OF_EPOCH_2000
 
 def day_from_mjd(mjd):
-    """Returns the day number relative to January 1, 2000 for the given Modified
-    Julian Day. Works for scalars or arrays, expected to be integers."""
+    """Day number after January 1, 2000 from integral Modified Julian Date.
+    Works for scalars or arrays."""
 
-    return mjd - MJD_OF_EPOCH_2000
+    return _INT(mjd) - MJD_OF_EPOCH_2000
 
-# Floating-point versions
+# Versions neglecting leap seconds
 
 def jd_from_time(time):
-    """Returns the Julian Date for a specified number of seconds relative to
-    midnight on January 1, 2000. Works for scalars or arrays. This definition of
-    Julian Date assumes every day contains 86400 seconds; it ignores leap
-    seconds."""
+    """Julian Date for a specified number of seconds since midnight on January
+    1, 2000. This version neglects leap seconds so every day contains 86400
+    seconds. Works for scalars or arrays."""
 
-    return time/86400. + JD_OF_EPOCH_2000
+    return _FLOAT(time)/86400. + JD_OF_EPOCH_2000
 
 def mjd_from_time(time):
-    """Returns the Modified Julian Date for a specified number of seconds
-    relative to midnight on January 1, 2000. Works for scalars or arrays. This
-     definition of Julian Date assumes every day contains 86400 seconds; it
-    ignores leap seconds."""
+    """Modified Julian Date for a specified number of seconds since midnight on
+    January 1, 2000. This version neglects leap seconds so every day contains
+    86400 seconds. Works for scalars or arrays."""
 
-    return time/86400. + MJD_OF_EPOCH_2000
+    return _FLOAT(time)/86400. + MJD_OF_EPOCH_2000
 
 def time_from_jd(jd):
-    """Returns the elapsed seconds relative to midnight on January 1, 2000 from
-    the Julian Date. Works for scalars or arrays. This definition of Julian Date
-    assumes every day contains 86400 seconds; it ignores leap seconds."""
+    """Elapsed seconds since midnight on January 1, 2000 from Julian Date,
+    neglecting leap seconds. Works for scalars or arrays."""
 
-    return (jd - JD_OF_EPOCH_2000) * 86400.
+    return (_FLOAT(jd) - JD_OF_EPOCH_2000) * 86400.
 
 def time_from_mjd(mjd):
-    """Returns the elapsed seconds relative to midnight on January 1, 2000 from
-    the Modified Julian Date. Works for scalars or arrays. This definition of
-    MJD assumes every day contains 86400 seconds; it ignores leap seconds."""
+    """Elapsed seconds since midnight on January 1, 2000 from Modified Julian
+    Date, neglecting leap seconds. Works for scalars or arrays."""
 
-    return (mjd - MJD_OF_EPOCH_2000) * 86400.
+    return (_FLOAT(mjd) - MJD_OF_EPOCH_2000) * 86400.
 
-# Floating-point UTC versions
+# Floating-point versions supporting UTC days and seconds.
 
-def jd_from_day_sec(day, sec, leapseconds=True):
-    """Returns the Julian Date for a given UTC day and seconds. Works for
-    scalars or arrays. This definition of Julian Date includes leap seconds, so
-    some days are longer than others."""
+def mjd_from_day_sec(day, sec):
+    """Modified Julian Date for a given UTC day and seconds. Works for scalars
+    or arrays. Includes leap seconds, so some days are longer than others."""
 
-    # Add zero to force conversion to float
-    return day + (sec + 0.)/seconds_on_day(day, leapseconds) + JD_OF_EPOCH_2000
+    # Add zero to force conversion to float, if necessary
+    return _INT(day) + _FLOAT(sec)/seconds_on_day(day) + MJD_OF_EPOCH_2000
 
-def mjd_from_day_sec(day, sec, leapseconds=True):
-    """Returns the Modified Julian Date for a given UTC day and seconds. Works
-    for scalars or arrays. This definition of MJD includes leap seconds, so some
-    days are longer than others."""
+def jd_from_day_sec(day, sec):
+    """Julian Date for a given UTC day and seconds. Works for scalars or arrays.
+    Includes leap seconds, so some days are longer than others."""
 
-    return day + (sec + 0.)/seconds_on_day(day, leapseconds) + MJD_OF_EPOCH_2000
+    # Add zero to force conversion to float, if necessary
+    return _INT(day) + _FLOAT(sec)/seconds_on_day(day) + JD_OF_EPOCH_2000
 
-def day_sec_from_jd(jd, leapseconds=True):
-    """Returns a UTC day number and seconds based on a Julian Date. Works for
-    scalars or arrays. This definition of Julian Date allows for leap seconds,
-    so some days are longer than others."""
+def day_sec_from_mjd(mjd):
+    """UTC day number and seconds based on a Julian Date. Works for scalars or
+    arrays. Allows for leap seconds, so some days are longer than others."""
 
-    delta = jd - JD_OF_EPOCH_2000
-    day = INT(delta//1)
-    sec = seconds_on_day(day, leapseconds) * (delta - day)
-
+    delta = _FLOAT(mjd) - MJD_OF_EPOCH_2000
+    day = _INT(delta//1)
+    sec = seconds_on_day(day) * (delta - day)
     return (day, sec)
 
-def day_sec_from_mjd(mjd, leapseconds=True):
-    """Returns a UTC day number and seconds based on a Julian Date. Works for
-    scalars or arrays. This definition of Julian Date allows for leap seconds,
-    so some days are longer than others."""
+def day_sec_from_jd(jd):
+    """UTC day number and seconds based on a Julian Date. Works for scalars or
+    arrays. Allows for leap seconds, so some days are longer than others."""
 
-    delta = mjd - MJD_OF_EPOCH_2000
-    day = INT(delta//1)
-    sec = seconds_on_day(day, leapseconds) * (delta - day)
+    return day_sec_from_mjd(_FLOAT(jd) - JD_MINUS_MJD)
 
-    return (day, sec)
+# Floating-point versions supporting TAI.
+
+def mjd_from_tai(tai):
+    """Modified Julian Date fram TAI seconds."""
+
+    return mjd_from_day_sec(*day_sec_from_tai(tai))
+
+def jd_from_tai(tai):
+    """Julian Date fram TAI seconds."""
+
+    return jd_from_day_sec(*day_sec_from_tai(tai))
+
+def tai_from_mjd(mjd):
+    """TAI seconds from Modified Julian Date."""
+
+    return tai_from_day_sec(*day_sec_from_mjd(mjd))
+
+def tai_from_jd(jd):
+    """TAI seconds from Julian Date."""
+
+    return tai_from_day_sec(*day_sec_from_jd(jd))
 
 ########################################
 # UNIT TESTS
@@ -880,12 +942,54 @@ class Test_JD_MJD(unittest.TestCase):
             self.assertTrue(error < span * 1.e-15)
 
 ################################################################################
+# Julian Ephemeris Date conversions
+################################################################################
+
+MJED_OF_J2000 = MJD_OF_EPOCH_2000 + 0.5
+JED_OF_J2000  = JD_OF_EPOCH_2000  + 0.5
+
+def mjed_from_tdb(tdb):
+    """Modified Julian Ephemeris Date from TDB seconds."""
+
+    return tdb/86400. + MJED_OF_J2000
+
+def jed_from_tdb(tdb):
+    """Julian Ephemeris Date from TDB seconds."""
+
+    return tdb/86400. + JED_OF_J2000
+
+def tdb_from_mjed(mjed):
+    """TDB seconds from Modified Julian Ephemeris Date."""
+
+    return (mjed - MJED_OF_J2000) * 86400.
+
+def tdb_from_jed(jed):
+    """TDB seconds from Modified Julian Ephemeris Date."""
+
+    return (jed - JED_OF_J2000) * 86400.
+
+def mjed_from_tai(tdb):
+    """Modified Julian Ephemeris Date from TAI seconds."""
+
+    return tdb_from_tai(tai)/86400. + MJED_OF_J2000
+
+def jed_from_tai(tai):
+    """Julian Ephemeris Date from TAI seconds."""
+
+    return tdb_from_tai(tai)/86400. + JED_OF_J2000
+
+def tai_from_mjed(mjed):
+    """TAI seconds from Modified Julian Ephemeris Date."""
+
+    return tai_from_tdb((mjed - MJED_OF_J2000) * 86400.)
+
+def tai_from_mjed(jed):
+    """TDB seconds from Modified Julian Ephemeris Date."""
+
+    return tai_from_tdb((jed - JED_OF_J2000) * 86400.)
+
+################################################################################
 # Time System conversions
-#
-# UTC day and second allow for leap seconds.
-# TAI day and second does not allow for leapseconds. Every day has exactly 86400
-#       seconds. TAI and UTC were equal prior to 1972.
-# TDB is TAI plus an offset and allowance for relativistic effects.
 ################################################################################
 
 def utc_from_day_sec_as_type(day, sec, time_type="UTC"):
@@ -893,7 +997,10 @@ def utc_from_day_sec_as_type(day, sec, time_type="UTC"):
     # Conversion UTC to UCT is easy
     if time_type == "UTC": return (day, sec)
 
-    # Conversion from day and second to TAI ignores leap seconds
+    day = _INT(day)
+    sec = _FLOAT(sec)
+
+    # Conversion to TAI
     if time_type == "TAI":
         tai = 86400. * day + sec
         return day_sec_from_tai(tai)
@@ -910,6 +1017,9 @@ def day_sec_as_type_from_utc(day, sec, time_type="UTC"):
 
     # Conversion UTC to UCT is easy
     if time_type == "UTC": return (day, sec)
+
+    day = _INT(day)
+    sec = _FLOAT(sec)
 
     # Conversion from TAI to day and second ignores leap seconds
     if time_type == "TAI":
@@ -939,12 +1049,12 @@ class Test_Conversions(unittest.TestCase):
         # TAI tests...
 
         # TAI was 31-32 seconds ahead of UTC in 1999,2000,2001
-        (day,sec) = day_sec_as_type_from_utc(np.array((-366,0,366)),0.,"TAI")
+        (day,sec) = day_sec_as_type_from_utc((-366,0,366),0.,"TAI")
         self.assertTrue(np.all(day == (-366,0,366)))
         self.assertTrue(np.all(sec == (31.,32.,32.)))
 
         # Inverse of the above
-        (day,sec) = utc_from_day_sec_as_type(np.array((-366,0,366)),32.,"TAI")
+        (day,sec) = utc_from_day_sec_as_type((-366,0,366),32.,"TAI")
         self.assertTrue(np.all(day == (-366,0,366)))
         self.assertTrue(np.all(sec == (1.,0.,0.)))
 
@@ -1086,7 +1196,7 @@ def hms_format_from_sec(sec, digits=None, suffix="", buffer=None):
     if digits is None or digits < 0:
         secfmt = "{:02d}"
         lsec = 2
-        s = INT((s + 0.5) // 1)
+        s = _INT((s + 0.5) // 1)
     else:
         secfmt = "{:0" + str(digits+3) + "." + str(digits) + "f}"
         lsec = 3 + digits
@@ -1169,6 +1279,9 @@ def ydhms_format_from_day_sec(day, sec, sep="T", digits=None, suffix="",
 def _yxdhms_format_from_day_sec(day, sec, ymd=True, sep="T", digits=None,
                                 suffix="", buffer=None):
     """Support function for ymd and yd ISO date-time formats."""
+
+    day = _INT(day)
+    sec = _FLOAT(sec)
 
     # Validate the extra characters
     sep = str(sep)
@@ -1309,14 +1422,14 @@ class Test_Formatting(unittest.TestCase):
         # ymd_format_from_day()
         self.assertEqual(ymd_format_from_day(0), "2000-01-01")
 
-        self.assertTrue(np.all(ymd_format_from_day(np.array([-365,0,366])) ==
-                        np.array([b"1999-01-01", b"2000-01-01", b"2001-01-01"])))
+        self.assertTrue(np.all(ymd_format_from_day([-365,0,366]) ==
+                        [b"1999-01-01", b"2000-01-01", b"2001-01-01"]))
 
         # yd_format_from_day()
         self.assertEqual(yd_format_from_day(0), "2000-001")
 
-        self.assertTrue(np.all(yd_format_from_day(np.array([-365,0,366])) ==
-                        np.array([b"1999-001", b"2000-001", b"2001-001"])))
+        self.assertTrue(np.all(yd_format_from_day([-365,0,366]) ==
+                        [b"1999-001", b"2000-001", b"2001-001"]))
 
         # Check if yd_format_from_day start from 2000-001
         self.assertEqual(yd_format_from_day(0), "2000-001")
@@ -1347,15 +1460,14 @@ class Test_Formatting(unittest.TestCase):
         self.assertEqual(ymdhms_format_from_day_sec(0,0,'T',None,'Z'),
                          "2000-01-01T00:00:00Z")
 
-        ymdhms = ymdhms_format_from_day_sec(np.array(np.array([0,366])),
-                                            np.array(np.array([0,43200])))
-        self.assertTrue(np.all(ymdhms == np.array((b"2000-01-01T00:00:00",
-                                                   b"2001-01-01T12:00:00"))))
+        ymdhms = ymdhms_format_from_day_sec([0,366],[0,43200])
+        self.assertTrue(np.all(ymdhms == (b"2000-01-01T00:00:00",
+                                          b"2001-01-01T12:00:00")))
 
         # Check TAI formatting
         # The 32's below are for the offset between TAI and UTC
-        self.assertTrue(np.all(ydhms_format_from_tai(np.array([32.,366.*86400.+32.])) ==
-                    np.array((b"2000-001T00:00:00", b"2001-001T00:00:00"))))
+        self.assertTrue(np.all(ydhms_format_from_tai([32.,366.*86400.+32.]) ==
+                        (b"2000-001T00:00:00", b"2001-001T00:00:00")))
 
 ################################################################################
 # ISO format parsers
@@ -1682,11 +1794,11 @@ class Test_ISO_Parsing(unittest.TestCase):
 
         strings = ["1999-01-01", "2000-01-01", "2001-01-01"]
         days    = [       -365 ,           0 ,         366 ]
-        self.assertTrue(np.all(day_from_iso(strings) == np.array(days)))
+        self.assertTrue(np.all(day_from_iso(strings) == days))
 
         strings = [["2000-001", "2000-002"], ["2000-003", "2000-004"]]
         days    = [[        0 ,         1 ], [        2 ,         3 ]]
-        self.assertTrue(np.all(day_from_iso(strings) == np.array(days)))
+        self.assertTrue(np.all(day_from_iso(strings) == days))
 
         strings = ["1999-01-01", "2000-01-01", "2001-01+01"]
         self.assertRaises(ValueError, day_from_iso, strings)
@@ -1719,15 +1831,15 @@ class Test_ISO_Parsing(unittest.TestCase):
 
         strings = ["00:00:00", "00:01:00", "00:02:00"]
         secs    = [        0 ,        60 ,       120 ]
-        self.assertTrue(np.all(sec_from_iso(strings) == np.array(secs)))
+        self.assertTrue(np.all(sec_from_iso(strings) == secs))
 
         strings = [["00:02:00Z", "00:04:00Z"], ["00:06:00Z", "00:08:01Z"]]
         secs    = [[      120  ,       240  ], [       360 ,        481 ]]
-        self.assertTrue(np.all(sec_from_iso(strings) == np.array(secs)))
+        self.assertTrue(np.all(sec_from_iso(strings) == secs))
 
         strings = ["00:00:00.01", "00:01:00.02", "23:59:69.03"]
         secs    = [        0.01 ,        60.02 ,     86409.03 ]
-        self.assertTrue(np.all(sec_from_iso(strings) == np.array(secs)))
+        self.assertTrue(np.all(sec_from_iso(strings) == secs))
 
         strings = ["00:00:00.01", "00:01:00.02", "00:02+00.03"]
         self.assertRaises(ValueError, sec_from_iso, strings)
@@ -1767,31 +1879,31 @@ class Test_ISO_Parsing(unittest.TestCase):
 
         strings = ["1999-01-01", "2000-01-01", "2001-01-01"]
         days    = [       -365 ,           0 ,         366 ]
-        self.assertTrue(np.all(day_sec_from_iso(strings)[0] == np.array(days)))
+        self.assertTrue(np.all(day_sec_from_iso(strings)[0] == days))
         self.assertTrue(np.all(day_sec_from_iso(strings)[1] == 0))
 
         strings = [["2000-001", "2000-002"], ["2000-003", "2000-004"]]
         days    = [[        0 ,         1 ], [        2 ,         3 ]]
-        self.assertTrue(np.all(day_sec_from_iso(strings)[0] == np.array(days)))
+        self.assertTrue(np.all(day_sec_from_iso(strings)[0] == days))
         self.assertTrue(np.all(day_sec_from_iso(strings)[1] == 0))
 
         strings = ["1998-12-31 23:59:60", "2001-01-01 01:00:01"]
         days    = [       -366          ,         366          ]
         secs    = [               86400 ,                 3601 ]
-        self.assertTrue(np.all(day_sec_from_iso(strings)[0] == np.array(days)))
-        self.assertTrue(np.all(day_sec_from_iso(strings)[1] == np.array(secs)))
+        self.assertTrue(np.all(day_sec_from_iso(strings)[0] == days))
+        self.assertTrue(np.all(day_sec_from_iso(strings)[1] == secs))
 
         strings = ["1998-12-31T23:59:60", "2001-01-01T01:00:01"]
         days    = [       -366          ,         366          ]
         secs    = [               86400 ,                 3601 ]
-        self.assertTrue(np.all(day_sec_from_iso(strings)[0] == np.array(days)))
-        self.assertTrue(np.all(day_sec_from_iso(strings)[1] == np.array(secs)))
+        self.assertTrue(np.all(day_sec_from_iso(strings)[0] == days))
+        self.assertTrue(np.all(day_sec_from_iso(strings)[1] == secs))
 
         strings = ["1998-12-31 23:59:60Z", "2001-01-01 01:00:01Z"]
         days    = [       -366           ,         366           ]
         secs    = [               86400  ,                 3601  ]
-        self.assertTrue(np.all(day_sec_from_iso(strings)[0] == np.array(days)))
-        self.assertTrue(np.all(day_sec_from_iso(strings)[1] == np.array(secs)))
+        self.assertTrue(np.all(day_sec_from_iso(strings)[0] == days))
+        self.assertTrue(np.all(day_sec_from_iso(strings)[1] == secs))
 
         strings = ["1998-12-31 23:59:60Z", "2001-01-01x01:00:01Z"]
         self.assertRaises(ValueError, day_sec_from_iso, strings)
