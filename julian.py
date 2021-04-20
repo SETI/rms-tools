@@ -35,7 +35,7 @@
 #   others are defined. Note: The term "TAI" is also used infrequently in the
 #   SPICE Toolkit, but the SPICE value is smaller by exactly 43200 seconds. All
 #   other terms used here are essentially identical in meaning to their SPICE
-#   Toolkit equivlents.
+#   Toolkit equivalents.
 #
 #   If the environment variable SPICE_LSK_FILEPATH is defined, then this SPICE
 #   leapseconds kernel is read at startup. Otherwise, leap seconds through 2020
@@ -981,12 +981,12 @@ def jed_from_tai(tai):
 def tai_from_mjed(mjed):
     """TAI seconds from Modified Julian Ephemeris Date."""
 
-    return tai_from_tdb((mjed - MJED_OF_J2000) * 86400.)
+    return tai_from_tdb(tdb_from_mjed(mjed))
 
-def tai_from_mjed(jed):
+def tai_from_jed(jed):
     """TDB seconds from Modified Julian Ephemeris Date."""
 
-    return tai_from_tdb((jed - JED_OF_J2000) * 86400.)
+    return tai_from_tdb(tdb_from_jed(jed))
 
 ################################################################################
 # Time System conversions
