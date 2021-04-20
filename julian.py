@@ -865,7 +865,7 @@ def day_sec_from_jd(jd):
 # Floating-point versions supporting TAI.
 
 def mjd_from_tai(tai):
-    """Modified Julian Date fram TAI seconds."""
+    """Modified Julian Date from TAI seconds."""
 
     return mjd_from_day_sec(*day_sec_from_tai(tai))
 
@@ -973,7 +973,7 @@ def tdb_from_jed(jed):
 
     return (jed - JED_OF_J2000) * 86400.
 
-def mjed_from_tai(tdb):
+def mjed_from_tai(tai):
     """Modified Julian Ephemeris Date from TAI seconds."""
 
     return tdb_from_tai(tai)/86400. + MJED_OF_J2000
