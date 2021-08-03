@@ -2,6 +2,7 @@
 *.pyc
 *.so
 */*.so
+.DS_Store
 cspice1/_cspice_swig.so
 .project
 .pydevproject
