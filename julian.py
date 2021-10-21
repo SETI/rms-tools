@@ -1532,8 +1532,11 @@ def day_from_iso(strings, validate=True, strip=False):
             dtype_dict["dash1"] = ("|S1", k0 + 4)
             dtype_dict["dash2"] = ("|S1", k0 + 7)
 
-        strings.dtype = np.dtype(dtype_dict)
+        dtype = np.dtype(dtype_dict)
+        if dtype.itemsize != len(first):
+            raise ValueError('invalid ISO date length')
 
+        strings.dtype = dtype
         y = strings["y"].astype("int")
         m = strings["m"].astype("int")
         d = strings["d"].astype("int")
@@ -1559,8 +1562,11 @@ def day_from_iso(strings, validate=True, strip=False):
         if validate:
             dtype_dict["dash"] = ("|S1", k0 + 4)
 
-        strings.dtype = np.dtype(dtype_dict)
+        dtype = np.dtype(dtype_dict)
+        if dtype.itemsize != len(first):
+            raise ValueError('invalid ISO date length')
 
+        strings.dtype = dtype
         y = strings["y"].astype("int")
         d = strings["d"].astype("int")
 
@@ -1662,7 +1668,10 @@ def sec_from_iso(strings, validate=True, strip=False):
 
     # Extract hours, minutes, seconds
     dtype = np.dtype(dtype_dict)
-    strings.dtype = np.dtype(dtype_dict)
+    if dtype.itemsize != len(first):
+        raise ValueError('invalid ISO time length')
+
+    strings.dtype = dtype
     h = strings["h"].astype("int")
     m = strings["m"].astype("int")
     s = strings["s"].astype("int")
@@ -1743,7 +1752,7 @@ def day_sec_from_iso(strings, validate=True, strip=False):
     if isep == -1:
         if strip:
             for k0 in range(len(first)):
-                if first[k0:k0+1] != b' ':
+                if first[k0:k0+1] != b" ":
                     break
         else:
             k0 = 0
@@ -1762,7 +1771,11 @@ def day_sec_from_iso(strings, validate=True, strip=False):
     if validate:
         dtype_dict["sep"] = ("|S1", isep)
 
-    strings.dtype = np.dtype(dtype_dict)
+    dtype = np.dtype(dtype_dict)
+    if dtype.itemsize != len(first):
+        raise ValueError('invalid ISO date length')
+
+    strings.dtype = dtype
     day = day_from_iso(strings["day"], validate, strip)
     sec = sec_from_iso(strings["sec"], validate, strip)
 
