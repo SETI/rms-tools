@@ -17,6 +17,8 @@
 #   the raw VICAR header, and the raw VICAR extension header, from input files.
 # 9/19/13 MRS - added method get_values().
 # 12/29/19 MRS - compatible with Python 3 as well as Python 2.
+# 12/30/21 MRS - added __contains__, xxx option for dealing with extraneous
+#   trailing bytes in Galileo SSI files.
 ################################################################################
 
 import numpy as np
@@ -24,6 +26,7 @@ import re
 import sys
 import decimal as dec
 import numbers
+import warnings
 
 ################################################################################
 # VicarImage class
@@ -229,14 +232,23 @@ class VicarImage():
     ############################################################################
 
     @staticmethod
-    def from_file(filename):
+    def from_file(filename, extraneous='error'):
         """Returns a VicarImage object given the name of an existing VICAR file.
     
         Inputs:
             filename        the name of the file to load.
+            extraneous      how to handle extraneous bytes in the file:
+                            'error' to raise ValueError;
+                            'warn' to raise a UserWarning;
+                            'print' to print a message;
+                            'ignore' to ignore.
 
         Return:             a VicarImage object.
         """
+
+        if extraneous not in ('error', 'warn', 'print', 'ignore'):
+            raise ValueError('unrecognized value for extraneous option: ' +
+                             extraneous)
 
         # Create the object
         this = VicarImage()
@@ -273,7 +285,7 @@ class VicarImage():
         vicar_RECSIZE  = this.get_value("RECSIZE")
         vicar_ORG      = this.get_value("ORG"    , default="BSQ")
         vicar_NL       = this.get_value("NL"     )
-        vicar_NS       = this.get_value("NS"     )     
+        vicar_NS       = this.get_value("NS"     )
         vicar_NB       = this.get_value("NB"     , default=1    )
         vicar_N1       = this.get_value("N1"     )
         vicar_N2       = this.get_value("N2"     )
@@ -356,7 +368,26 @@ class VicarImage():
         # Reshape into file records
         samples = vicar_RECSIZE // itemsize
         recs = vector.size // samples
-        records = vector.reshape((recs, samples))
+        try:
+            records = vector.reshape((recs, samples))
+        except ValueError:
+            if extraneous == 'error':
+                raise
+
+            records = vector[:recs*samples].reshape((recs, samples))
+            if extraneous in ('warn', 'print'):
+                trailing = vector[recs*samples:]
+                if np.all(trailing == 0):
+                    message = ('%s has %d zero-valued trailing items' %
+                               (filename, len(trailing)))
+                else:
+                    message = ('%s has %d trailing items' %
+                               (filename, len(trailing)))
+
+                if extraneous == 'print':
+                    print(message)
+                else:
+                    warnings.warn(message)
 
         # Slice out the binary header
         vicar_recs = vicar_LBLSIZE // vicar_RECSIZE
@@ -505,6 +536,18 @@ class VicarImage():
 
         raise TypeError("Invalid index type")
 
+    def __contains__(self, key):
+        if isinstance(key, str):
+            return self.find_keyword(key) >= 0
+        if isinstance(key, numbers.Integral):
+            return key >= 0 and key < self.keyword_count()
+        if isinstance(key, (list,tuple)):
+            if len(key) != 2:
+                raise ValueError("Tuple must contain keyword and index")
+            return self.find_keyword(keyword=key[0], occurrence=key[1]) >= 0
+
+        raise TypeError("Invalid index type")
+
     def find_keyword(self, keyword=".*", occurrence=0, start=0):
         """Returns the index of a keyword in the VICAR header. Returns -1 if the
         keyword is not found.
@@ -546,10 +589,10 @@ class VicarImage():
                 if found == occurrence: return i
 
             # Otherwise, try again
-        
+
         # No match was found
         return -1
-        
+
     def keyword_index(self, keyword=".*", occurrence=0, start=0):
         """Returns the index of a keyword in the VICAR header. Raises an error
         if the keyword is not found.
@@ -590,7 +633,7 @@ class VicarImage():
                 if found == occurrence: return i
 
             # Otherwise, try again
-        
+
         # No match was found
 
         # If the keyword was never matched, raise KeyError
