@@ -2,7 +2,12 @@
 # starcat/spice.py
 ################################################################################
 
-from starcatalog import *
+from __future__ import print_function
+
+try:
+    from starcatalog import *
+except:
+    from .starcatalog import *
 import numpy as np
 import os.path
 import cspyce
@@ -29,7 +34,7 @@ class SpiceStarCatalog(StarCatalog):
 
         # (ra, dec, ra_uncertainty, dec_uncertainty,
         #  catalog_number, spectral_type, v_magnitude)
-            
+
     def _find_stars(self, ra_min, ra_max, dec_min, dec_max, **kwargs):
         """Yield the results for all stars in the RA,DEC range."""
         vmag_min = kwargs.get('vmag_min', None)
@@ -44,16 +49,16 @@ class SpiceStarCatalog(StarCatalog):
              star.unique_number, star.spectral_class, star.vmag) = result
             if vmag_min is not None and star.vmag < vmag_min:
                 if self.debug_level:
-                    print 'SKIPPED VMAG', star.vmag
+                    print('SKIPPED VMAG', star.vmag)
                 continue
             if vmag_max is not None and star.vmag > vmag_max:
                 if self.debug_level:
-                    print 'SKIPPED VMAG', star.vmag
+                    print('SKIPPED VMAG', star.vmag)
                 continue
 
             star.temperature = self.temperature_from_sclass(star.spectral_class)
             if self.debug_level:
-                print 'OK!'
+                print('OK!')
             yield star
 
 
