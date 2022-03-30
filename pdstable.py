@@ -1028,7 +1028,7 @@ class PdsTableInfo(object):
                     self.table_file_name = node.pdsvalue.value
 
         if self.table_file_name is None:
-            raise IOerror("Pointer to a data file was not found in PDS label")
+            raise IOError("Pointer to a data file was not found in PDS label")
 
         # Locate the root of the table object
         table_node = self.label[pointer_name]

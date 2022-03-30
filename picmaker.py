@@ -54,7 +54,7 @@ def main():
     ############################################################################
 
     parser = OptionParser(usage="%prog [options] file1 file2 ...",
-                          version="%prog 0.9")
+                          version="%prog 1.0")
 
     ### Control options
     group = OptionGroup(parser, "control options")
@@ -98,8 +98,9 @@ def main():
 
     # --verbose
     group.add_option("--verbose", dest="verbose",
-        action="store_true", default=False,
-        help="print out the name of each directory in a recursive search.")
+        action="store", type='int', default=0,
+        help="1 to print out the name of each directory in a recursive "       +
+             "search; 2 to print out each file path.")
 
     # --replace
     group.add_option("--replace", dest="replace",
@@ -144,8 +145,8 @@ def main():
         action="store", type="string", default="",
         help="a string to strip from output filename if it is present.")
 
-    # --alt_strip
-    group.add_option("--alt_strip", dest="alt_strip", 
+    # --alt-strip
+    group.add_option("--alt-strip", "--alt_strip", dest="alt_strip", 
         action="store", type="string", default=None,
         help="an additional string to strip from output filename if it is "    +
              "present.")
@@ -197,8 +198,8 @@ def main():
              "input file is a PDS label. Converted to upper case. Default is " +
              "'IMAGE'.") 
 
-    # --alt_pointer
-    group.add_option("--alt_pointer", dest="alt_pointer",
+    # --alt-pointer
+    group.add_option("--alt-pointer", "--alt_pointer", dest="alt_pointer",
         action="store", type="string", default=None,
         help="an alternative PDS pointer identifying the image object; used "  +
              "when the input file is a PDS label and the first pointer is "    +
@@ -206,7 +207,7 @@ def main():
 
     parser.add_option_group(group)
 
-    ### Sizing and layout options
+    ### Sizing options
     group = OptionGroup(parser, "sizing options")
 
     # --size
@@ -229,6 +230,12 @@ def main():
         help="percentage by which to scale the width of the image; use with "  +
              "--wscale to scale the width and height by different amounts.")
 
+    # --crop
+    group.add_option("--crop", dest="crop",
+        action="store", type="float", nargs=1, default=None,
+        help="crop away any boundary regions entirely containing the "         +
+             "specified value.")
+
     # --frame
     group.add_option("--frame", dest="frame",
         action="store", type="int", nargs=2,
@@ -236,10 +243,32 @@ def main():
              "if necessary, the final width and height of the image will be "  +
              "scaled down proportionally to fit within the frame.")
 
+    # --pad
+    group.add_option("--pad", dest="pad",
+        action="store_true", default=False,
+        help="pad the image to match the full size of the frame.")
+
+    # --pad-color
+    group.add_option("--pad-color", dest="pad_color",
+        action="store", type="string", default="black",
+        help="the color to use when padding an image to fill a frame. "        +
+             "The color can be specified by X11 name or by (R,G,B) triplet.")
+
+    parser.add_option_group(group)
+
+    ### Layout options
+    group = OptionGroup(parser, "layout options")
+
     # --wrap
     group.add_option("--wrap", dest="wrap",
         action="store_true", default=False,
         help="wrap the sections of an image if it is extremely elongated.")
+
+    # --wrap-ratio
+    group.add_option("--wrap-ratio", dest="wrap_ratio",
+        action="store", type="float", nargs=1, default=None,
+        help="wrap the sections of an image if its width:height ratio or its " +
+             "height:width ratio exceeds this value.")
 
     # --overlap
     group.add_option("--overlap", dest="overlap",
@@ -250,17 +279,17 @@ def main():
     # --overlaps
     group.add_option("--overlaps", dest="overlaps",
         action="store", type="float", nargs=2, default=None,
-        help="range of percentage of overlaps between the end of one "         +
+        help="range of percentages of overlaps between the end of one "        +
              "wrapped section and the beginning of the next.")
 
-    # --gapsize
-    group.add_option("--gapsize", dest="gap_size",
+    # --gap-size
+    group.add_option("--gap-size", "--gapsize", dest="gap_size",
         action="store", type="int", nargs=1, default=1,
         help="the width of the gap in pixels between sections of a wrapped "   +
              "image.")
 
-    # --gapcolor
-    group.add_option("--gapcolor", dest="gap_color",
+    # --gap-color
+    group.add_option("--gap-color", "--gapcolor", dest="gap_color",
         action="store", type="string", default="white",
         help="the color of the gap between sections of a wrapped image. "      +
              "A color can be specified by X11 name or by (R,G,B) triplet.")
@@ -304,8 +333,8 @@ def main():
              "computing a histogram. Sometimes edge pixels have bad values "   +
              "that could otherwise corrupt the scaling. Default is zero.")
 
-    # --trimzeros
-    group.add_option("--trimzeros", dest="trimzeros",
+    # --trim-zeros
+    group.add_option("--trim-zeros", "--trimzeros", dest="trim_zeros",
         action="store_true", default=False,
         help="ignore any exterior rows or columns that contain all zeros "     +
              "before calculating the percentiles or limits.")
@@ -465,7 +494,10 @@ def main():
     recursive = options.recursive
     movie = options.movie
     pattern = options.pattern
+
     verbose = options.verbose
+    if verbose not in (0,1,2):
+        raise ValueError('unrecognized verbose option: ' + str(verbose))
 
     replace = options.replace
     if replace not in ('all', 'none', 'warn', 'error'):
@@ -484,7 +516,8 @@ def main():
         if os.path.isfile(f):
             filenames.append(f)
         else:
-            if f.endswith('/'): f = f[:-1]
+            if f.endswith('/'):
+                f = f[:-1]
             directories.append(f)
 
     ############################################################################
@@ -500,7 +533,8 @@ def main():
         options_list = []
         for line in lines:
             new_args = line.split()
-            if new_args == []: continue
+            if new_args == []:
+                continue
 
             these_args = sys.argv[1:] + new_args
             options = parser.parse_args(args = these_args)[0]
@@ -584,9 +618,12 @@ def main():
             lines   = sorted([options.rectangle[1]-1, options.rectangle[3]])
 
         # Determine scaling factors
-        if options.scale is None: options.scale = 100.
-        if options.wscale is None: options.wscale = options.scale
-        if options.hscale is None: options.hscale = options.scale
+        if options.scale is None:
+            options.scale = 100.
+        if options.wscale is None:
+            options.wscale = options.scale
+        if options.hscale is None:
+            options.hscale = options.scale
 
         options.scale = (options.wscale, options.hscale)
 
@@ -637,8 +674,14 @@ def main():
             # sizing options
             'size': options.size,
             'scale': options.scale,
+            'crop': options.crop,
             'frame': options.frame,
+            'pad': options.pad,
+            'pad_color': options.pad_color,
+
+            # layout options
             'wrap': options.wrap,
+            'wrap_ratio': options.wrap_ratio,
             'overlap': options.overlaps,
             'gap_size': options.gap_size,
             'gap_color': options.gap_color,
@@ -649,7 +692,7 @@ def main():
             'limits': options.limits,
             'percentiles': options.percentiles,
             'trim': options.trim,
-            'trimzeros': options.trimzeros,
+            'trim_zeros': options.trim_zeros,
             'footprint': options.footprint,
             'histogram': options.histogram,
 
@@ -680,11 +723,12 @@ def main():
     # Process command line filenames
     filtered = fnmatch.filter(filenames, pattern)
     if filtered != []:
-        ProcessImages(filtered, directory, movie, option_dicts)
+        process_images(filtered, directory, movie, option_dicts,
+                       verbose=(verbose > 1))
 
     # Identify the common prefix of all the command line directories
     # This will not be included in the path from the root directory.
-    common_prefix = FindCommonPath(directories)
+    common_prefix = find_common_path(directories)
 
     # In a case where we have already processed command line filenames, we need
     # to insert one extra subdirectory
@@ -692,7 +736,8 @@ def main():
         common_prefix = os.path.split(common_prefix)[0]
 
     lcommon = len(common_prefix)
-    if lcommon == 0: lcommon = -1   # because the prefix does not end in slash
+    if lcommon == 0:
+        lcommon = -1        # because the prefix does not end in slash
 
     # Process command line directories
     for dirpath in directories:
@@ -701,9 +746,11 @@ def main():
         if recursive:
             for (this_dir, subdirs, filenames_in_this_dir) in os.walk(dirpath):
                 filtered = fnmatch.filter(filenames_in_this_dir, pattern)
-                if filtered == []: continue
+                if filtered == []:
+                    continue
 
-                if verbose: print(this_dir)
+                if verbose:
+                    print(this_dir)
 
                 filepaths = [os.path.join(this_dir,f) for f in filtered]
 
@@ -712,15 +759,18 @@ def main():
                 else:
                     out_dir = os.path.join(directory, this_dir[lcommon+1:])
 
-                ProcessImages(filepaths, out_dir, movie, option_dicts)
+                process_images(filepaths, out_dir, movie, option_dicts,
+                               verbose=(verbose > 1))
 
         # Non-recursive case
         else:
-            if verbose: print(dirpath)
+            if verbose:
+                print(dirpath)
 
             filenames_in_dir = os.listdir(dirpath)
             filtered = fnmatch.filter(filenames_in_dir, pattern)
-            if filtered == []: continue
+            if filtered == []:
+                continue
 
             filepaths = [os.path.join(dirpath,f) for f in filtered]
 
@@ -729,7 +779,8 @@ def main():
             else:
                 out_dir = os.path.join(directory, dirpath[lcommon+1:])
 
-            ProcessImages(filepaths, out_dir, movie, option_dicts)
+            process_images(filepaths, out_dir, movie, option_dicts,
+                           verbose=(verbose > 1))
 
   except Exception:
     sys.excepthook(*sys.exc_info())
@@ -743,7 +794,7 @@ def main():
 # A handy utility
 ################################################################################
 
-def FindCommonPath(directories):
+def find_common_path(directories):
 
     def longest_match(str1, str2):
         kmax = min(len(str1), len(str2))
@@ -752,15 +803,18 @@ def FindCommonPath(directories):
                 return str1[:k]
         return str1[:kmax]
 
-    if len(directories) == 0: return ''
-    if len(directories) == 1: return directories[0]
+    if len(directories) == 0:
+        return ''
+    if len(directories) == 1:
+        return directories[0]
 
     longest = longest_match(directories[0], directories[1])
     for dir in directories[2:]:
         longest = longest_match(longest, dir)
 
     last_slash = longest.rfind('/')
-    if last_slash < 1: return ''
+    if last_slash < 1:
+        return ''
 
     return longest[:last_slash]
 
@@ -768,7 +822,7 @@ def FindCommonPath(directories):
 # Circular footprint mask for median filter
 ################################################################################
 
-def CircleMask(diameter):
+def circle_mask(diameter):
 
     size = int(np.ceil(diameter))
     center = size/2. - 0.5
@@ -786,7 +840,7 @@ def CircleMask(diameter):
 # Function to process all the files in a directory
 ################################################################################
 
-def ProcessImages(filenames, directory, movie, option_dicts):
+def process_images(filenames, directory, movie, option_dicts, verbose=False):
     """Process a list of images using a list of option dictionaries."""
 
     if directory is not None and not os.path.exists(directory):
@@ -796,24 +850,26 @@ def ProcessImages(filenames, directory, movie, option_dicts):
     if movie:
 
         # Convert all images...
-        results = ImagesToPics(filenames, directory, reuse=None,
-                               **option_dicts[0])
+        results = images_to_pics(filenames, directory, reuse=None,
+                                 verbose=verbose, **option_dicts[0])
         if results[:2] == (None, None):
-            if proceed: return
+            if proceed:
+                return
             raise IOError('unable to process movie')
 
         # Re-convert using a fixed stretch
         movie_dict = option_dicts[0].copy()
         movie_dict['limits'] = results[:2]
 
-        _ = ImagesToPics(filenames, directory, reuse=None, **movie_dict)
+        _ = images_to_pics(filenames, directory, reuse=None,
+                           verbose=verbose, **movie_dict)
 
     # Otherwise handle images sequentially
     else:
         for filename in filenames:
             prev_obj = -1
             prev_pointer = None
-            for option_dict in option_dicts:
+            for k,option_dict in enumerate(option_dicts):
 
                 if (prev_obj == option_dict['obj'] and
                     prev_pointer == option_dict['pointer']):
@@ -824,20 +880,23 @@ def ProcessImages(filenames, directory, movie, option_dicts):
                         prev_pointer = option_dict['pointer']
 
                 # Convert image...
-                results = ImagesToPics([filename], directory, reuse=reuse,
-                                       **option_dict)
+                results = images_to_pics([filename], directory, reuse=reuse,
+                                         verbose=(verbose and k == 0),
+                                         **option_dict)
 
 ################################################################################
 # Main method
 ################################################################################
 
-def ImagesToPics(filenames, directory=None,
+def images_to_pics(filenames, directory=None, verbose=False,
         replace='all', proceed=False,
         extension='jpg', suffix='', strip=[], quality=75, twobytes=False,
         bands=None, lines=None, samples=None, obj=None, pointer=['IMAGE'],
-        size=None, scale=(100.,100.), frame=None, wrap=False, overlap=(0.,0.),
-            gap_size=1, gap_color='white', hst=False,
-        valid=None, limits=None, percentiles=None, trim=0, trimzeros=False,
+        size=None, scale=(100.,100.), crop=None, frame=None, pad=False,
+            pad_color='black',
+        wrap=False, wrap_ratio=None, overlap=(0.,0.), gap_size=1,
+            gap_color='white', hst=False,
+        valid=None, limits=None, percentiles=None, trim=0, trim_zeros=False,
             footprint=0, histogram=False,
         colormap=None, below_color=None, above_color=None, invalid_color=None,
             gamma=1., tint=False,
@@ -855,6 +914,8 @@ def ImagesToPics(filenames, directory=None,
     directory           the directory in which to write output files. If None,
                         files will be written to the same directory in which
                         the image files were found.
+
+    verbose             True to print out each file name as it is processed.
 
     replace             what to do when a file already exists.
                         "all" (the default) to replace the file silently;
@@ -914,6 +975,9 @@ def ImagesToPics(filenames, directory=None,
                         Use a tuple to scale each dimension by a different
                         amount. None implies no scaling.
 
+    crop                crop any pixels at the border of the image matching this
+                        numeric value. None implies no cropping.
+
     frame               an optional tuple specifying the absolute upper limit on
                         the dimensions of the image. The final image must fit
                         inside this frame. If either dimension of the output
@@ -921,9 +985,23 @@ def ImagesToPics(filenames, directory=None,
                         proportionally until it fits. Smaller images are not
                         enlarged.
 
+    pad                 True to pad the image to match the full size of the
+                        frame.
+
+    pad_color           the color to use when padding an image to fill a frame.
+                        Colors can be expressed by name, using any of the
+                        standard names used in the X11 system. They may also be
+                        specifed by triples (r,g,b), where the red, green and
+                        blue values are each specified by a value between 0 and
+                        255.
+
     wrap                True to wrap the sections of an image that is extremely
                         elongated. This can make more effective use of the
                         specified size or frame.
+
+    wrap_ratio          wrap the sections of an image if its width:height ratio
+                        or its height:width ratio exceeds this value. None to
+                        ignore this option.
 
     overlap             a tuple defining the range of allowed overlaps between
                         the end of one wrapped section and the beginning of the
@@ -969,7 +1047,7 @@ def ImagesToPics(filenames, directory=None,
                         have bad values that could otherwise corrupt the
                         scaling. Default is zero.
 
-    trimzeros           ignore any exterior rows or columns that contain all
+    trim_zeros          ignore any exterior rows or columns that contain all
                         zeros before calculating the percentiles or limits.
 
     footprint           diameter in pixels of a circular footprint for a median
@@ -1075,12 +1153,19 @@ def ImagesToPics(filenames, directory=None,
     if frame is not None and size is not None:
         raise ValueError("frame and size options are incompatible")
 
+    # frame vs. wrap_ratio
+    if frame is not None and wrap_ratio:
+        raise ValueError("frame and wrap_ratio options are incompatible")
+
     # Fill in defaults if necessary
-    if bands is None: bands = (0,1)
+    if bands is None:
+        bands = (0,1)
 
     if extension is None:
-        if twobytes: extension = "tiff"
-        else:        extension = "jpg"
+        if twobytes:
+            extension = "tiff"
+        else:
+            extension = "jpg"
 
     # Initialize the list of limits for return in movie mode
     min_limits = []
@@ -1090,13 +1175,17 @@ def ImagesToPics(filenames, directory=None,
     # Loop through files...
     for infile in filenames:
 
+      if verbose:
+        print(infile)
+
       # Don't stop on error!
       try:
 
         # Construct the output file name
-        outfile = GetOutfile(infile, directory, strip, suffix, extension,
+        outfile = get_outfile(infile, directory, strip, suffix, extension,
                              replace)
-        if outfile == '': continue
+        if outfile == '':
+            continue
 
         # Check for the reuse information
         if len(filenames) == 1 and reuse is not None:
@@ -1120,6 +1209,8 @@ def ImagesToPics(filenames, directory=None,
                     inst_host = labeldict['INSTRUMENT_HOST_ID']
                 elif 'SPACECRAFT_ID' in labeldict:
                     inst_host = labeldict['SPACECRAFT_ID']
+                elif 'SPACECRAFT_NAME' in labeldict:
+                    inst_host = labeldict['SPACECRAFT_NAME']
                 else:
                     inst_host = None
 
@@ -1128,8 +1219,10 @@ def ImagesToPics(filenames, directory=None,
                         inst_id = labeldict['INSTRUMENT_ID']
                         if 'DETECTOR_ID' in labeldict:
                             detector_id = labeldict['DETECTOR_ID']
-                            if type(detector_id) == str:
+                            if isinstance(detector_id, str):
                                 inst_id += '/' + detector_id
+                    elif 'INSTRUMENT_NAME' in labeldict:
+                        inst_id = labeldict['INSTRUMENT_NAME']
                     else:
                         inst_id = None
 
@@ -1141,7 +1234,7 @@ def ImagesToPics(filenames, directory=None,
                     filter_info = (inst_host, inst_id, filter_name)
 
                 # Find the first matching object pointer
-                if type(pointer) == str:
+                if isinstance(pointer, str):
                     pointer = [pointer]
 
                 pds_obj = None
@@ -1153,7 +1246,7 @@ def ImagesToPics(filenames, directory=None,
 
                     if pname in labeldict:
                         pds_obj = labeldict[pname]
-                        if type(pds_obj) == tuple:
+                        if isinstance(pds_obj, tuple):
                             pds_obj = pds_obj[0]
                         break
 
@@ -1162,14 +1255,14 @@ def ImagesToPics(filenames, directory=None,
                                    pointer[0].upper())
 
                 # Convert to a list of filenames for reading
-                if type(pds_obj) == str:
+                if isinstance(pds_obj, str):
                     pds_obj = [pds_obj]
 
                 if obj is None:
                     max_obj = len(pds_obj) - 1
                     imagefile = [os.path.join(os.path.split(infile)[0],
                                               p) for p in pds_obj]
-                elif type(obj) == int:
+                elif isinstance(obj, int):
                     max_obj = obj
                     imagefile = os.path.join(os.path.split(infile)[0],
                                              pds_obj[obj])
@@ -1187,7 +1280,7 @@ def ImagesToPics(filenames, directory=None,
 
             # Read the image array, select up, try to find the filter
             (array3d, default_is_up,
-                      filter_info2) = ReadImageArray(imagefile, labelfile,
+                      filter_info2) = read_image_array(imagefile, labelfile,
                                                      obj, hst)
             filter_info = filter_info or filter_info2
 
@@ -1205,7 +1298,7 @@ def ImagesToPics(filenames, directory=None,
 
         # Look up an instrument-specific colormap if necessary
         if tint:
-            colormap2 = TintedColormap(filter_info)
+            colormap2 = tinted_colormap(filter_info)
             if colormap2 is not None:
                 colormap = colormap2
 
@@ -1225,24 +1318,25 @@ def ImagesToPics(filenames, directory=None,
 
                 # Slice out the needed part of the image
                 (array2d,
-                 invalid_mask) = SliceArray(array3d, samples, lines, (b,b+1),
-                                                     valid)
+                 invalid_mask) = slice_array(array3d, samples, lines, (b,b+1),
+                                                      valid, crop)
 
                 # Fill in zebra stripes (converting to float if necessary)
-                if zebra: array2d = FillZebraStripes(array2d)
+                if zebra:
+                    array2d = fill_zebra_stripes(array2d)
 
                 # Get the histogram limits
-                these_limits = GetLimits(array2d, invalid_mask,
-                                         limits, percentiles,
-                                         assume_int=is_int, trim=trim,
-                                         trimzeros=trimzeros,
-                                         footprint=footprint)
+                these_limits = get_limits(array2d, invalid_mask,
+                                          limits, percentiles,
+                                          assume_int=is_int, trim=trim,
+                                          trim_zeros=trim_zeros,
+                                          footprint=footprint)
 
                 # Apply colormap
-                arrayRGB = ApplyColormap(array2d, these_limits, histogram,
-                                         colormap, invalid_mask,
-                                         below_color, above_color,
-                                         invalid_color)
+                arrayRGB = apply_colormap(array2d, these_limits, histogram,
+                                          colormap, invalid_mask,
+                                          below_color, above_color,
+                                          invalid_color)
 
                 arraysRGB.append(arrayRGB)
 
@@ -1253,7 +1347,7 @@ def ImagesToPics(filenames, directory=None,
                 quadsRGB = np.zeros((4,) + arraysRGB[0].shape)
 
                 for b in range(array3d.shape[0]):
-                    if type(imagefile) == str:
+                    if isinstance(imagefile, str):
                         quadsRGB[b] = np.rot90(arraysRGB[b],b)
                     else:
                         testfile = imagefile[b].upper()
@@ -1285,7 +1379,7 @@ def ImagesToPics(filenames, directory=None,
                     # panelsRGB[0] = WFC1; panelsRGB[1] = WFC2
 
                     for b in range(2):
-                        if type(imagefile) == str:
+                        if isinstance(imagefile, str):
                             panelsRGB[1-b] = arraysRGB[b]
                         else:
                             testfile = imagefile[b].upper()
@@ -1309,59 +1403,65 @@ def ImagesToPics(filenames, directory=None,
         else:
             # Slice out the needed part of the image
             (array2d,
-             invalid_mask) = SliceArray(array3d, samples, lines, bands, valid)
+             invalid_mask) = slice_array(array3d, samples, lines, bands, valid,
+                                                  crop)
 
             # Fill in zebra stripes (converting to float if necessary)
-            if zebra: array2d = FillZebraStripes(array2d)
+            if zebra:
+                array2d = fill_zebra_stripes(array2d)
 
             # Get the histogram limits
-            these_limits = GetLimits(array2d, invalid_mask, limits, percentiles,
-                                     assume_int=is_int, trim=trim,
-                                     trimzeros=trimzeros,
-                                     footprint=footprint)
+            these_limits = get_limits(array2d, invalid_mask, limits, percentiles,
+                                      assume_int=is_int, trim=trim,
+                                      trim_zeros=trim_zeros,
+                                      footprint=footprint)
 
             # Save the current limits for movie mode
             min_limits.append(these_limits[0])
             max_limits.append(these_limits[1])
 
             # Apply colormap
-            arrayRGB = ApplyColormap(array2d, these_limits, histogram,
-                                     colormap, invalid_mask,
-                                     below_color, above_color, invalid_color)
+            arrayRGB = apply_colormap(array2d, these_limits, histogram,
+                                      colormap, invalid_mask,
+                                      below_color, above_color, invalid_color)
 
         # Apply rotation if necessary
-        arrayRGB = RotateArrayRGB(arrayRGB, this_display_upward, rotate)
+        arrayRGB = rotate_array_rgb(arrayRGB, this_display_upward, rotate)
 
         # Apply gamma
-        arrayRGB = ApplyGamma(arrayRGB, gamma)
+        arrayRGB = apply_gamma(arrayRGB, gamma)
 
         # Determine the full output size neglecting any wrap to be applied
         (unwrapped_size, wrapped_size, sections,
-         wrap_axis) = GetSize(arrayRGB.shape, size, scale, frame,
-                                              wrap, overlap, gap_size)
+         wrap_axis) = get_size(arrayRGB.shape, size, scale, frame, wrap,
+                                               wrap_ratio, overlap, gap_size)
 
         # Convert to PIL image
-        image = ArrayToPIL(arrayRGB, twobytes)
+        image = array_to_pil(arrayRGB, twobytes)
 
         # Apply filter
-        image = FilterImage(image, filter)
+        image = filter_image(image, filter)
 
         # Resize PIL image
-        image = ResizeImage(image, unwrapped_size)
+        image = resize_image(image, unwrapped_size)
 
         # Wrap the PIL image if necessary
         if sections > 1:
-            image = WrapImage(image, wrapped_size, sections, wrap_axis,
-                                     gap_size, gap_color)
+            image = wrap_image(image, wrapped_size, sections, wrap_axis,
+                                      gap_size, gap_color)
+
+        # Pad the PIL image if necessary
+        if pad:
+            image = pad_image(image, frame, pad_color)
 
         # Write PIL image via PIL or as a 16-bit TIFF
-        WritePIL(image, outfile, quality)
+        write_pil(image, outfile, quality)
 
       except Exception:
         if proceed:
-            info = sys.exc_info()
-            traceback.print_tb(info[2])
-            print(infile, '**** %s: %s' % (info[0].__name__, info[1][0]))
+            (etype, value, tb) = sys.exc_info()
+            traceback.print_tb(tb)
+            print(infile, '**** %s: %s' % (etype.__name__, value))
         else:
             raise
 
@@ -1379,37 +1479,37 @@ def ImagesToPics(filenames, directory=None,
 # Read the 3-D image array from a data file
 ################################################################################
 
-def ReadImageArray(filename, labelfile, obj=None, hst=False):
+def read_image_array(filename, labelfile, obj=None, hst=False):
     """Return the 3D pixel array and the default display orientation, given the
     file and optional object number.
 
     Input:
-        filename            input file name, which could be in Vicar, FITS,
-                            TIFF, or .npy format. Alternatively, a list of
-                            filenames whose arrays are stacked together.
-        labelfile           optional name of a PDS3 label file.
-        obj                 index or name of the object to load; only used if
-                            the file contains multiple image objects. Default is
-                            to return the first image object. If obj is a list
-                            or tuple, then multiple objects are stacked to
-                            create a new image cube.
-        hst                 True to mosaic an HST image involving multiple CCDs.
+        filename        input file name, which could be in Vicar, FITS, TIFF, or
+                        .npy format. Alternatively, a list of filenames whose
+                        arrays are stacked together.
+        labelfile       optional name of a PDS3 label file.
+        obj             index or name of the object to load; only used if the
+                        file contains multiple image objects. Default is to
+                        return the first image object. If obj is a list or
+                        tuple, then multiple objects are stacked to create a new
+                        image cube.
+        hst             True to mosaic an HST image involving multiple CCDs.
 
-    Return:                 a tuple of three values:
-                            [0]: a numpy 3-D array containing the image data.
-                            [1]: True if the default display orientation is
-                                 upward; False if it is downward or unknown.
-                            [2]: a tuple containing (instrument_host_name,
-                                 instrument_name, filter_name), if available.
+    Return:             a tuple of three values:
+                        [0]: a numpy 3-D array containing the image data.
+                        [1]: True if the default display orientation is upward;
+                             False if it is downward or unknown.
+                        [2]: a tuple containing (instrument_host_name,
+                             instrument_name, filter_name), if available.
     """
 
-    if type(filename) == str:
-        return ReadImageArray1(filename, labelfile, obj, hst)
+    if isinstance(filename, str):
+        return read_one_image_array(filename, labelfile, obj, hst)
 
     # In the case of multiple filenames
     results = []
     for k in range(len(filename)):
-        results.append(ReadImageArray1(filename[k], labelfile, None, hst))
+        results.append(read_one_image_array(filename[k], labelfile, None, hst))
 
     arrays = [r[0] for r in results]
     for k in range(len(arrays)):
@@ -1420,7 +1520,7 @@ def ReadImageArray(filename, labelfile, obj=None, hst=False):
     array = np.vstack(arrays)
     return (array,) + results[0][1:]
 
-def ReadImageArray1(filename, labelfile, obj=None, hst=False):
+def read_one_image_array(filename, labelfile, obj=None, hst=False):
     """Return the 3D pixel array and the default display orientation, given the
     file and optional object number.
     """
@@ -1449,23 +1549,44 @@ def ReadImageArray1(filename, labelfile, obj=None, hst=False):
 
     # Attempt to read a VICAR image
     try:
-        vic = VicarImage.from_file(filename)
+        vic = VicarImage.from_file(filename, extraneous='print')
         array3d = vic.data_3d
 
         # Get filter name for Cassini ISS
         try:
-            (filter1, filter2) = vic['FILTER_NAME']
-            filter_name = filter1 + "+" + filter2
-            return (array3d, False, ('CASSINI', 'ISS', filter_name))
+            if vic['INSTRUMENT_HOST_NAME'] == 'CASSINI ORBITER':
+                (filter1, filter2) = vic['FILTER_NAME']
+                filter_name = filter1 + "+" + filter2
+                return (array3d, False, ('CASSINI', 'ISS', filter_name))
+        except (VicarError, KeyError):
+            pass
+
+        # Get filter name for Galileo SSI
+        try:
+            if vic['MISSION'] == 'GALILEO':
+                filtno = vic['FILTER']
+                filter_name = GALILEO_SSI_NAMES[filtno]
+                return (array3d, False, ('GALILEO', 'SSI', filter_name))
+        except (VicarError, KeyError):
+            pass
+
+        try:
+            if vic['LAB01'][:7] == 'GLL/SSI':
+                filtno = int(vic['LAB03'].partition('FILTER=')[2][0])
+                filter_name = GALILEO_SSI_NAMES[filtno]
+                return (array3d, False, ('GALILEO', 'SSI', filter_name))
         except (VicarError, KeyError):
             pass
 
         # Get filter name for Voyager ISS
         try:
-            filter_name = vic['LAB03'][37:43].rstrip()
-            return (array3d, False, ('VOYAGER', 'ISS', filter_name))
+            if vic['LAB02'][:3] == 'VGR':
+                filter_name = vic['LAB03'][37:43].rstrip()
+                return (array3d, False, ('VOYAGER', 'ISS', filter_name))
         except (VicarError, IndexError, KeyError):
-            return (array3d, False, None)
+            pass
+
+        return (array3d, False, None)
 
     except VicarError:
         pass
@@ -1500,13 +1621,13 @@ def ReadImageArray1(filename, labelfile, obj=None, hst=False):
                       inst_id += '/' + hdulist[0].header['DETECTOR']  # For HST
                 except KeyError:
                   try:
-                    inst_id = hdulist[0].header['INSTRU']      # For NH
+                    inst_id = hdulist[0].header['INSTRU'].upper().strip() # NH
                   except KeyError:
                     pass
 
                 # Get filter name for HST/WFC3 or HST/NICMOS or NH/MVIC
                 try:
-                    filter_name = hdulist[0].header['FILTER'].upper()
+                    filter_name = hdulist[0].header['FILTER'].upper().strip()
                 except KeyError:
                     pass
 
@@ -1541,18 +1662,22 @@ def ReadImageArray1(filename, labelfile, obj=None, hst=False):
 
                     elif hst and inst_id == 'WFPC2':
                         array3d = []
-                        for i in range(len(hdulist)):
-                            array = hdulist[i].data
-                            if type(array) != np.ndarray: continue
-                            if len(array.shape) not in (2,3): continue
+                        for hdu in hdulist:
+                            array = hdu.data
+                            if not isinstance(array, np.ndarray):
+                                continue
+                            if len(array.shape) not in (2,3):
+                                continue
                             array3d.append(array)
                         array3d = np.array(array3d)
 
                     else:
-                        for i in range(len(hdulist)):
-                            array3d = hdulist[i].data
-                            if type(array3d) != np.ndarray: continue
-                            if len(array3d.shape) in (2,3): break
+                        for hdu in hdulist:
+                            array3d = hdu.data
+                            if not isinstance(array3d, np.ndarray):
+                                continue
+                            if len(array3d.shape) in (2,3):
+                                break
 
                 elif isinstance(obj, (list,tuple)):
                     layers = []
@@ -1573,19 +1698,19 @@ def ReadImageArray1(filename, labelfile, obj=None, hst=False):
                 if array3d is None:
                     raise IOError("Image array not found in FITS file")
 
-                if len(array3d.shape) == 2: 
+                if len(array3d.shape) == 2:
                     array3d = array3d.reshape((1,) + array3d.shape)
 
                 hdulist.close()
 
                 return(array3d, True, (inst_host, inst_id, filter_name))
  
-        except (UserWarning, OSError):          # If not a FITS file
+        except (UserWarning, OSError):          # if not a FITS file
             pass
 
     # Attempt to read a PIL-compatible file or 16-bit TIFF
     try:
-        array2d = ReadArray(filename, False)
+        array2d = read_array(filename, False)
         array3d = array2d.reshape((1,) + array2d.shape)
         return (array3d, False, None)
     except IOError:
@@ -1593,7 +1718,7 @@ def ReadImageArray1(filename, labelfile, obj=None, hst=False):
 
     # Attempt to read a PDS3 label
     if labelfile:
-        result = ReadPDSLabeledImageArray(labelfile, obj)
+        result = read_pds_labeled_image_array(labelfile, obj)
         if result is not None:
             return result
 
@@ -1603,7 +1728,7 @@ def ReadImageArray1(filename, labelfile, obj=None, hst=False):
 # Support for PDS-labeled images
 ################################################################################
 
-def ReadPDSLabeledImageArray(filename, obj=None):
+def read_pds_labeled_image_array(filename, obj=None):
 
     label = None
     try:
@@ -1736,34 +1861,40 @@ def ReadPDSLabeledImageArray(filename, obj=None):
 # Slice out the 2-D subarray of a 3-D array
 ################################################################################
 
-def SliceArray(array3d, samples=None, lines=None, bands=None, valid=None):
+def slice_array(array3d, samples=None, lines=None, bands=None, valid=None,
+                         crop=None):
     """Returns the requested slice of a 3-D array as a 2-D array. The input
     3-D array is not modified.
 
     Input:
-        array3d             a 3-D image array indexed (bands, lines, samples).
-        samples             a tuple containing the range of lines to include
-                            in the output image; default is None for all.
-        lines               a tuple containing the range of lines to include
-                            in the output image; default is None for all.
-        bands               a tuple containing the range of bands to average for
-                            the output 2-D array; default is None for all.
-        valid               a tuple containing the numeric range of valid
-                            pixels; default is None to make all pixels valid.
+        array3d         a 3-D image array indexed (bands, lines, samples).
+        samples         a tuple containing the range of lines to include in the
+                        output image; default is None for all.
+        lines           a tuple containing the range of lines to include in the
+                        output image; default is None for all.
+        bands           a tuple containing the range of bands to average for the
+                        output 2-D array; default is None for all.
+        valid           a tuple containing the numeric range of valid pixels;
+                        default is None to make all pixels valid.
+        crop            crop any pixels at the border of the image matching this
+                        numeric value. None implies no cropping.
 
-    Return:                 a tuple containing two values:
-                            [0]: a 2-D array in which the image has been
-                            averaged across the set of bands selected. Note that
-                            invalid pixels are not included in the average.
-                            [1]: The mask array, which could be None if no
-                            no pixels are masked.
+    Return:             a tuple containing two values:
+                        [0]: a 2-D array in which the image has been averaged
+                             across the set of bands selected. Note that invalid
+                             pixels are not included in the average.
+                        [1]: The mask array, which could be None if no pixels
+                             are masked.
     """
 
     # Slice out the needed part of the image
     slice3d = array3d
-    if samples: slice3d = slice3d[:, :, samples[0]:samples[1]]
-    if lines:   slice3d = slice3d[:, lines[0]:lines[1], :]
-    if bands:   slice3d = slice3d[bands[0]:bands[1], :, :]
+    if samples:
+        slice3d = slice3d[:, :, samples[0]:samples[1]]
+    if lines:
+        slice3d = slice3d[:, lines[0]:lines[1], :]
+    if bands:
+        slice3d = slice3d[bands[0]:bands[1], :, :]
 
     # Create a masked array if some pixel values are invalid
     masked = slice3d
@@ -1779,9 +1910,13 @@ def SliceArray(array3d, samples=None, lines=None, bands=None, valid=None):
         masked = np.ma.masked_outside(masked, valid[0], valid[1])
         has_invalid_pixels = True
 
+    # Crop if necessary
+    if crop is not None:
+        masked = crop_array(masked, crop)
+
     # Derive mean of bands and convert to 2-D
     if bands[1] - bands[0] > 1:
-        array2d = np.mean(masked, axis=0)
+        array2d = np.ma.mean(masked, axis=0)
     else:
         array2d = masked[0,:,:].copy()
 
@@ -1799,52 +1934,65 @@ def SliceArray(array3d, samples=None, lines=None, bands=None, valid=None):
 # Trim away missing data around the edges of an image
 ################################################################################
 
-def TrimArray(array2d, value=0., samples=True, lines=True):
-    """Trims away constant values (typically zero) around the periphery of an
-    image.
+def crop_array(array, value=0., samples=True, lines=True):
+    """Crops away constant values (typically zero) around the periphery of an
+    image. Handles masked arrays too.
 
     Input:
-        array2d             a 2-D image array indexed (lines, samples).
-        value               the constant value to trim away.
-        samples             True to trim away samples; False to leave them.
-        lines               True to trim away lines; False to leave them.
+        array           a 2-D image array indexed (lines, samples) or a 3-D
+                        array indexed (bands, lines, samples).
+        value           the constant value to trim away.
+        samples         True to trim away samples; False to leave them.
+        lines           True to trim away lines; False to leave them.
 
-    Return:                 a slice of the image with possibly reduced
-                            dimensions.
+    Return:             a slice of the image with possibly reduced dimensions.
     """
 
-    (nlines, nsamples) = array2d.shape
+    # Return an empty array as is
+    if np.ma.allequal(array, value):
+        return array
+
+    # Add a leading band axis if necessary
+    original_array = array
+    if original_array.ndim == 2:
+        array = array[np.newaxis,:,:]
+
+    # Get the shape
+    (_, nlines, nsamples) = array.shape
 
     # Count empty lines from each end
     lmin = 0
     lmax = nlines - 1
     if lines:
-        while np.ma.allequal(array2d[lmin,:], value): lmin += 1
-        while np.ma.allequal(array2d[lmax,:], value): lmax -= 1
+        while np.ma.allequal(array[:,lmin,:], value):
+            lmin += 1
+        while np.ma.allequal(array[:,lmax,:], value):
+            lmax -= 1
 
     # Count empty rows from each side
     smin = 0
     smax = nsamples - 1
-
     if samples:
-        while np.ma.allequal(array2d[smin,:], value): smin += 1
-        while np.ma.allequal(array2d[smax,:], value): smax -= 1
+        while np.ma.allequal(array[:,:,smin], value):
+            smin += 1
+        while np.ma.allequal(array[:,:,smax], value):
+            smax -= 1
 
-    return array2d[lmin:lmax+1, smin:smax+1]
+    return original_array[..., lmin:lmax+1, smin:smax+1]
 
 ################################################################################
 # Fill zebra stripes in a 2-D array
 ################################################################################
 
-def FillZebraStripes(array2d):
+def fill_zebra_stripes(array2d):
     """Fills lines of zeros at the beginning and end of each row of nonzero
     values exist above and below them. This removes an artifact associated with
     some spacecraft compression procedures.
 
     Input:
-        array2d             a 2-D numpy array.
+        array2d         a 2-D numpy array.
 
-    Return:                 a pointer to the same array, modified in place.
+    Return:             a pointer to the same array, modified in place.
     """
 
     # Get the dimensions
@@ -1859,7 +2007,8 @@ def FillZebraStripes(array2d):
 
         # Average over stripes starting from left
         for s in range(samples):
-            if array2d[l,s] != 0: break
+            if array2d[l,s] != 0:
+                break
 
             array_above = int(array2d[lprev,s])
             array_below = int(array2d[lnext,s])
@@ -1869,7 +2018,8 @@ def FillZebraStripes(array2d):
 
         # Average over stripes starting from right
         for s in range(samples-1, -1, -1):
-            if array2d[l,s] != 0: break
+            if array2d[l,s] != 0:
+                break
 
             array_above = int(array2d[lprev,s])
             array_below = int(array2d[lnext,s])
@@ -1891,8 +2041,8 @@ def FillZebraStripes(array2d):
 
 HISTOGRAM_BINS = 1024
 
-def GetLimits(array2d, mask, limits=None, percentiles=(0.,100.),
-              assume_int=False, trim=0, trimzeros=False, footprint=0):
+def get_limits(array2d, mask, limits=None, percentiles=(0.,100.),
+               assume_int=False, trim=0, trim_zeros=False, footprint=0):
     """Determines the stretch limits of an image based on defined limits and/or
     percentiles.
     
@@ -1916,7 +2066,7 @@ def GetLimits(array2d, mask, limits=None, percentiles=(0.,100.),
                         from the histogram. Sometimes the edge of an image can
                         contain bad pixels. Default 0.
 
-        trimzeros       trim any exterior rows or columns that contain all zeros
+        trim_zeros      trim any exterior rows or columns that contain all zeros
                         before calculating the limits.
 
         footprint       size of the 2-D median filter to apply as an alternative
@@ -1927,19 +2077,23 @@ def GetLimits(array2d, mask, limits=None, percentiles=(0.,100.),
 
     # Make note of whether the pixels are integers or floats
     is_int = array2d.dtype.kind in ("i","u")
-    if assume_int: is_int = True
+    if assume_int:
+        is_int = True
 
     # Trim the array if necessary
     if trim != 0:
         trimmed = array2d[trim:-trim, trim:-trim]
-        tmask = mask[trim:-trim, trim:-trim]
+        if mask is None:
+            tmask = np.zeros(trimmed.shape, dtype='bool')
+        else:
+            tmask = mask[trim:-trim, trim:-trim]
     else:
         trimmed = array2d
         tmask = mask
 
     trimmed_v1 = trimmed
     tmask_v1 = tmask
-    if trimzeros:
+    if trim_zeros:
         if tmask is None:
             tmask = np.zeros(trimmed.shape, dtype='bool')
 
@@ -1966,8 +2120,12 @@ def GetLimits(array2d, mask, limits=None, percentiles=(0.,100.),
     else:
         non_nans = trimmed[~tmask]
 
-    array_min = non_nans.min()
-    array_max = non_nans.max()
+    if non_nans.size:
+        array_min = non_nans.min()
+        array_max = non_nans.max()
+    else:               # empty image
+        array_min = 0
+        array_max = 0
 
     # Deal with a single value
     if array_min == array_max:
@@ -1982,11 +2140,15 @@ def GetLimits(array2d, mask, limits=None, percentiles=(0.,100.),
 
     # Identify the valid extremes of the image
     if limits is None:
-        if is_int: limits = (array_min - 0.5, array_max + 0.5)
-        else:      limits = (array_min,       array_max)
+        if is_int:
+            limits = (array_min - 0.5, array_max + 0.5)
+        else:
+            limits = (array_min, array_max)
 
     # Create the histogram and locate percentiles if necessary
-    if not percentiles: percentiles = (0.,100.)
+    if not percentiles:
+        percentiles = (0.,100.)
+
     if percentiles != (0.,100.):
 
         # Allow an integer histogram to be optimally sampled
@@ -2001,7 +2163,8 @@ def GetLimits(array2d, mask, limits=None, percentiles=(0.,100.),
             hrange = (dn0, dn1)
 
             # Reduce the number of bins if it gets ridiculous
-            if hbins > HISTOGRAM_BINS: hbins = HISTOGRAM_BINS
+            if hbins > HISTOGRAM_BINS:
+                hbins = HISTOGRAM_BINS
 
         else:
             # Sample a floating-point histogram the usual way
@@ -2025,14 +2188,14 @@ def GetLimits(array2d, mask, limits=None, percentiles=(0.,100.),
                               (cumvals[1] - cumvals[0]))
 
         # Locate the percentiles
-        limits = (_PercentileLookup(percentiles[0], percentlist, dnlist,
+        limits = (_percentile_lookup(percentiles[0], percentlist, dnlist,
                                                                  limits),
-                  _PercentileLookup(percentiles[1], percentlist, dnlist,
+                  _percentile_lookup(percentiles[1], percentlist, dnlist,
                                                                  limits))
 
     # Median-filter the array if necessary
     if footprint:
-        circle_footprint = CircleMask(footprint)
+        circle_footprint = circle_mask(footprint)
         filtered = median_filter(trimmed, footprint=circle_footprint)
 
         if tmask is None:
@@ -2044,21 +2207,26 @@ def GetLimits(array2d, mask, limits=None, percentiles=(0.,100.),
 
     return limits
 
-def _PercentileLookup(p, percentlist, dnlist, limits):
+def _percentile_lookup(p, percentlist, dnlist, limits):
 
     # Return expected values beyond limits
-    if p <=   0.: return limits[0]
-    if p >= 100.: return limits[1]
+    if p <= 0.:
+        return limits[0]
+    if p >= 100.:
+        return limits[1]
 
     # Perform an interpolation
     dn = np.interp(p, percentlist, dnlist)
 
     # Check limits
-    if dn <= limits[0]: return limits[0]
-    if dn >= limits[1]: return limits[1]
+    if dn <= limits[0]:
+        return limits[0]
+    if dn >= limits[1]:
+        return limits[1]
 
     # Failure occurs if the value of p appears more than once in the table
-    if np.isnan(dn): return np.mean(dnlist[np.where(percentlist == p)])
+    if np.isnan(dn):
+        return np.mean(dnlist[np.where(percentlist == p)])
 
     # Otherwise all is well
     return dn
@@ -2082,10 +2250,23 @@ VOYAGER_ISS_DICT = {
 }
 
 NH_MVIC_DICT = {
-    "BLUE"  : ( 55, 55,128),
-    "RED"   : (128,105, 50),
-    "NIR"   : (128, 65, 45),
-    "CH4"   : (128, 35, 35),
+    "BLUE"  : (110,110,210),
+    "RED"   : (190,100,100),
+    "NIR"   : (210, 65, 45),
+    "CH4"   : (230, 35, 35),
+}
+
+GALILEO_SSI_NAMES = ["CLEAR", "GREEN", "RED", "VIOLET",
+                     "IR-7560", "IR-9680", "IR-7270", "IR-8890"]
+GALILEO_SSI_DICT = {
+    "CLEAR"  : (128,128,128),
+    "RED"    : (190,130,100),
+    "GREEN"  : (110,190,110),
+    "VIOLET" : (160,100,200),
+    "IR-7270": (200,100,100),
+    "IR-7560": (210, 80, 80),
+    "IR-8890": (220, 60, 60),
+    "IR-9680": (230, 40, 40),
 }
 
 RGB_BY_NM = np.array([                      # [wavelength, r, g, b]
@@ -2103,19 +2284,18 @@ RFUNC = Tabulation(RGB_BY_NM[:,0], RGB_BY_NM[:,1])
 GFUNC = Tabulation(RGB_BY_NM[:,0], RGB_BY_NM[:,2])
 BFUNC = Tabulation(RGB_BY_NM[:,0], RGB_BY_NM[:,3])
 
-def TintedColormap(filter_info):
+def tinted_colormap(filter_info):
     """Returns a colormap based on a tuple of filter info.
 
     Input:
-        filter_info         a tuple (instrument_host, instrument_id, filter),
-                            where the filter might be a tuple of two filter
-                            names.
+        filter_info     a tuple (instrument_host, instrument_id, filter), where
+                        the filter might be a tuple of two filter names.
 
-    Return:                 a color map of the form (black, tint, white), where
-                            the tint is based on the filter name.
+    Return:             a color map of the form (black, tint, white), where the
+                        tint is based on the filter name.
     """
 
-    global VOYAGER_ISS_DICT, NH_MVIC_DICT, RGB_BY_NM, RFUNC, GFUNC, BFUNC
+#     global VOYAGER_ISS_DICT, NH_MVIC_DICT, RGB_BY_NM, RFUNC, GFUNC, BFUNC
 
     if filter_info is None:
         return None
@@ -2124,7 +2304,7 @@ def TintedColormap(filter_info):
     if filter_name is None:
         return None
 
-    if type(filter_name) == tuple:
+    if isinstance(filter_name, tuple):
         (filter1,filter2) = filter_name
         if filter1.startswith('CLEAR') or filter1 == 'CL1' or filter1 == 'N/A':
             filter1 = 'CLEAR'
@@ -2209,8 +2389,14 @@ def TintedColormap(filter_info):
             else:
                 return [(0,0,0), (255,255,255)]
 
-        if inst_host == 'NEW HORIZONS':
-            if inst_id in ('MVIC', 'mvi'):
+        if inst_host.startswith('GALILEO'):
+            if inst_id == 'SSI' or inst_id.startswith('SOLID'):
+                return [(0,0,0), GALILEO_SSI_DICT[filter_name], (255,255,255)]
+            else:
+                return [(0,0,0), (255,255,255)]
+
+        if inst_host in ('NEW HORIZONS', 'NH'):
+            if inst_id in ('MVIC', 'MVI'):
                 return [(0,0,0), NH_MVIC_DICT[filter_name], (255,255,255)]
             else:
                 return [(0,0,0), (255,255,255)]
@@ -2221,26 +2407,28 @@ def TintedColormap(filter_info):
 # Apply rotation
 ################################################################################
 
-def RotateArrayRGB(arrayRGB, display_upward, rotation_name):
+def rotate_array_rgb(arrayRGB, display_upward, rotation_name):
     """Applies an arbitrary orientation to an RGB array.
 
     Input:
-        arrayRGB            an RGB array.
-        display_upward      True if the image should be displayed upward; False
-                            if it should be displayed downward.
-        rotation_name       name of the rotation to be applied. Choices are
-                            "FLIPTB", "FLIPLR", "ROT90", "ROT180", ROT270".
-                            Case is insignificant.
+        arrayRGB        an RGB array.
+        display_upward  True if the image should be displayed upward;
+                        False if it should be displayed downward.
+        rotation_name   name of the rotation to be applied. Choices are
+                        "FLIPTB", "FLIPLR", "ROT90", "ROT180", ROT270". Case is
+                        insignificant.
     """
 
     # Apply the default orientation
-    if display_upward: arrayRGB = np.flipud(arrayRGB)
+    if display_upward:
+        arrayRGB = np.flipud(arrayRGB)
 
     # Apply an additional rotation if necessary
     if rotation_name:
         rotation_name = rotation_name.upper()
 
-        if   rotation_name == "NONE": pass
+        if rotation_name == "NONE":
+            pass
 
         elif rotation_name == "FLIPLR": arrayRGB = np.fliplr(arrayRGB)
         elif rotation_name == "FLIPTB": arrayRGB = np.flipud(arrayRGB)
@@ -2257,32 +2445,33 @@ def RotateArrayRGB(arrayRGB, display_upward, rotation_name):
 # Apply colormap
 ################################################################################
 
-def ApplyColormap(array2d, limits, histogram=False, colormap=None,
-                  invalid_mask=None,
-                  below_color=None, above_color=None, invalid_color="black"):
-    """Applies the colormap to a grayscale image, producing a 3-D array
-    with either one band if grayscale or three bands (R,G,B) if color.
+def apply_colormap(array2d, limits, histogram=False, colormap=None,
+                   invalid_mask=None,
+                   below_color=None, above_color=None, invalid_color="black"):
+    """Applies the colormap to a grayscale image, producing a 3-D array with
+    either one band if grayscale or three bands (R,G,B) if color. The axis
+    order is (line,sample,band).
 
     Input:
-        array2d             a 2-D numpy array for colormapping.
-        limits              the array values that correspond to the first and
-                            last colors in the mapping.
-        histogram           True to use histogram shading, in which case the
-                            returned images has a uniform distribution of DNs,
-                            False otherwise.
-        colormap            an N-tuple of colors to map from the lower to upper
-                            limit.
-        invalid_mask        a boolean mask of invalid pixels, or None if all
-                            pixels are valid.
-        below_color         the color to use for any pixels below the lower
-                            limit. Default is the first color of the colormap.
-        above_color         the color to use for any pixels above the upper
-                            limit. Default is the last color of the colormap.
-        invalid_color       the color to use for invalid pixels.
+        array2d         a 2-D numpy array for colormapping.
+        limits          the array values that correspond to the first and last
+                        colors in the mapping.
+        histogram       True to use histogram shading, in which case the
+                        returned images has a uniform distribution of DNs;
+                        False otherwise.
+        colormap        an N-tuple of colors to map from the lower to upper
+                        limit.
+        invalid_mask    a boolean mask of invalid pixels, or None if all pixels
+                        are valid.
+        below_color     the color to use for any pixels below the lower limit.
+                        Default is the first color of the colormap.
+        above_color     the color to use for any pixels above the upper limit.
+                        Default is the last color of the colormap.
+        invalid_color   the color to use for invalid pixels.
 
-    Return                  a 3-D array containing the new colors mapped to
-                            (0.,1.). The array has three bands (R,G,B) if the
-                            output is color; it has one band if grayscale.
+    Return              a 3-D array containing the new colors mapped to (0.,1.).
+                        The array has three bands (R,G,B) if the output is
+                        color; it has one band if grayscale.
 
     Note: Input colors can be specified by name or by (R,G,B) triple. If the
     latter, 0 is black and 255 is white.
@@ -2296,13 +2485,14 @@ def ApplyColormap(array2d, limits, histogram=False, colormap=None,
     highlights = [below_color, above_color, invalid_color]
     for i in range(len(highlights)):
         if highlights[i]:
-            if type(highlights[i]) == str:
+            if isinstance(highlights[i], str):
                 highlights[i] = ColorNames.lookup(highlights[i])
 
             highlights[i] = np.array(highlights[i][:], 'float') / 255.
 
             if (highlights[i][0] != highlights[i][1] or
-                highlights[i][0] != highlights[i][2]): is_gray = False
+                highlights[i][0] != highlights[i][2]):
+                    is_gray = False
 
     # An invalid color must be defined, defaults to black
     if highlights[2] is None:
@@ -2312,7 +2502,7 @@ def ApplyColormap(array2d, limits, histogram=False, colormap=None,
     if colormap:
 
         # Interpret the colormap if it involves strings
-        if type(colormap) == str:
+        if isinstance(colormap, str):
             names = colormap.split("-")
             colormap = [ColorNames.lookup(name) for name in names]
 
@@ -2325,10 +2515,12 @@ def ApplyColormap(array2d, limits, histogram=False, colormap=None,
 
         # Check for colors in colormap
         for c in colormap:
-            if (c[0] != c[1] or c[0] != c[2]): is_gray = False
+            if (c[0] != c[1] or c[0] != c[2]):
+                is_gray = False
 
         # Extend the map to avoid potential indexing errors below
-        if type(colormap) == tuple: colormap = list(colormap)
+        if isinstance(colormap, tuple):
+            colormap = list(colormap)
         colormap.append(colormap[-1])
         colormap.append(colormap[-1])
 
@@ -2336,8 +2528,10 @@ def ApplyColormap(array2d, limits, histogram=False, colormap=None,
         colormap = np.array(colormap, 'float') / 255.
 
     # Determine whether we need one or tree channels
-    if is_gray: channels = 1
-    else:       channels = 3
+    if is_gray:
+        channels = 1
+    else:
+        channels = 3
 
     # Apply the histogram scaling if necessary
     if histogram:
@@ -2352,7 +2546,8 @@ def ApplyColormap(array2d, limits, histogram=False, colormap=None,
     # Scale the image to the range zero to number of colors
     scaled = normalized.astype("float")
     denom = limits[1] - limits[0]
-    if denom == 0: denom = 1.
+    if denom == 0:
+        denom = 1.
     scaled = (mapcolors-1) * ((scaled - limits[0]) / float(denom))
     scaled = scaled.clip(0, mapcolors-1)
 
@@ -2370,8 +2565,10 @@ def ApplyColormap(array2d, limits, histogram=False, colormap=None,
             above = np.take(colormap[:,c], indices+1)
             result[:,:,c] = (below + fracs * (above - below))
     else:
-        if channels == 1: result = np.atleast_3d(scaled)
-        else:             result = np.dstack((scaled, scaled, scaled))
+        if channels == 1:
+            result = np.atleast_3d(scaled)
+        else:
+            result = np.dstack((scaled, scaled, scaled))
 
     # Apply highlights if necessary
     for c in range(channels):
@@ -2391,18 +2588,19 @@ def ApplyColormap(array2d, limits, histogram=False, colormap=None,
 # Apply gamma factor to an array scaled (0-1)
 ################################################################################
 
-def ApplyGamma(array, gamma):
+def apply_gamma(array, gamma):
     """Applies the gamma factor to an array already scaled 0-1.
 
     Input:
-        array               a 2-D or 3-D numpy array.
-        gamma               gamma factor to apply. > 1 to brighten intermediate
-                            grays; < 1 to darken them.
+        array           a 2-D or 3-D numpy array.
+        gamma           gamma factor to apply. > 1 to brighten intermediate
+                        grays; < 1 to darken them.
 
-    Return                  a pointer to the rescaled array, changed in place.
+    Return              a pointer to the rescaled array, changed in place.
     """
 
-    if gamma != 1.: array = array**(1./gamma)
+    if gamma != 1.:
+        array = array**(1./gamma)
 
     return array
 
@@ -2410,8 +2608,8 @@ def ApplyGamma(array, gamma):
 # Determine unwrapped image dimensions
 ################################################################################
 
-def GetSize(array_shape, size=None, scale=(100.,100.), frame=None,
-                         wrap=False, overlap=(0.,0.), gap_size=1):
+def get_size(array_shape, size=None, scale=(100.,100.), frame=None, wrap=False,
+                          wrap_ratio=None, overlap=(0.,0.), gap_size=1):
     """Returns the output image size (width, height) and wrap properties based
     on the shape of the array (neglecting bands, if any).
     
@@ -2433,6 +2631,9 @@ def GetSize(array_shape, size=None, scale=(100.,100.), frame=None,
                         each dimension; None implies no frame constraint.
         wrap            True to wrap the image in a way that maximizes detail
                         and minimizes distortion.
+        wrap_ratio      wrap the sections of an image if its width:height ratio
+                        or its height:width ratio exceeds this value. None to
+                        ignore this option.
         overlap         a tuple defining the range of allowed overlaps between
                         the end of one wrapped section and the beginning of the
                         next. For example, (5,10) means that between 5% and 10%
@@ -2451,15 +2652,15 @@ def GetSize(array_shape, size=None, scale=(100.,100.), frame=None,
 
     # Normalize inputs
     if size is not None:
-        if type(size) not in (list, tuple):
+        if not isinstance(size, (list,tuple)):
             size = (size, size)
 
     if scale is not None:
-        if type(scale) not in (list, tuple):
+        if not isinstance(scale, (list,tuple)):
             scale = (scale, scale)
 
     if frame is not None:
-        if type(frame) not in (list, tuple):
+        if not isinstance(frame, (list,tuple)):
             frame = (frame, frame)
 
     # Apply scale factor to shape
@@ -2471,12 +2672,30 @@ def GetSize(array_shape, size=None, scale=(100.,100.), frame=None,
     # Determine the output size based on size or frame
     if size is not None:
         (unwrapped_size, quality,
-         expand) = _GetSize_for_size(array_size, size, 0, 1., 1.)
+         expand) = _get_size_for_size(array_size, size, 0, 1., 1.)
     elif frame is not None:
         (unwrapped_size, expanded_size, quality,
-         expand) = _GetSize_for_frame(array_size, frame, 0, 1., 1.)
+         expand) = _get_size_for_frame(array_size, frame, 0, 1., 1.)
     else:
         unwrapped_size = [int(array_size[0] + 0.5), int(array_size[1] + 0.5)]
+
+        # Handle a limit on the wrap ratio
+        if wrap_ratio:
+          if unwrapped_size[0] > wrap_ratio * unwrapped_size[1]:
+            for k in range(2, 101):
+                expand = 1. + overlap[0]/100. * (k-1.)/k
+                wrapped_size = [int(unwrapped_size[0]/k * expand + 0.5),
+                                unwrapped_size[1] * k + gap_size * (k-1)]
+                if wrapped_size[0] <= wrap_ratio * wrapped_size[1]:
+                    return (unwrapped_size, wrapped_size, k, 0)
+
+          if unwrapped_size[1] > wrap_ratio * unwrapped_size[0]:
+            for k in range(2, 101):
+                expand = 1. + overlap[0]/100. * (k-1.)/k
+                wrapped_size = [unwrapped_size[0] * k + gap_size * (k-1),
+                                int(unwrapped_size[1]/k * expand + 0.5)]
+                if wrapped_size[1] <= wrap_ratio * wrapped_size[0]:
+                    return (unwrapped_size, wrapped_size, k, 1)
 
     # Without the wrapping option, we're done
     if not wrap or ((size is None) and (frame is None)):
@@ -2503,13 +2722,17 @@ def GetSize(array_shape, size=None, scale=(100.,100.), frame=None,
 
         # Adjust size and frame for axis, sections and gap
         if size is not None:
+
+            # Calculate the number of pixels (w,h) available for the image if
+            # we wrap it into k sections.
             temp_size = [size[0], size[1]]
             temp_size[axis] *= k
             temp_size[1-axis] -= (k-1) * gap_size
             temp_size[1-axis] //= k
 
+            # Get the image size if it is forced to fit into this area
             (unwrapped_size, quality,
-             expand) = _GetSize_for_size(array_size, temp_size, axis,
+             expand) = _get_size_for_size(array_size, temp_size, axis,
                                                       expand_min, expand_max)
             test_overlap = (expand - 1.) / tweak * 100.
 
@@ -2522,8 +2745,8 @@ def GetSize(array_shape, size=None, scale=(100.,100.), frame=None,
             temp_frame[1-axis] //= k
 
             (unwrapped_size, expanded_size, quality,
-             expand) = _GetSize_for_frame(array_size, temp_frame, axis,
-                                                      expand_min, expand_max)
+             expand) = _get_size_for_frame(array_size, temp_frame, axis,
+                                                       expand_min, expand_max)
             test_overlap = (expand - 1.) / tweak * 100.
 
             wrapped_size = [expanded_size[0], expanded_size[1]]
@@ -2556,21 +2779,42 @@ def GetSize(array_shape, size=None, scale=(100.,100.), frame=None,
 
     return (unwrapped_size, wrapped_size, sections, axis)
 
-def _GetSize_for_size(array_size, size, axis, expand_min, expand_max):
+def _get_size_for_size(array_size, size, axis, expand_min, expand_max):
+    # Calculate the size and quality when attempting to fit an image array into
+    # a pixel area.
+    #
+    # Input:
+    #   array_size      (w,h) of the image array.
+    #   size            (w,h) of the available pixels.
+    #   axis            the axis being wrapped: 0 for width; 1 for height.
+    #   expand_min      minimum allowed expansion factor on the specified axis.
+    #   expand_max      maximum allowed expansion factor on the specified axis.
+    #
+    # Return: (unexpanded_size, quality, expand)
+    #   unexpanded_size exact size of the image to insert into the pixel area,
+    #                   before expansion.
+    #   quality         quality metric, which is maximized when the image has
+    #                   least distortion.
+    #   expand          expansion factor to use along the specified axis.
 
+    # Derive the (w,h) scale factors required to fit the image array into the
+    # available size, neglecting expansion along the axis
     scale = [size[0] / float(array_size[0]),
              size[1] / float(array_size[1])]
 
+    # Adjust the along-axis scale factor for minimum and maximum expansion
     scale_expmin = [scale[0], scale[1]]
     scale_expmin[axis] /= expand_min
-
-    distortion_expmin = np.log(scale_expmin[1] / scale_expmin[0])
 
     scale_expmax = [scale[0], scale[1]]
     scale_expmax[axis] /= expand_max
 
+    # Derive distortion factors for minimum and maximum expansion
+    # We take the log, so distortion == 0 for a 1:1 ratio of scale factors
+    distortion_expmin = np.log(scale_expmin[1] / scale_expmin[0])
     distortion_expmax = np.log(scale_expmax[1] / scale_expmax[0])
 
+    # Select the expansion factor that produces distortion closer to zero
     if abs(distortion_expmin) <= abs(distortion_expmax):
         expand = expand_min
         distortion = abs(distortion_expmin)
@@ -2578,20 +2822,40 @@ def _GetSize_for_size(array_size, size, axis, expand_min, expand_max):
         expand = expand_max
         distortion = abs(distortion_expmax)
 
+    # Choose an intermediate expansion factor if it can give us zero distortion
     if distortion_expmin * distortion_expmax < 0:
         expand = scale[axis] / scale[1-axis]
         distortion = 0.
 
-    quality = np.exp(-distortion)   # Quality peaks at unity for no distortion
+    # Quality = 1 for zero distortion, smaller for larger distortion ratios
+    quality = np.exp(-distortion)
 
-    unwrapped_size = [size[0], size[1]]
-    unwrapped_size[axis] = int(unwrapped_size[axis]/expand + 0.5)
+    # Determine the size of the array to wrap
+    unexpanded_size = [size[0], size[1]]
+    unexpanded_size[axis] = int(unexpanded_size[axis]/expand + 0.5)
 
-    return (unwrapped_size, quality, expand)
+    return (unexpanded_size, quality, expand)
 
-def _GetSize_for_frame(array_size, frame, axis, expand_min, expand_max):
+def _get_size_for_frame(array_size, frame, axis, expand_min, expand_max):
+    # Calculate the size and quality when attempting to fit an image array into
+    # a given pixel frame.
+    #
+    # Input:
+    #   array_size      (w,h) of the image array.
+    #   frame           (w,h) of the available frame.
+    #   axis            the axis being wrapped: 0 for width; 1 for height.
+    #   expand_min      minimum allowed expansion factor on the specified axis.
+    #   expand_max      maximum allowed expansion factor on the specified axis.
+    #
+    # Return: (unexpanded_size, quality, expand)
+    #   unexpanded_size exact size of the image to insert into the pixel frame,
+    #                   before expansion.
+    #   expanded_size   size of the image after expansion.
+    #   quality         quality metric, which is maximized when the image has
+    #                   least distortion.
+    #   expand          expansion factor to use along the specified axis.
 
-    # Determine optimal size inside the frame, with minimal expansion
+    # Determine optimal image size inside the frame, assuming minimal expansion
     array_size_expmin = [array_size[0], array_size[1]]
     array_size_expmin[axis] *= expand_min
 
@@ -2606,30 +2870,29 @@ def _GetSize_for_frame(array_size, frame, axis, expand_min, expand_max):
     optimal_size = [min(int(optimal_size_float[0] + 0.5), frame[0]),
                     min(int(optimal_size_float[1] + 0.5), frame[1])]
 
+    # Quality is the fractional filling factor of the image when inserted into
+    # the frame
     quality = optimal_size[0] * optimal_size[1] / float(frame[0] * frame[1])
-        # quality is the fractional filling factor
 
     # Determine size of image before expansion
-    unwrapped_size_float = [scale * array_size[0], scale * array_size[1]]
+    unexpanded_size_float = [scale * array_size[0], scale * array_size[1]]
+    unexpanded_size = [optimal_size[0], optimal_size[1]]
+    unexpanded_size[axis] = int(unexpanded_size_float[axis] + 0.5)
 
-    unwrapped_size = [optimal_size[0], optimal_size[1]]
-    unwrapped_size[axis] = int(unwrapped_size_float[axis] + 0.5)
-
-    # Expand overlap if possible for better filling
+    # Increase the expansion factor for better filling, if possible
     expanded_size = [optimal_size[0], optimal_size[1]]
-
-    expanded_length = unwrapped_size_float[axis] * expand_max
+    expanded_length = unexpanded_size_float[axis] * expand_max
     expanded_size[axis] = min(int(expanded_length + 0.5), frame[axis])
 
     expand = expanded_size[axis]/scale / float(array_size[axis])
 
-    return (unwrapped_size, expanded_size, quality, expand)
+    return (unexpanded_size, expanded_size, quality, expand)
 
 ################################################################################
 # Convert an array to a PIL image (or list of RGB images).
 ################################################################################
 
-def ArrayToPIL(array, twobytes=False, rescale=True):
+def array_to_pil(array, twobytes=False, rescale=True):
     """Converts an array to a PIL image. For the special case of a 16-bit RGB
     image, it converts it to a list of three PIL images.
 
@@ -2695,40 +2958,41 @@ def ArrayToPIL(array, twobytes=False, rescale=True):
 # Convert a PIL image (or list of RGB images) to an array.
 ################################################################################
 
-def PILtoArray(image, rescale=True):
-    """Converts a PIL image (or list of RGB images) to an array.
+def pil_to_array(image, rescale=True):
+    """Converts a PIL image (or list of RGB images) to an array. The shape of
+    the returned array is (lines, samples, bands) for an RGB image or (lines,
+    samples) for a grayscale image.
 
     Input:
-        image           a PIL image or vector of three.
+        image           a PIL image or list/tuple of three.
         rescale         True to scale values to the range 0-1; False to leave
                         them alone.
     Return:             An array.
     """
 
     # Determine if it's a triple
-    if type(image) in (list, tuple):
+    if isinstance(image, (list,tuple)):
         bands = []
         for i in image:
-            bands.append(_OnePILtoArray(i, rescale))
+            bands.append(_one_pil_to_array(i, rescale))
 
-        array = np.dstack((bands[0], bands[1], bands[2]))
-        return array
+        return np.dstack((bands[0], bands[1], bands[2]))
 
     # Deal with an RGB image in three bands
     if image.mode.startswith("RGB"):
         (r,g,b) = image.split()[:3]
 
-        r = _OnePILtoArray(r, rescale)
-        g = _OnePILtoArray(g, rescale)
-        b = _OnePILtoArray(b, rescale)
+        r = _one_pil_to_array(r, rescale)
+        g = _one_pil_to_array(g, rescale)
+        b = _one_pil_to_array(b, rescale)
 
         array = np.dstack((r, g, b))
         return array
 
     # Otherwise it's a simple case
-    return _OnePILtoArray(image, rescale)
+    return _one_pil_to_array(image, rescale)
 
-def _OnePILtoArray(image, rescale):
+def _one_pil_to_array(image, rescale):
 
     # 32-bit case...
     if image.mode == "I":
@@ -2753,7 +3017,7 @@ def _OnePILtoArray(image, rescale):
         return array
 
     raise IOError("Unsupported PIL image format")
-    
+
 ################################################################################
 # Filter a PIL mage
 ################################################################################
@@ -2779,24 +3043,23 @@ FILTER_DICT = { "NONE"              : None,
                 "MAXIMUM_5"         : ImageFilter.MaxFilter(5),
                 "MAXIMUM_7"         : ImageFilter.MaxFilter(7) }
 
-def FilterImage(image, filter_name):
+def filter_image(image, filter_name):
     """Applies an arbitrary filtering to a PIL image. Note that this does not
     work for two-byte images.
 
     Input:
-        image               a PIL image as 8-bit RGB or grayscale.
-        filter_name         name of the filter to be applied. Choices are
-                            "NONE", "BLUR", "CONTOUR", "DETAIL" ,"EDGE_ENHANCE",
-                            "EDGE_ENHANCE_MORE", "EMBOSS", "FIND_EDGES",
-                            "SMOOTH", "SMOOTH_MORE", "SHARPEN", "MEDIAN_3",
-                            "MEDIAN_5", "MEDIAN_7", "MINIMUM_3", "MINIMUM_5",
-                            "MINIMUM_7" ,"MAXIMUM_3", "MAXIMUM_5", and
-                            "MAXIMUM_7".
+        image           a PIL image as 8-bit RGB or grayscale.
+        filter_name     name of the filter to be applied. Choices are "NONE",
+                        "BLUR", "CONTOUR", "DETAIL" ,"EDGE_ENHANCE",
+                        "EDGE_ENHANCE_MORE", "EMBOSS", "FIND_EDGES", "SMOOTH",
+                        "SMOOTH_MORE", "SHARPEN", "MEDIAN_3", "MEDIAN_5",
+                        "MEDIAN_7", "MINIMUM_3", "MINIMUM_5", "MINIMUM_7"
+                        ,"MAXIMUM_3", "MAXIMUM_5", and "MAXIMUM_7".
 
-    Return:                 a pointer to the filtered image.
+    Return:             a pointer to the filtered image.
     """
 
-    if type(image) == list:
+    if isinstance(image, list):
         raise ValueError("filtering of 2-byte images is not supported")
 
     # Look up filter method
@@ -2806,7 +3069,8 @@ def FilterImage(image, filter_name):
         filter_method = None
 
     # Apply filter if necessary
-    if filter_method: image = image.filter(filter_method)
+    if filter_method:
+        image = image.filter(filter_method)
 
     return image
 
@@ -2814,7 +3078,7 @@ def FilterImage(image, filter_name):
 # Re-size a PIL image
 ################################################################################
 
-def ResizeImage(image, new_size):
+def resize_image(image, new_size):
     """Re-sizes a PIL image or a list of PIL images.
 
     Input:
@@ -2825,18 +3089,19 @@ def ResizeImage(image, new_size):
     """
 
     # If the size is unchanged, just return
-    if image.size == new_size: return image
+    if image.size == new_size:
+        return image
 
     # Handle one or three PIL image objects
-    if type(image) == list:
+    if isinstance(image, (list,tuple)):
         result = []
-        for i in image: list.append(_ResizeOneImage(i, new_size))
+        for i in image: list.append(_resize_one_image(i, new_size))
     else:
-        result = _ResizeOneImage(image, new_size)
+        result = _resize_one_image(image, new_size)
 
     return result
 
-def _ResizeOneImage(image, new_size):
+def _resize_one_image(image, new_size):
     """This internal method re-sizes a single PIL image."""
 
     # Scale up if necessary using NEAREST
@@ -2854,7 +3119,7 @@ def _ResizeOneImage(image, new_size):
 # Wrap a PIL image
 ################################################################################
 
-def WrapImage(image, wrapped_size, sections, wrap_axis, gap_size, gap_color):
+def wrap_image(image, wrapped_size, sections, wrap_axis, gap_size, gap_color):
     """Wraps a PIL image.
 
     Input:
@@ -2872,13 +3137,13 @@ def WrapImage(image, wrapped_size, sections, wrap_axis, gap_size, gap_color):
 
     # Get the gap color if necessary
     if gap_size > 0:
-        if type(gap_color) == str:
+        if isinstance(gap_color, str):
             gap_color = list(ColorNames.lookup(gap_color))
     else:
         gap_color = [0,0,0]
 
     # Get the image array
-    array = PILtoArray(image, rescale=False)
+    array = pil_to_array(image, rescale=False)
     array = np.atleast_3d(array)
     two_bytes = (array.dtype.itemsize == 2)
 
@@ -2887,7 +3152,6 @@ def WrapImage(image, wrapped_size, sections, wrap_axis, gap_size, gap_color):
        (gap_color[0] != gap_color[1] or gap_color[0] != gap_color[2]):
         buffer = np.empty((wrapped_size[1], wrapped_size[0], 3),
                            dtype=array.dtype)
-        array = np.dstack((array, array, array))
     else:
         buffer = np.empty((wrapped_size[1], wrapped_size[0], array.shape[2]),
                           dtype=array.dtype)
@@ -2949,14 +3213,81 @@ def WrapImage(image, wrapped_size, sections, wrap_axis, gap_size, gap_color):
             i0 += di
 
     # Convert the new buffer back to a PIL image
-    return ArrayToPIL(buffer, two_bytes, rescale=False)
+    return array_to_pil(buffer, two_bytes, rescale=False)
+
+################################################################################
+# Wrap a PIL image
+################################################################################
+
+def pad_image(image, frame, pad_color):
+    """Pads a PIL image to fill a specified frame size.
+
+    Input:
+        image           a PIL image.
+        pad_color       color to use in the gap, specified as an X11 name or an
+                        (R,G,B) triple.
+
+    Return:             a new PIL image of the requested size.
+    """
+
+    # Make sure padding is needed
+    if frame is None:
+        return image
+
+    if image.width >= frame[0] and image.height >= frame[1]:
+        return image
+
+    # Get the pad color
+    if isinstance(pad_color, str):
+        pad_color = list(ColorNames.lookup(pad_color))
+
+    # Get the image array
+    array = pil_to_array(image, rescale=False)
+    array = np.atleast_3d(array)
+    two_bytes = (array.dtype.itemsize == 2)
+
+    # Create an empty buffer (and convert to RGB if necessary)
+    width  = max(image.width,  frame[0])
+    height = max(image.height, frame[1])
+
+    if array.shape[2] == 1 and \
+       (pad_color[0] != pad_color[1] or pad_color[0] != pad_color[2]):
+        buffer = np.empty((height, width, 1), dtype=array.dtype)
+    else:
+        buffer = np.empty((height, width, array.shape[2]), dtype=array.dtype)
+
+    # Match the gap color to the byte size
+    if two_bytes:
+        pad_color[0] = int(pad_color[0]/255. * 65535.9999)
+        pad_color[1] = int(pad_color[1]/255. * 65535.9999)
+        pad_color[2] = int(pad_color[2]/255. * 65535.9999)
+
+    # Pre-fill the buffer with the gap color
+    if buffer.shape[2] == 1:
+        buffer[:,:,0] = pad_color[0]
+    else:
+        buffer[:,:,0] = pad_color[0]
+        buffer[:,:,1] = pad_color[1]
+        buffer[:,:,2] = pad_color[2]
+
+    # Insert the image
+    l0 = (height - image.height) // 2
+    s0 = (width  - image.width ) // 2
+
+    l1 = l0 + image.height
+    s1 = s0 + image.width
+
+    buffer[l0:l1,s0:s1] = array[:,:]
+
+    # Convert the new buffer back to a PIL image
+    return array_to_pil(buffer, two_bytes, rescale=False)
 
 ################################################################################
 # Write a PIL image (or list of RGB images) to a file. It recognizes the case of
 # 32-bit integers and writes them as 16-bit TIFFs.
 ################################################################################
 
-def WritePIL(image, outfile, quality=75):
+def write_pil(image, outfile, quality=75):
     """Writes a PIL image (or list of RGB images) to a file.
 
     Input:
@@ -2965,8 +3296,13 @@ def WritePIL(image, outfile, quality=75):
         quality         quality factor 0-100 to use for jpeg output.
     """
 
+    # Create the parent directory if necessary
+    parent = os.path.split(outfile)[0]
+    if not os.path.exists(parent):
+        os.makedirs(parent)
+
     # If it's a list, write a RGB 16-bit Tiff
-    if type(image) == list:
+    if isinstance(image, (list,tuple)):
 
         # Convert images back to a numpy arrays
         newarrays = []
@@ -2999,7 +3335,7 @@ def WritePIL(image, outfile, quality=75):
 # Read a PIL image.
 ################################################################################
 
-def ReadPIL(infile):
+def read_pil(infile):
     """Reads a PIL image (or list of RGB images) from a file.
 
     Input:
@@ -3022,7 +3358,7 @@ def ReadPIL(infile):
             if palette is not None:
                 return IOError("16-bit palette option is not supported")
 
-            return ArrayToPIL(array, twobytes=True, rescale=False)
+            return array_to_pil(array, twobytes=True, rescale=False)
 
     # Otherwise just use PIL method
     im = Image.open(infile)
@@ -3033,7 +3369,7 @@ def ReadPIL(infile):
 # Read a PIL image and convert to an array.
 ################################################################################
 
-def ReadArray(infile, rescale):
+def read_array(infile, rescale):
     """Reads a numpy array from a file.
 
     Input:
@@ -3064,14 +3400,14 @@ def ReadArray(infile, rescale):
         return array
 
     # Read PIL file
-    return PILtoArray(Image.open(infile), rescale)
+    return pil_to_array(Image.open(infile), rescale)
 
 ################################################################################
 # Construct the output file name
 ################################################################################
 
-def GetOutfile(infile, outdir=None, strip=[], suffix="", extension="jpg",
-               replace='all'):
+def get_outfile(infile, outdir=None, strip=[], suffix="", extension="jpg",
+                replace='all'):
     """Derive the name of the output file.
     
     Input:
@@ -3085,7 +3421,7 @@ def GetOutfile(infile, outdir=None, strip=[], suffix="", extension="jpg",
         extension       the extension for the output file, which must be one of
                         the PIL supported types such as jpg, jpeg, gif, tif, or
                         tiff. Lower and uppercase extensions are acceptable.
-        replace         what to do when a file already exists.
+        replace         what to do when a file already exists:
                         "all" (the default) to replace the file silently;
                         "none" to skip the file silently;
                         "warn" to issue a warning and skip the file;
@@ -3097,13 +3433,15 @@ def GetOutfile(infile, outdir=None, strip=[], suffix="", extension="jpg",
                         already exist, it is created (recursively).
     """
 
-    if suffix is None: suffix = ''
-    if strip is None: strip = ['']
+    if suffix is None:
+        suffix = ''
+    if strip is None:
+        strip = ['']
 
     outfile = infile
 
     # Strip substrings
-    if type(strip) == str:
+    if isinstance(strip, str):
         strip = [strip]
     for substring in strip:
         loc = outfile.rfind(substring)
@@ -3120,7 +3458,8 @@ def GetOutfile(infile, outdir=None, strip=[], suffix="", extension="jpg",
 
     # Create the directory tree if necessary
     path = os.path.split(outfile)[0]
-    if path != "" and not os.path.exists(path): os.makedirs(path)
+    if path != "" and not os.path.exists(path):
+        os.makedirs(path)
 
     # Raise an error if the file already exists
     if os.path.exists(outfile):
