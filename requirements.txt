@@ -1,2 +1,2 @@
 pyparsing==2.0.1
-numpy==1.7.0
+numpy==1.22.0
