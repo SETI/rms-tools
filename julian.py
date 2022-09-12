@@ -1202,6 +1202,10 @@ def hms_format_from_sec(sec, digits=None, suffix="", buffer=None):
         secfmt = "{:02d}"
         lsec = 2
         s = _INT((s + 0.5) // 1)
+    elif digits == 0:
+        secfmt = "{:02}."
+        lsec = 3
+        s = _INT((s + 0.5) // 1)
     else:
         secfmt = "{:0" + str(digits+3) + "." + str(digits) + "f}"
         lsec = 3 + digits
