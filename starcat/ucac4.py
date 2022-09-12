@@ -4,7 +4,12 @@
 
 #    Zacharias, N. et al. 2013, The Astronomical Journal, 145, 44
 
-from starcatalog import *
+from __future__ import print_function
+
+try:
+    from starcatalog import *
+except ImportError:
+    from .starcatalog import *
 import numpy as np
 import os.path
 import struct
@@ -20,8 +25,8 @@ UCAC4_OBJ_TYPE_SUPPL = 7
 UCAC4_OBJ_TYPE_HPM_NOT_MATCHED = 8
 UCAC4_OBJ_TYPE_HPM_DISCREPANT = 9
 
-UCAC4_OBJ_TYPE_STRINGS = ['CLEAN', 'NEAR_OVEREXPOSED', 'STREAK', 'HPM', 
-                          'EXT_HPM', 'POOR_PM', 'SUBST_ASTROMETRY', 'SUPPL', 
+UCAC4_OBJ_TYPE_STRINGS = ['CLEAN', 'NEAR_OVEREXPOSED', 'STREAK', 'HPM',
+                          'EXT_HPM', 'POOR_PM', 'SUBST_ASTROMETRY', 'SUPPL',
                           'HPM_NOT_MATCHED', 'HPM_DISCREPANT']
 
 #CATMATCH_TYCHO = 0
@@ -50,18 +55,18 @@ UCAC4_DOUBLE_STAR_TYPE_2PEAK_FIT = 5
 UCAC4_DOUBLE_STAR_TYPE_SECONDARY_PEAK_FIT = 6
 
 UCAC4_DOUBLE_STAR_TYPE_STRINGS = ['NONE', '1PEAK', '2PEAK', 'SECONDARY_PEAK',
-                                  '1PEAK_FIT', '2PEAK_FIT', 
+                                  '1PEAK_FIT', '2PEAK_FIT',
                                   'SECONDARY_PEAK_FIT']
 
 class UCAC4Star(Star):
     """A holder for star attributes.
-    
+
     This class includes attributes unique to the UCAC4 catalog."""
-    
+
     def __init__(self):
         # Initialize the standard fields
         Star.__init__(self)
-        
+
         # Initialize the UCAC4-specific fields
         self.vmag_model = None
         self.obj_type = None
@@ -104,13 +109,13 @@ class UCAC4Star(Star):
         else:
             ret += UCAC4_OBJ_TYPE_STRINGS[self.obj_type]
         ret += ' | '
-        
+
         if self.vmag_model is None:
             ret += 'APER VMAG None'
         else:
             ret += 'APER VMAG %6.3f' % self.vmag_model
         ret += ' | '
-        
+
         if self.temperature is None:
             ret += 'TEMP None'
         else:
@@ -123,13 +128,13 @@ class UCAC4Star(Star):
             ret += 'None'
         else:
             ret += UCAC4_DOUBLE_STAR_FLAG_STRINGS[self.double_star_flag]
-            
+
         ret += ' TYPE='
         if self.double_star_type is None:
             ret += 'None'
         else:
             ret += UCAC4_DOUBLE_STAR_TYPE_STRINGS[self.double_star_type]
-            
+
         ret += ' | GALAXY '
         if self.galaxy_match is None:
             ret += 'NONE'
@@ -137,7 +142,7 @@ class UCAC4Star(Star):
             ret += 'Yes'
         else:
             ret += 'No'
-            
+
         ret += ' | EXT SOURCE '
         if self.extended_source is None:
             ret += 'NONE'
@@ -146,7 +151,7 @@ class UCAC4Star(Star):
         else:
             ret += 'No'
         ret += '\n'
-        
+
         ret += 'APASS '
         if self.apass_mag_b is None:
             ret += 'B None '
@@ -174,14 +179,14 @@ class UCAC4Star(Star):
             ret += 'I %6.3f +/- %6.3f' % (self.apass_mag_i,
                                            self.apass_mag_i_sigma)
         ret += '\n'
-        
+
         if self.johnson_mag_b is None or self.johnson_mag_v is None:
             ret += 'JOHNSON B None V None'
         else:
             ret += 'JOHNSON B %6.3f V %6.3f' % (self.johnson_mag_b,
                                                 self.johnson_mag_v)
         ret += '\n'
-        
+
         return ret
 
 #        TODO
@@ -193,7 +198,7 @@ class UCAC4Star(Star):
 #        self.dec_mean_epoch = None
 #        self.id_str = None
 #        self.id_str_ucac2 = None
-    
+
 
 #col byte item   fmt unit       explanation                            notes
 #---------------------------------------------------------------------------
@@ -272,10 +277,10 @@ class UCAC4StarCatalog(StarCatalog):
         else:
             self.dirname = dir
         self.debug_level = 0
-    
+
     def _find_stars(self, ra_min, ra_max, dec_min, dec_max, **kwargs):
         """Yield the results for all zones in the DEC range.
-        
+
         Optional arguments:      DEFAULT
             ra_min, ra_max       0, 2PI    RA range in radians
             dec_min, dec_max     -PI, PI   DEC range in radians
@@ -296,11 +301,11 @@ class UCAC4StarCatalog(StarCatalog):
             optimize_ra          True      Use a binary search to find the
                                            starting RA
         """
-        
+
         start_znum = int(max(np.floor((dec_min*DPR+90)*5)+1, 1))
         end_znum = int(min(np.floor((dec_max*DPR+90-1e-15)*5)+1, 900))
-        
-        for znum in xrange(start_znum, end_znum+1):
+
+        for znum in range(start_znum, end_znum+1):
             fn = self._zone_filename(znum)
             with open(fn, 'rb') as fp:
                 for star in self._find_stars_one_file(znum, fp,
@@ -321,18 +326,18 @@ class UCAC4StarCatalog(StarCatalog):
         require_pm = kwargs.get('require_pm', True)
         return_everything = kwargs.get('return_everything', False)
         optimize_ra = kwargs.get('optimize_ra', True)
-        
+
         if return_everything:
             require_clean = False
             allow_double = True
             allow_galaxy = True
             require_pm = False
-        
+
         if optimize_ra:
             rec_num = self._find_starting_ra(fp, ra_min) # 0-based
         else:
             rec_num = 0
-            
+
         while True:
             record = fp.read(UCAC4_RECORD_SIZE)
             if len(record) != UCAC4_RECORD_SIZE:
@@ -340,11 +345,11 @@ class UCAC4StarCatalog(StarCatalog):
             rec_num += 1 # This makes rec_num 1-based
             parsed = struct.unpack(UCAC4_FMT, record)
             star = UCAC4Star()
-                        
+
             ###########
             # RA, DEC #
             ###########
-            
+
 # 1  1- 4 ra     I*4 mas        right ascension at  epoch J2000.0 (ICRS) (1)
 # 2  5- 8 spd    I*4 mas        south pole distance epoch J2000.0 (ICRS) (1)
 #    Note  (1):  Positions are on the International Celestial Reference
@@ -353,7 +358,7 @@ class UCAC4StarCatalog(StarCatalog):
 #    mean catalog position was updated using the provided proper
 #    motions.  The observational UCAC position is but one of several
 #    going into these values and is not given in the UCAC4; thus the
-#    original UCAC observation cannot be recovered from these data. 
+#    original UCAC observation cannot be recovered from these data.
 #    The declination is given in south pole distance (spd) and can be
 #    converted back to a true declination by subtracting 324000000 mas.
             star.ra = parsed[0] * MAS_TO_RAD
@@ -361,13 +366,13 @@ class UCAC4StarCatalog(StarCatalog):
             if star.ra >= ra_max:
                 # RA is in ascending order in the file
                 if self.debug_level > 1:
-                    print 'ID', parsed[42], 'SKIPPED RA AND REST OF FILE',
-                    print star.ra
+                    print('ID', parsed[42], 'SKIPPED RA AND REST OF FILE', end=' ')
+                    print(star.ra)
                 break
             if (star.ra < ra_min or
                 star.dec < dec_min or star.dec >= dec_max):
                 if self.debug_level > 1:
-                    print 'ID', parsed[42], 'SKIPPED RA/DEC', star.ra, star.dec
+                    print('ID', parsed[42], 'SKIPPED RA/DEC', star.ra, star.dec)
                 continue
 
             #############
@@ -377,16 +382,16 @@ class UCAC4StarCatalog(StarCatalog):
 # 3  9-10 magm   I*2 millimag   UCAC fit model magnitude                 (2)
 # 4 11-12 maga   I*2 millimag   UCAC aperture  magnitude                 (2)
 # 5 13    sigmag I*1 1/100 mag  error of UCAC magnitude                  (3)
-#    Note  (2):  Unknown, or unrealistic photometric results are set to 
+#    Note  (2):  Unknown, or unrealistic photometric results are set to
 #    magnitude = 20 (20000 mmag entry in catalog).  Systematic errors
 #    are expected to be below 0.1 mag for magm,maga photometric results
 #    obtained from the UCAC CCD pixel data.  The aperture photometry
-#    is considered more robust, particularly for "odd" cases, while 
-#    the model fit magnitude is expected to be more accurate for 
+#    is considered more robust, particularly for "odd" cases, while
+#    the model fit magnitude is expected to be more accurate for
 #    "well behaved" stars.
 #
 #    Note  (3):  A value of 99 for error in magnitude means "no data".
-#    For many stars a photometric error based on the scatter from 
+#    For many stars a photometric error based on the scatter from
 #    individual observations of that star on different CCD frames
 #    could be obtained.  A model error was also attempted to be
 #    assigned, based on the S/N ratio.  The error quoted here is
@@ -407,22 +412,22 @@ class UCAC4StarCatalog(StarCatalog):
             if vmag_min is not None:
                 if star.vmag is None or star.vmag < vmag_min:
                     if self.debug_level > 1:
-                        print 'ID', parsed[42], 'SKIPPED MODEL MAG',
-                        print star.vmag_model
+                        print('ID', parsed[42], 'SKIPPED MODEL MAG', end=' ')
+                        print(star.vmag_model)
                     continue
             if vmag_max is not None:
                 if star.vmag is None or star.vmag > vmag_max:
                     if self.debug_level > 1:
-                        print 'ID', parsed[42], 'SKIPPED MODEL MAG',
-                        print star.vmag_model
+                        print('ID', parsed[42], 'SKIPPED MODEL MAG', end=' ')
+                        print(star.vmag_model)
                     continue
-            
+
             ###############
             # OBJECT TYPE #
             ###############
-            
+
 # 6 14    objt   I*1            object type                              (4)
-#    Note  (4):  The object type flag is used to identify possible problems 
+#    Note  (4):  The object type flag is used to identify possible problems
 #    with a star or the source of data.  Of the individual image flags
 #    the one with the largest value (worst problem case) is propagated
 #    into this object type flag, unless it is superseded by an overriding
@@ -449,15 +454,15 @@ class UCAC4StarCatalog(StarCatalog):
                  star.obj_type == UCAC4_OBJ_TYPE_HPM_DISCREPANT)):
                 # Use with extreme caution
                 if self.debug_level:
-                    print 'ID', parsed[42], 'SKIPPED NOT CLEAN', star.obj_type
+                    print('ID', parsed[42], 'SKIPPED NOT CLEAN', star.obj_type)
                 continue
 
             #############################
             # COMBINED DOUBLE STAR FLAG #
             #############################
-            
+
 # 7 15    cdf    I*1            combined double star flag                (5)
-#    Note  (5):  The cdf flag is a combined double star flag used to indicate 
+#    Note  (5):  The cdf flag is a combined double star flag used to indicate
 #    the type/quality of double star fit.  It is a combination of 2 flags,
 #    cdf = 10 * dsf + dst  with the following meaning:
 #
@@ -490,7 +495,7 @@ class UCAC4StarCatalog(StarCatalog):
             cdf = parsed[6]
             if not allow_double and cdf != 0:
                 if self.debug_level:
-                    print 'ID', parsed[42], 'SKIPPED DOUBLE', cdf
+                    print('ID', parsed[42], 'SKIPPED DOUBLE', cdf)
                 continue
             star.double_star_flag = cdf // 10
             star.double_star_type = cdf % 10
@@ -498,24 +503,24 @@ class UCAC4StarCatalog(StarCatalog):
             #################################
             # GALAXIES AND EXTENDED SOURCES #
             #################################
-            
+
 #(41)49 67    leda   I*1            LEDA galaxy match flag                  (18)
 #(42)50 68    x2m    I*1            2MASS extend.source flag                (19)
 #    Note (18):  This flag is either 0 (no match) or contains the log10 of
 #    the apparent total diameter for I-band (object size) information
-#    (unit = 0.1 arcmin) copied from the LEDA catalog (galaxies).  
+#    (unit = 0.1 arcmin) copied from the LEDA catalog (galaxies).
 #    A size value of less than 1 has been rounded up to 1.
 #
 #    Note (19):  This flag is either 0 (no match) or contains the length of
-#    the semi-major axis of the fiducial ellipse at the K-band 
+#    the semi-major axis of the fiducial ellipse at the K-band
 #    (object size) information copied from the 2MASS extended source
-#    catalog. 
+#    catalog.
             star.galaxy_match = parsed[40]
             star.extended_source = parsed[41] # XXX What units is this in?
             if not allow_galaxy and (star.galaxy_match or star.extended_source):
                 if self.debug_level:
-                    print 'ID', parsed[42], 'SKIPPED GALAXY/EXTENDED',
-                    print star.galaxy_match, star.extended_source
+                    print('ID', parsed[42], 'SKIPPED GALAXY/EXTENDED', end=' ')
+                    print(star.galaxy_match, star.extended_source)
                 continue
             if star.galaxy_match:
                 star.galaxy_match = 10.**star.galaxy_match / 10. / 60. # Degrees
@@ -523,7 +528,7 @@ class UCAC4StarCatalog(StarCatalog):
             #################
             # PROPER MOTION #
             #################
-            
+
 #15 25-26 pmrac  I*2 0.1 mas/yr proper motion in RA*cos(Dec)             (8)
 #16 27-28 pmdc   I*2 0.1 mas/yr proper motion in Dec
 #17 29    sigpmr I*1 0.1 mas/yr s.e. of pmRA * cos Dec                   (9)
@@ -550,12 +555,12 @@ class UCAC4StarCatalog(StarCatalog):
 #
 #    For astrometric data copied from the FK6, Hipparcos and Tycho-2
 #    catalogs a mean error in positions was adopted depending on input
-#    catalog and the brightness of the star rather than giving the 
+#    catalog and the brightness of the star rather than giving the
 #    individual star's error quoted in those catalogs.
             star.pm_rac = parsed[14] * 0.1 * MAS_TO_RAD * YEAR_TO_SEC
             star.pm_ra = star.pm_rac / np.cos(star.dec)
             star.pm_dec = parsed[15] * 0.1 * MAS_TO_RAD * YEAR_TO_SEC
-            
+
             if parsed[14] == 32767 or parsed[15] == 32767:
                 # PM is too large and needs to be looked up in another
                 # table, which we don't support yet. XXX
@@ -582,8 +587,8 @@ class UCAC4StarCatalog(StarCatalog):
             if star.pm_rac_sigma is None:
                 star.pm_ra_sigma = None
             else:
-                star.pm_ra_sigma = star.pm_rac_sigma / np.cos(star.dec) 
-                
+                star.pm_ra_sigma = star.pm_rac_sigma / np.cos(star.dec)
+
             if pdse == 251:
                 star.pm_dec_sigma = 27.5 * MAS_TO_RAD
             elif pdse == 252:
@@ -599,32 +604,32 @@ class UCAC4StarCatalog(StarCatalog):
 
             if require_pm and (star.pm_ra is None or star.pm_dec is None):
                 if self.debug_level:
-                    print 'ID', parsed[42], 'SKIPPED NO PM', parsed[14:18]
+                    print('ID', parsed[42], 'SKIPPED NO PM', parsed[14:18])
                 continue
-            
+
             #################################
             #################################
             ### END OF SELECTION CRITERIA ###
             #################################
             #################################
-            
+
             if not full_result:
                 if self.debug_level:
-                    print 'ID', parsed[42], 'OK!'
+                    print('ID', parsed[42], 'OK!')
                 yield star
                 continue
-            
+
             ###########################
             # RA/DEC SYSTEMATIC ERROR #
             ###########################
-            
+
 # 8 16    sigra  I*1 mas        s.e. at central epoch in RA (*cos Dec)   (6)
 # 9 17    sigdc  I*1 mas        s.e. at central epoch in Dec             (6)
 #    Note  (6):  The range of values here is 1 to 255 which is represented
 #    as a signed 1-byte integer (range -127 to 127); thus add 128 to the
 #    integer number found in the data file.  There is no 0 mas value;
 #    data less than 1 mas have been set to 1 mas.  Original data larger
-#    than 255 mas have been set to 255.  
+#    than 255 mas have been set to 255.
 #    If the astrometric data for a star was substituted from an external
 #    catalog like Hipparcos, Tycho or high proper motion data, a mean
 #    error in position and proper motion depending on the catalog and
@@ -636,7 +641,7 @@ class UCAC4StarCatalog(StarCatalog):
             ##############
             # IMAGE INFO #
             ##############
-            
+
 #10 18    na1    I*1            total # of CCD images of this star
 #11 19    nu1    I*1            # of CCD images used for this star       (7)
 #12 20    cu1    I*1            # catalogs (epochs) used for proper motions
@@ -648,20 +653,20 @@ class UCAC4StarCatalog(StarCatalog):
             star.num_img_total = parsed[9]
             star.num_img_used = parsed[10]
             star.num_cat_pm = parsed[11]
-            
+
             #########
             # EPOCH #
             #########
-            
+
 #13 21-22 cepra  I*2 0.01 yr    central epoch for mean RA, minus 1900
 #14 23-24 cepdc  I*2 0.01 yr    central epoch for mean Dec,minus 1900
             star.ra_mean_epoch = parsed[12] * 0.01 + 1900
             star.dec_mean_epoch = parsed[13] * 0.01 + 1900
-            
-            ##############                
+
+            ##############
             # 2MASS DATA #
             ##############
-            
+
 #19 31-34 pts_key I*4           2MASS unique star identifier            (10)
 #20 35-36 j_m    I*2 millimag   2MASS J  magnitude
 #21 37-38 h_m    I*2 millimag   2MASS H  magnitude
@@ -676,8 +681,8 @@ class UCAC4StarCatalog(StarCatalog):
 #    pegasus.astro.umass.edu/ipac_wget/releases/allsky/doc/sec2_2a.html
 #
 #    Note (11):  For each 2MASS bandpass a combined flag was created
-#    (cc_flg*10 + ph_qual) consisting of the contamination flag (0 to 5) 
-#    and the photometric quality flag (0 to 8).  
+#    (cc_flg*10 + ph_qual) consisting of the contamination flag (0 to 5)
+#    and the photometric quality flag (0 to 8).
 #
 #    0 =  cc_flg  2MASS 0, no artifacts or contamination
 #    1 =  cc_flg  2MASS p, source may be contaminated by a latent image
@@ -728,7 +733,7 @@ class UCAC4StarCatalog(StarCatalog):
 #    are identified by apasm(1) < 20000 and apase(1) = 0  for B mags,
 #    and similarly for apasm(2) < 20000 and apase(2) = 0  for V mags.
 #    For over 10,000 stars no Vt mag was available and the V mag from Tycho
-#    was used instead.  
+#    was used instead.
 #
 #    Note (14):  Positive errors are from the official release data error
 #    estimates (at least 2 observations per star).  Formal, S/N estimated
@@ -737,60 +742,60 @@ class UCAC4StarCatalog(StarCatalog):
 #    For "no data" (i.e. magnitude = 20000 = 20.0 mag) the error is set to 99.
 # ============================================================================
 #    APASS is described in:
-#    
+#
 #        Henden, A. A., et al. 2009, The AAVSO Photometric All-Sky Survey,
 #        AAS 214, 0702.
-#    
+#
 #        Henden, A. A., et al. 2010, New Results from the AAVSO Photometric
 #        All Sky Survey, AAS 215, 47011.
-#    
+#
 #        Henden, A. A., et al. 2011,The AAVSO Photometric All-Sky Survey,
 #        in prep.
-#    
+#
 #        Smith, T. C., et al. 2010, AAVSO Photometric All-Sky Survey
 #        Implementation at the Dark Ridge Observatory, SAS.
 #
 #    APASS provides magnitudes in five pass bands: Johnson B and V, and Sloan
 #    g', r', and i'.
-#    
+#
 #    The Johnson system is described in:
-#    
+#
 #        Johnson, H.L. and Morgan, W.W. 1953, The Astrophysical Journal, 117,
 #        313
-#    
+#
 #    Johnson filter transmission data can be found at:
-#    
+#
 #        http://obswww.unige.ch/gcpd/filters/fil01.html
-#    
+#
 #        ftp://obsftp.unige.ch/pub/mermio/filters/ph01.Bj
 #        ftp://obsftp.unige.ch/pub/mermio/filters/ph01.Vj
-#    
+#
 #    The SDSS photometric system is described in:
-#    
+#
 #        Fukugita, M. et al. 1996, The Astronomical Journal, 111, 1748
-#    
+#
 #    SDSS filter transmission data can be found at:
-#    
+#
 #        http://www.sdss.org/dr1/instruments/imager/index.html#filters
-#        
+#
 #        http://www.sdss.org/dr1/instruments/imager/filters/g.dat
 #        http://www.sdss.org/dr1/instruments/imager/filters/r.dat
 #        http://www.sdss.org/dr1/instruments/imager/filters/i.dat
-#    
+#
 #    The Tycho-2 photometric system is described in:
-#    
+#
 #        The Hipparcos and Tycho Catalogues, ESA SP-1200, Vol. 1, June 1997.
-#    
+#
 #    Bt and Vt filter transmission data is shown in Table 1.3.1 of SP-1200.
-#    
+#
 #    ESA SP-1200 p. 57 provides the following conversion from Tycho V_T and B_T
 #    to Johnson V, B:
-#    
+#
 #        V_J = V_T - 0.090 * (B_T - V_T)
 #        (B_J - V_J) = 0.850 * (B_T - V_T)
 #            or
 #        B_J = V_J + 0.850 * (B_T - V_T)
-#    
+#
 #    These transformations fail for M-type stars and apply only to unreddened
 #    stars.
             if parsed[28] != 20000:
@@ -808,10 +813,10 @@ class UCAC4StarCatalog(StarCatalog):
             star.apass_mag_g_sigma = parsed[35] * .01
             star.apass_mag_r_sigma = parsed[36] * .01
             star.apass_mag_i_sigma = parsed[37] * .01
-            
+
             star.johnson_mag_b = star.apass_mag_b
             star.johnson_mag_v = star.apass_mag_v
-            
+
             if (parsed[28] < 20000 and parsed[33] == 0 and
                 parsed[29] < 20000 and parsed[34] == 0):
                 star.johnson_mag_v = (star.apass_mag_v -
@@ -820,7 +825,7 @@ class UCAC4StarCatalog(StarCatalog):
                 star.johnson_mag_b = (star.johnson_mag_v +
                                       0.85 * (star.apass_mag_b -
                                               star.apass_mag_v))
-            
+
 #29 47-48 apasm  I*2 millimag   B magnitude from APASS                  (13)
 #30 49-50  (2)   I*2 millimag   V magnitude from APASS                  (13)
 #31 51-52  (3)   I*2 millimag   g magnitude from APASS                  (13)
@@ -836,7 +841,7 @@ class UCAC4StarCatalog(StarCatalog):
             #######################
             # CATALOG MATCH FLAGS #
             #######################
-            
+
 #39 62    gcflg  I*1            Yale SPM g-flag*10  c-flag              (15)
 #40 63-66 icf(1) I*4            FK6-Hipparcos-Tycho source flag         (16)
 #41       icf(2) ..             AC2000       catalog match flag         (17)
@@ -886,17 +891,17 @@ class UCAC4StarCatalog(StarCatalog):
 #
 #     Note (17):  The catflg match flag is provided for major catalogs used
 #     in the computation of the proper motions.  Each match is analyzed
-#     for multiple matches of entries of the 1st catalog to 2nd catalog 
+#     for multiple matches of entries of the 1st catalog to 2nd catalog
 #     entries, and the other way around.  Matches are also classified
 #     by separation and difference in magnitude to arrive at a confidence
-#     level group.  The flag has the following meaning: 
+#     level group.  The flag has the following meaning:
 #
 #     0 = star not matched with this catalog
 #     1 = unique-unique match,  not involving a double star
 #     2 =  ... same, but involving a flagged double star
 #     3 = multiple match but unique in high confidence level group, no double
 #     4 =  ... same, but involving a flagged double star
-#     5 = closest match, not involving a double, likely o.k. 
+#     5 = closest match, not involving a double, likely o.k.
 #     6 =  ... same, but involving a flagged double star
 #     7 = maybe o.k. smallest sep. match in both directions, no double
 #     8 =  ... same, but involving a flagged double star
@@ -905,7 +910,7 @@ class UCAC4StarCatalog(StarCatalog):
             ###################
             # UCAC4 UNIQUE ID #
             ###################
-            
+
 #(43)51 69-72 rnm    I*4            unique star identification number       (20)
 #    Note (20):  This unique star identification number is between 200001
 #    and  321640 for Hipparcos stars, and between 1 and 9430 for non-
@@ -916,14 +921,14 @@ class UCAC4StarCatalog(StarCatalog):
 #    on the u4supl.dat file providing more information, including the
 #    original Hipparcos star number.  Note, there are several thousand
 #    cases where different UCAC4 stars link to the same Hipparcos star
-#    number due to resolved binary stars with each component being a 
+#    number due to resolved binary stars with each component being a
 #    separate star entry in UCAC4.
             star.unique_number = parsed[42]
 
             ###############################
             # UCAC2 IDENTIFICATION NUMBER #
             ###############################
-            
+
 #(44)52 73-74 zn2    I*2            zone number of UCAC2 (0 = no match)     (21)
 #(45)53 75-78 rn2    I*4            running record number along UCAC2 zone  (21)
 
@@ -932,11 +937,11 @@ class UCAC4StarCatalog(StarCatalog):
             else:
                 star.id_str_ucac2 = 'UCAC2-%03d-%06d' % (parsed[43],
                                                          parsed[44])
-            
+
             ###############################
             # UCAC4 IDENTIFICATION NUMBER #
             ###############################
-            
+
             star.id_str = 'UCAC4-%03d-%06d' % (znum, rec_num)
 
             ##################################################
@@ -944,18 +949,18 @@ class UCAC4StarCatalog(StarCatalog):
             ##################################################
 
             if (star.johnson_mag_b is not None and
-                star.johnson_mag_v is not None):                
+                star.johnson_mag_v is not None):
                 star.spectral_class = self.sclass_from_bv(star.johnson_mag_b,
                                                           star.johnson_mag_v)
 
             if star.spectral_class is not None:
                 star.temperature = self.temperature_from_sclass(star.
                                                                 spectral_class)
-                                    
+
             if self.debug_level:
-                print 'ID', parsed[42], 'OK!'
-                print star
-            yield star            
+                print('ID', parsed[42], 'OK!')
+                print(star)
+            yield star
 
 #############################################################################
 
@@ -969,7 +974,7 @@ class UCAC4StarCatalog(StarCatalog):
         if ra_min <= 0.:
             # No point in searching!
             return 0
-        
+
         fp.seek(0, os.SEEK_END)
         file_size = fp.tell()
         num_rec = file_size // UCAC4_RECORD_SIZE
@@ -985,7 +990,7 @@ class UCAC4StarCatalog(StarCatalog):
             midval = parsed[0] * MAS_TO_RAD
             if midval < ra_min:
                 lo = mid+1
-            elif midval > ra_min: 
+            elif midval > ra_min:
                 hi = mid-1
             else:
                 # Exact match!
@@ -998,7 +1003,7 @@ class UCAC4StarCatalog(StarCatalog):
 
 
 #===============================================================================
-# UNIT TESTS 
+# UNIT TESTS
 #===============================================================================
 
 import unittest
@@ -1040,21 +1045,21 @@ class Test_UCAC4StarCatalog(unittest.TestCase):
 
         # Compare slicing directions
         num_dec = 0
-        for idec in xrange(20):
+        for idec in range(20):
             num_dec += cat.count_stars(dec_min=0.2*idec*RPD,
                                        dec_max=0.2*(idec+1)*RPD,
                                        ra_min=60*RPD, ra_max=70*RPD)
         num_ra = 0
-        for ira in xrange(10):
+        for ira in range(10):
             num_ra += cat.count_stars(dec_min=0., dec_max=4.*RPD,
                                       ra_min=(ira+60)*RPD, ra_max=((ira+1)+60)*RPD)
         self.assertEqual(num_dec, num_ra)
-        
+
         # Compare optimized RA search with non-optimized
-        for dec_idx in xrange(10):
+        for dec_idx in range(10):
             dec_min = (dec_idx*10-90.)*RPD
             dec_max = (dec_idx*10-89.8)*RPD
-            for ra_min_idx in xrange(10):
+            for ra_min_idx in range(10):
                 ra_min = ra_min_idx * 10 * RPD
                 ra_max = ra_min + 10*RPD
                 num_opt = cat.count_stars(dec_min=dec_min, dec_max=dec_max,
@@ -1063,8 +1068,8 @@ class Test_UCAC4StarCatalog(unittest.TestCase):
                                              ra_min=ra_min, ra_max=ra_max,
                                              optimize_ra=False)
                 self.assertEqual(num_opt, num_no_opt)
-        
 
-        
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

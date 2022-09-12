@@ -283,7 +283,7 @@ class Star(object):
         return dict(attribs)
 
     def from_dict(self, d):
-        for key in d.keys():
+        for key in list(d.keys()):
             setattr(self, key, d[key])
 
     def ra_dec_with_pm(self, tdb):
@@ -379,7 +379,7 @@ class StarCatalog(object):
 
         min_bmv = 1e38
         max_bmv = -1e38
-        for sclass, sbmv in SCLASS_TO_B_MINUS_V.iteritems():
+        for sclass, sbmv in SCLASS_TO_B_MINUS_V.items():
             min_bmv = min(min_bmv, sbmv)
             max_bmv = max(max_bmv, sbmv)
             resid = abs(sbmv-bmv)

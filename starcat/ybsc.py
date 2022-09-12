@@ -8,8 +8,12 @@
 #     =1964BS....C......0H
 # From ftp://cdsarc.u-strasbg.fr/cats/V/50/1
 
+from __future__ import print_function
 
-from starcatalog import *
+try:
+    from starcatalog import *
+except:
+    from .starcatalog import *
 import numpy as np
 import os.path
 import struct
@@ -35,13 +39,13 @@ YBSC_VMAG_UNCERTAINTY_HR = 'H'
 
 class YBSCStar(Star):
     """A holder for star attributes.
-    
+
     This class includes attributes unique to the YBSC catalog."""
-    
+
     def __init__(self):
         # Initialize the standard fields
         Star.__init__(self)
-        
+
         # Initialize the YBSC-specific fields
         self.name = None
         self.durchmusterung_id = None
@@ -85,14 +89,14 @@ class YBSCStar(Star):
         ret += ' | SAO ' + str(self.sao_number)
         ret += ' | FK5 ' + str(self.fk5_number)
         ret += '\n'
-        
+
         ret += 'IR ' + str(self.ir_source) + ' Ref ' + str(self.ir_source_ref)
         ret += ' | Double "' + str(self.double_star_code) + '"'
         ret += ' | Aitken ' + str(self.aitken_designation) + ' '
         ret += str(self.ads_components)
         ret += ' | Variable ' + str(self.variable_star_id)
         ret += '\n'
-        
+
         if self.temperature is None:
             ret += 'TEMP None'
         else:
@@ -111,12 +115,12 @@ class YBSCStar(Star):
         else:
             ret += str(self.galactic_latitude*DPR)
         ret += '\n'
-        
+
         ret += 'B-V ' + str(self.b_v)
         ret += ' | U-B ' + str(self.u_b)
         ret += ' | R-I ' + str(self.r_i)
         ret += '\n'
-        
+
         ret += 'Parallax "' + str(self.parallax_type) + '"'
         ret += ' ' + str(self.parallax)
         ret += ' | RadVel ' + str(self.radial_velocity)
@@ -125,13 +129,13 @@ class YBSCStar(Star):
         ret += ' | RotVel ' +str(self.rotational_velocity)
         ret += ' ' + str(self.rotational_velocity_uncertainty_flag)
         ret += '\n'
-        
+
         ret += 'Double mag diff ' + str(self.double_mag_diff)
         ret += ' Sep ' + str(self.double_mag_sep)
         ret += ' Components ' + str(self.double_mag_components)
         ret += ' Num components ' + str(self.multiple_num_components)
         ret += '\n'
-        
+
         return ret
 
 #        TODO
@@ -143,7 +147,7 @@ class YBSCStar(Star):
 #        star.dec_mean_epoch = None
 #        star.id_str = None
 #        star.id_str_ucac2 = None
-    
+
 
 # --------------------------------------------------------------------------------
 #    Bytes Format  Units   Label    Explanations
@@ -246,7 +250,7 @@ class YBSCStarCatalog(StarCatalog):
             self.dirname = dir
 
         self.stars = []
-                    
+
         fp = open(os.path.join(self.dirname, 'catalog'), 'r')
         while True:
             record = fp.readline().rstrip()
@@ -258,21 +262,21 @@ class YBSCStarCatalog(StarCatalog):
             self.stars.append(star)
         fp.close()
 
-    
+
     def _find_stars(self, ra_min, ra_max, dec_min, dec_max, **kwargs):
         """Yield the results for all stars.
-        
+
         Optional arguments:      DEFAULT
             ra_min, ra_max       0, 2PI    RA range in radians
             dec_min, dec_max     -PI, PI   DEC range in radians
             vmag_min, vmag_max     ALL     Magnitude range
             allow_double         False     Allow double stars
         """
-        
+
         vmag_min = kwargs.get('vmag_min', None)
         vmag_max = kwargs.get('vmag_max', None)
         allow_double = kwargs.get('allow_double', False)
-        
+
         for star in self.stars:
             if not ra_min <= star.ra <= ra_max:
                 continue
@@ -284,9 +288,9 @@ class YBSCStarCatalog(StarCatalog):
                 continue
             if not allow_double and star.double_star_code != ' ':
                 continue
-            
+
             yield star
-            
+
     @staticmethod
     def _record_to_star(record):
         star = YBSCStar()
@@ -294,7 +298,7 @@ class YBSCStarCatalog(StarCatalog):
             ###################
             # CATALOG NUMBERS #
             ###################
-            
+
 #    1-  4  I4     ---     HR       [1/9110]+ Harvard Revised Number
 #                                     = Bright Star Number
 #    5- 14  A10    ---     Name     Name, generally Bayer and/or Flamsteed name
@@ -317,7 +321,7 @@ class YBSCStarCatalog(StarCatalog):
         ################
         # SOURCE FLAGS #
         ################
-        
+
 #       42  A1     ---     IRflag   [I] I if infrared source
 #       43  A1     ---   r_IRflag  *[ ':] Coded reference for infrared source
 #       44  A1     ---    Multiple *[AWDIRS] Double or multiple-star code
@@ -325,14 +329,14 @@ class YBSCStarCatalog(StarCatalog):
 #   50- 51  A2     ---     ADScomp  ADS number components
 #   52- 60  A9     ---     VarID    Variable star identification
 
-        star.ir_source = (record[41] == 'I') 
+        star.ir_source = (record[41] == 'I')
         if record[42] == ' ':
             star.ir_source_ref = YBSC_IR_NASA
         elif record[42] == '\'':
             star.ir_source_ref = YBSC_IR_ENGLES
         elif record[42] == ':':
             star.ir_source_ref = YBSC_IR_UNCERTAIN
-        
+
         star.double_star_code = record[43]
         if record[44:49].strip() != '':
             star.aitken_designation = record[44:49]
@@ -359,25 +363,25 @@ class YBSCStarCatalog(StarCatalog):
         dec_deg = float(record[83:86])
         dec_min = float(record[86:88])
         dec_sec = float(record[88:90])
-        
+
         sign = 1
         if dec_deg < 0:
             dec_deg = -dec_deg
             sign = -1
-            
+
         star.ra = (ra_hr/24. + ra_min/24./60 + ra_sec/24./60/60)*360 * RPD
         star.dec = sign*(dec_deg + dec_min/60. + dec_sec/3600.) * RPD
 
         ########################
         # GALACTIC COORDINATES #
         ########################
-        
+
 #   91- 96  F6.2   deg     GLON     ?Galactic longitude (1)
 #   97-102  F6.2   deg     GLAT     ?Galactic latitude (1)
 
         star.galactic_longitude = float(record[90:96]) * RPD
         star.galactic_latitude = float(record[96:102]) * RPD
-        
+
         ##############
         # MAGNITUDES #
         ##############
@@ -391,7 +395,7 @@ class YBSCStarCatalog(StarCatalog):
 #      121  A1     ---   u_U-B      [ :?] Uncertainty flag on U-B
 #  122-126  F5.2   mag     R-I      ? R-I   in system specified by n_R-I
 #      127  A1     ---   n_R-I      [CE:?D] Code for R-I system (Cousin, Eggen)
-        
+
         star.vmag = float(record[102:107])
         star.vmag_code = record[107]
         star.vmag_uncertainty_flag = record[108]
@@ -405,7 +409,7 @@ class YBSCStarCatalog(StarCatalog):
         ##################
         # SPECTRAL CLASS #
         ##################
-        
+
 #  128-147  A20    ---     SpType   Spectral type
 #      148  A1     ---   n_SpType   [evt] Spectral type code
 
@@ -415,7 +419,7 @@ class YBSCStarCatalog(StarCatalog):
         #######################
         # MOTION AND PARALLAX #
         #######################
-        
+
 #  149-154  F6.3 arcsec/yr pmRA    *?Annual proper motion in RA J2000, FK5 system
 #  155-160  F6.3 arcsec/yr pmDE     ?Annual proper motion in Dec J2000, FK5 system
 #      161  A1     ---   n_Parallax [D] D indicates a dynamical parallax,
@@ -431,7 +435,7 @@ class YBSCStarCatalog(StarCatalog):
         star.pm_rac = float(record[148:154]) * AS_TO_RAD * YEAR_TO_SEC
         star.pm_ra = star.pm_rac / np.cos(star.dec)
         star.pm_dec = float(record[154:160]) * AS_TO_RAD * YEAR_TO_SEC
-        
+
         star.parallax_type = record[160:161]
         if record[161:166].strip() != '':
             star.parallax = float(record[161:166]) * AS_TO_RAD
@@ -441,7 +445,7 @@ class YBSCStarCatalog(StarCatalog):
         star.rotational_velocity_limit = record[174:176]
         if record[176:179].strip() != '':
             star.rotational_velocity = float(record[176:179])
-        star.rotational_velocity_uncertainty_flag = record[179:180] 
+        star.rotational_velocity_uncertainty_flag = record[179:180]
 
 #  181-184  F4.1   mag     Dmag     ? Magnitude difference of double,
 #                                     or brightest multiple
@@ -474,7 +478,7 @@ class YBSCStarCatalog(StarCatalog):
 
 
 #===============================================================================
-# UNIT TESTS 
+# UNIT TESTS
 #===============================================================================
 
 import unittest
@@ -487,20 +491,20 @@ class Test_YBSCStarCatalog(unittest.TestCase):
         self.assertEqual(len(cat.stars), 9096)
         self.assertEqual(cat.count_stars(), 7519)
         self.assertEqual(cat.count_stars(allow_double=True), 9096)
-        
+
         # Look up Vega
         ra_vega = 279.2333 * RPD
         dec_vega = 38.7836 * RPD
-        
+
         vega_list = list(cat.find_stars(ra_min=ra_vega-0.1*RPD,
                                         ra_max=ra_vega+0.1*RPD,
                                         dec_min=dec_vega-0.1*RPD,
                                         dec_max=dec_vega+0.1*RPD))
         self.assertEqual(len(vega_list), 1)
-        
+
         vega = vega_list[0]
         self.assertEqual(vega.vmag, 0.03)
 
-        
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

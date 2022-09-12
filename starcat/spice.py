@@ -82,12 +82,12 @@ class Test_SpiceStarCatalog(unittest.TestCase):
 
         # Compare slicing directions
         num_dec = 0
-        for idec in xrange(20):
+        for idec in range(20):
             num_dec += cat.count_stars(dec_min=0.2*idec*RPD,
                                        dec_max=0.2*(idec+1)*RPD,
                                        ra_min=60*RPD, ra_max=70*RPD)
         num_ra = 0
-        for ira in xrange(10):
+        for ira in range(10):
             num_ra += cat.count_stars(dec_min=0., dec_max=4.*RPD,
                                       ra_min=(ira+60)*RPD, ra_max=((ira+1)+60)*RPD)
         self.assertEqual(num_dec, num_ra)
