@@ -61,7 +61,6 @@
 #
 #   The Julian Library is compatible with both Python 2 and Python 3.
 #
-# Mark R. Showalter
 # PDS Ring-Moon Systems Node, SETI Institute
 # This software is licensed under Academic Free License ("AFL") v. 3.0.
 # See https://opensource.org/licenses/afl-3.0.php
@@ -69,18 +68,19 @@
 
 from __future__ import print_function, division
 
-import os
 import datetime as dt
-import numpy as np
-import pyparsing
-import unittest
 import numbers
+import numpy as np
+import os
+import pyparsing
+import re
+import unittest
 
 import textkernel as tk
 import julian_dateparser as jdp
 
 def _INT(arg):
-    """Convert to int, works for for scalar, array, or array-like."""
+    """Convert to int, works for scalar, array, or array-like."""
     if isinstance(arg, np.ndarray):
         return arg.astype('int')
     elif np.shape(arg):
@@ -161,8 +161,9 @@ LS_ARRAY1D = None
 LS_ARRAY2D = None
 
 def load_from_dict(spicedict):
-    """Loads the SPICE LSK parameters from the given dictionary. The dictionary
-    is that returned by textkernel.from_file()["DELTET"].
+    """Loads the SPICE LSK parameters from the given dictionary.
+
+    The dictionary is that returned by textkernel.from_file()["DELTET"].
     """
 
     global DELTET_T_A, DELTET_K, DELTET_EB, DELTET_M0, DELTET_M1
@@ -248,8 +249,10 @@ class Test_Initialize(unittest.TestCase):
 ################################################################################
 
 def day_from_ymd(y, m, d):
-    """Day number from year, month and day. All must be integers. Supports
-    scalar or array arguments."""
+    """Day number from year, month and day. All must be integers.
+
+    Supports scalar or array arguments.
+    """
 
     y = _INT(y)
     m = _INT(m)
@@ -304,8 +307,10 @@ def day_from_yd(y, d):
 ########################################
 
 def month_from_ym(y, m):
-    """Number of elapsed months since January 2000. Supports scalar or array
-    arguments."""
+    """Number of elapsed months since January 2000.
+
+    Supports scalar or array arguments.
+    """
 
     return 12*(_INT(y) - 2000) + (_INT(m) - 1)
 
@@ -464,8 +469,9 @@ def leapsecs_from_ym(y, m):
 ########################################
 
 def leapsecs_from_day(day):
-    """Number of elapsed leapseconds for a given number of days elapsed since
-    January 1, 2000."""
+    """Number of elapsed leapseconds for a given number of days since January 1,
+    2000.
+    """
 
     (y,m,d) = ymd_from_day(day)
     return leapsecs_from_ym(y,m)
@@ -474,7 +480,8 @@ def leapsecs_from_day(day):
 
 def seconds_on_day(day, leapseconds=True):
     """Number of seconds duration for the given day number since January 1,
-    2000."""
+    2000.
+    """
 
     if not leapseconds: return 86400
 
@@ -511,7 +518,8 @@ class Test_Leapseconds(unittest.TestCase):
 
 def day_sec_from_tai(tai):
     """Number of integer days and the number of elapsed seconds into that day,
-    given the number of elapsed seconds since January 1, 2000 TAI."""
+    given the number of elapsed seconds since January 1, 2000 TAI.
+    """
 
     # Make an initial guess at the day and seconds
     tai = _FLOAT(tai)
@@ -534,7 +542,8 @@ def day_sec_from_tai(tai):
 
 def tai_from_day(day):
     """Number of elapsed seconds since January 1, 2000 TAI, at the beginning of
-    the specified day since January 1, 2000 UTC."""
+    the specified day since January 1, 2000 UTC.
+    """
 
     (y,m,d) = ymd_from_day(day)
     leapsecs = leapsecs_from_ym(y,m)
@@ -543,7 +552,8 @@ def tai_from_day(day):
 
 def tai_from_day_sec(day, sec):
     """Number of elapsed seconds since January 1, 2000 TAI, at the specified day
-    since January 1, 2000 UTC, plus the specified number of seconds."""
+    since January 1, 2000 UTC, plus the specified number of seconds.
+    """
 
     (y,m,d) = ymd_from_day(day)
     leapsecs = leapsecs_from_ym(y,m)
@@ -589,9 +599,11 @@ class Test_TAI_UTC(unittest.TestCase):
 ################################################################################
 
 def hms_from_sec(sec):
-    """Hour, minute and second from seconds into day. Supports scalar or array
-    arguments. Input must be between 0 and 86410, where numbers above 86400 are
-    treated as leap seconds."""
+    """Hour, minute and second from seconds into day.
+
+    Supports scalar or array arguments. Input must be between 0 and 86410, where
+    numbers above 86400 are treated as leap seconds.
+    """
 
     sec = _FLOAT(sec)
 
@@ -610,8 +622,10 @@ def hms_from_sec(sec):
 ########################################
 
 def sec_from_hms(h, m, s):
-    """Seconds into day from hour, minute and second. Supports scalar or array
-    arguments."""
+    """Seconds into day from hour, minute and second.
+
+    Supports scalar or array arguments.
+    """
 
     return 3600*_INT(h) + 60*_INT(m) + _FLOAT(s)
 
@@ -685,12 +699,14 @@ class Test_Time_of_Day(unittest.TestCase):
 ################################################################################
 
 def tdb_from_tai(tai, iters=2):
-    """Converts from TAI to TDB. Operates on either a single scalar or an
-    arbitrary array of values. Accurate to about 30 microseconds but an exact
-    inverse for function tai_from_tdb().
+    """Convert from TAI to TDB.
+
+    Operates on either a single scalar or an arbitrary array of values. Accurate
+    to about 30 microseconds but an exact inverse for function tai_from_tdb().
 
     The default value of 2 iterations appears to give full double-precision
-    convergencec for every possible case."""
+    convergencec for every possible case.
+    """
 
     # Solve:
     #   tdb = tai + DELTA + K sin(E)
@@ -712,8 +728,11 @@ def tdb_from_tai(tai, iters=2):
 ########################################
 
 def tai_from_tdb(tdb):
-    """Converts from TDB to TAI. Operates on either a single scalar or an
-    arbitrary array of values. An exact solution; no iteration required."""
+    """Converts from TDB to TAI.
+
+    Operates on either a single scalar or an arbitrary array of values. An exact
+    solution; no iteration required.
+    """
 
     tdb = _FLOAT(tdb) + 43200.  # add 12 hours as tdb is respect to noon on
                                 # 1/1/2000
@@ -793,13 +812,17 @@ JD_MINUS_MJD = JD_OF_EPOCH_2000 - MJD_OF_EPOCH_2000
 
 def mjd_from_day(day):
     """Modified Julian Date for a specified day number after January 1, 2000.
-    Works for scalars or arrays."""
+
+    Works for scalars or arrays.
+    """
 
     return _INT(day) + MJD_OF_EPOCH_2000
 
 def day_from_mjd(mjd):
     """Day number after January 1, 2000 from integral Modified Julian Date.
-    Works for scalars or arrays."""
+
+    Works for scalars or arrays.
+    """
 
     return _INT(mjd) - MJD_OF_EPOCH_2000
 
@@ -807,49 +830,70 @@ def day_from_mjd(mjd):
 
 def jd_from_time(time):
     """Julian Date for a specified number of seconds since midnight on January
-    1, 2000. This version neglects leap seconds so every day contains 86400
-    seconds. Works for scalars or arrays."""
+    1, 2000.
+
+    This version neglects leap seconds so every day contains 86400 seconds.
+    Works for scalars or arrays.
+    """
 
     return _FLOAT(time)/86400. + JD_OF_EPOCH_2000
 
 def mjd_from_time(time):
     """Modified Julian Date for a specified number of seconds since midnight on
-    January 1, 2000. This version neglects leap seconds so every day contains
-    86400 seconds. Works for scalars or arrays."""
+    January 1, 2000.
+
+    This version neglects leap seconds so every day contains 86400 seconds.
+    Works for scalars or arrays.
+    """
 
     return _FLOAT(time)/86400. + MJD_OF_EPOCH_2000
 
 def time_from_jd(jd):
     """Elapsed seconds since midnight on January 1, 2000 from Julian Date,
-    neglecting leap seconds. Works for scalars or arrays."""
+    neglecting leap seconds.
+
+    Works for scalars or arrays.
+    """
 
     return (_FLOAT(jd) - JD_OF_EPOCH_2000) * 86400.
 
 def time_from_mjd(mjd):
     """Elapsed seconds since midnight on January 1, 2000 from Modified Julian
-    Date, neglecting leap seconds. Works for scalars or arrays."""
+    Date, neglecting leap seconds.
+
+    Works for scalars or arrays.
+    """
 
     return (_FLOAT(mjd) - MJD_OF_EPOCH_2000) * 86400.
 
 # Floating-point versions supporting UTC days and seconds.
 
 def mjd_from_day_sec(day, sec):
-    """Modified Julian Date for a given UTC day and seconds. Works for scalars
-    or arrays. Includes leap seconds, so some days are longer than others."""
+    """Modified Julian Date for a given UTC day and seconds.
+
+    Works for scalars or arrays. Includes leap seconds, so some days are longer
+    than others.
+    """
 
     # Add zero to force conversion to float, if necessary
     return _INT(day) + _FLOAT(sec)/seconds_on_day(day) + MJD_OF_EPOCH_2000
 
 def jd_from_day_sec(day, sec):
-    """Julian Date for a given UTC day and seconds. Works for scalars or arrays.
-    Includes leap seconds, so some days are longer than others."""
+    """Julian Date for a given UTC day and seconds.
+
+    Works for scalars or arrays. Includes leap seconds, so some days are longer
+    than others.
+    """
 
     # Add zero to force conversion to float, if necessary
     return _INT(day) + _FLOAT(sec)/seconds_on_day(day) + JD_OF_EPOCH_2000
 
 def day_sec_from_mjd(mjd):
-    """UTC day number and seconds based on a Julian Date. Works for scalars or
-    arrays. Allows for leap seconds, so some days are longer than others."""
+    """UTC day number and seconds based on a Julian Date.
+
+    Works for scalars or arrays. Allows for leap seconds, so some days are
+    longer than others.
+    """
 
     delta = _FLOAT(mjd) - MJD_OF_EPOCH_2000
     day = _INT(delta//1)
@@ -857,8 +901,11 @@ def day_sec_from_mjd(mjd):
     return (day, sec)
 
 def day_sec_from_jd(jd):
-    """UTC day number and seconds based on a Julian Date. Works for scalars or
-    arrays. Allows for leap seconds, so some days are longer than others."""
+    """UTC day number and seconds based on a Julian Date.
+
+    Works for scalars or arrays. Allows for leap seconds, so some days are
+    longer than others.
+    """
 
     return day_sec_from_mjd(_FLOAT(jd) - JD_MINUS_MJD)
 
@@ -1189,7 +1236,7 @@ def hms_format_from_sec(sec, digits=None, suffix="", buffer=None):
         sec         the number of seconds into a day, or an arbitrary array
                     thereof; should be less than 86410.
         digits      the number of digits to include after the decimal point; use
-                    a negative value or None for for seconds to be rounded to
+                    a negative value or None for seconds to be rounded to
                     integer.
         suffix      "Z" to include the Zulu time zone indicator.
         buffer      an optional byte array into which to write the results.
@@ -1235,8 +1282,9 @@ def hms_format_from_sec(sec, digits=None, suffix="", buffer=None):
 
 def ymdhms_format_from_day_sec(day, sec, sep="T", digits=None, suffix="",
                                buffer=None):
-    """Date and time in ISO format 'yyyy-mm-ddThh:mm:ss....'. Works for both
-    scalars and arrays.
+    """Date and time in ISO format 'yyyy-mm-ddThh:mm:ss....'.
+
+    Works for both scalars and arrays.
 
     Input:
         day         integer or arbitrary array of integers defining day numbers
@@ -1248,7 +1296,7 @@ def ymdhms_format_from_day_sec(day, sec, sep="T", digits=None, suffix="",
         sep         the character to separate the date from the time. Default is
                     "T" but " " is also allowed.
         digits      the number of digits to include after the decimal point; use
-                    a negative value or None for for seconds to be rounded to
+                    a negative value or None for seconds to be rounded to
                     integer.
         suffix      "Z" to include the Zulu time zone indicator.
         buffer      an optional byte array into which to write the results.
@@ -1261,8 +1309,9 @@ def ymdhms_format_from_day_sec(day, sec, sep="T", digits=None, suffix="",
 
 def ydhms_format_from_day_sec(day, sec, sep="T", digits=None, suffix="",
                               buffer=None):
-    """Date and time in ISO format 'yyyy-dddThh:mm:ss....'. Works for both
-    scalars and arrays.
+    """Date and time in ISO format 'yyyy-dddThh:mm:ss....'.
+
+    Works for both scalars and arrays.
 
     Input:
         day         integer or arbitrary array of integers defining day numbers
@@ -1274,7 +1323,7 @@ def ydhms_format_from_day_sec(day, sec, sep="T", digits=None, suffix="",
         sep         the character to separate the date from the time. Default is
                     "T" but " " is also allowed.
         digits      the number of digits to include after the decimal point; use
-                    a negative value or None for for seconds to be rounded to
+                    a negative value or None for seconds to be rounded to
                     integer.
         suffix      "Z" to include the Zulu time zone indicator.
         buffer      an optional byte array into which to write the results.
@@ -1361,6 +1410,7 @@ def _yxdhms_format_from_day_sec(day, sec, ymd=True, sep="T", digits=None,
 def ymdhms_format_from_tai(tai, sep="T", digits=None, suffix="",
                            buffer=None):
     """Date and time in ISO format 'yyyy-mm-ddThh:mm:ss....' given seconds TAI.
+
     Works for both scalars and arrays.
 
     Input:
@@ -1368,7 +1418,7 @@ def ymdhms_format_from_tai(tai, sep="T", digits=None, suffix="",
         sep         the character to separate the date from the time. Default is
                     "T" but " " is also allowed.
         digits      the number of digits to include after the decimal point; use
-                    a negative value or None for for seconds to be rounded to
+                    a negative value or None for seconds to be rounded to
                     integer.
         suffix      "Z" to include the Zulu time zone indicator.
         buffer      an optional byte array into which to write the results.
@@ -1383,6 +1433,7 @@ def ymdhms_format_from_tai(tai, sep="T", digits=None, suffix="",
 def ydhms_format_from_tai(tai, sep="T", digits=None, suffix="",
                           buffer=None):
     """Date and time in ISO format 'yyyy-dddThh:mm:ss....' given seconds TAI.
+
     Works for both scalars and arrays.
 
     Input:
@@ -1390,7 +1441,7 @@ def ydhms_format_from_tai(tai, sep="T", digits=None, suffix="",
         sep         the character to separate the date from the time. Default is
                     "T" but " " is also allowed.
         digits      the number of digits to include after the decimal point; use
-                    a negative value or None for for seconds to be rounded to
+                    a negative value or None for seconds to be rounded to
                     integer.
         suffix      "Z" to include the Zulu time zone indicator.
         buffer      an optional byte array into which to write the results.
@@ -1408,7 +1459,7 @@ def iso_from_tai(tai, digits=None, ymd=True, suffix=""):
     Input:
         tai         number of elapsed seconds from TAI January 1, 2000.
         digits      the number of digits to include after the decimal point; use
-                    a negative value or None for for seconds to be rounded to
+                    a negative value or None for seconds to be rounded to
                     integer.
         ymd         True for year-month-day format; False for year plus
                     day-of-year format.
@@ -1483,9 +1534,10 @@ class Test_Formatting(unittest.TestCase):
 ################################################################################
 
 def day_from_iso(strings, validate=True, strip=False):
-    """Day number based on a parsing of a date string in ISO format. The format
-    is strictly required to be either "yyyy-mm-dd" or "yyyy-ddd". It works on
-    bytestring arrays in addition to individual strings or bytestrings.
+    """Day number based on a parsing of a date string in ISO format.
+
+    The format is strictly required to be either "yyyy-mm-dd" or "yyyy-ddd". It
+    works on bytestring arrays in addition to individual strings or bytestrings.
 
     Now revised to avoid the slow julian_isoparser routines. It should be very
     fast. It also works for lists or arrays of arbitrary shape, provided every
@@ -1591,8 +1643,9 @@ def day_from_iso(strings, validate=True, strip=False):
 ########################################
 
 def sec_from_iso(strings, validate=True, strip=False):
-    """Second value based on a parsing of a time string in ISO format. The
-    format is strictly required to be "hh:mm:ss[.s...][Z]". It works on
+    """Second value based on a parsing of a time string in ISO format.
+
+    The format is strictly required to be "hh:mm:ss[.s...][Z]". It works on
     bytestring arrays in addition to individual strings or bytestrings.
 
     Now revised to avoid the slow julian_isoparser routines. It should be very
@@ -1728,9 +1781,11 @@ def sec_from_iso(strings, validate=True, strip=False):
 
 def day_sec_from_iso(strings, validate=True, strip=False):
     """Day and second based on a parsing of the string in ISO date-time format.
+
     The format is strictly enforced to be an ISO date plus an ISO time,
     separated by a single space or a "T". It works for bytestring arrays in
-    addition to individual strings or bytestrings."""
+    addition to individual strings or bytestrings.
+    """
 
     # Old, slow procedure...
     #
@@ -1796,8 +1851,11 @@ def day_sec_from_iso(strings, validate=True, strip=False):
 
 def tai_from_iso(strings, validate=True, strip=False):
     """Elapsed seconds TAI from January 1, 2000 given an ISO date or date-time
-    string. Works for individual strings or bytestrings and also for arrays of
-    bytestrings."""
+    string.
+
+    Works for individual strings or bytestrings and also for arrays of
+    bytestrings
+    """
 
     (day, sec) = day_sec_from_iso(strings, validate, strip)
     return tai_from_day(day) + sec
@@ -1941,30 +1999,69 @@ class Test_ISO_Parsing(unittest.TestCase):
 # array or array-like arguments.
 ################################################################################
 
-DATE_PARSER_DICT = {"YMD": jdp.YMD_PREF_DATE + pyparsing.StringEnd(),
-                    "MDY": jdp.MDY_PREF_DATE + pyparsing.StringEnd(),
-                    "DMY": jdp.DMY_PREF_DATE + pyparsing.StringEnd(),
-                   }
+DATE_PARSER_DICT = {"YMD": jdp.YMD_PREF_DATE,
+                    "MDY": jdp.MDY_PREF_DATE,
+                    "DMY": jdp.DMY_PREF_DATE}
 
-DATETIME_PARSER_DICT = {"YMD": jdp.YMD_PREF_DATETIME + pyparsing.StringEnd(),
-                        "MDY": jdp.MDY_PREF_DATETIME + pyparsing.StringEnd(),
-                        "DMY": jdp.DMY_PREF_DATETIME + pyparsing.StringEnd(),
-                       }
+DATETIME_PARSER_DICT = {"YMD": jdp.YMD_PREF_DATETIME,
+                        "MDY": jdp.MDY_PREF_DATETIME,
+                        "DMY": jdp.DMY_PREF_DATETIME}
+
+WORDS = re.compile('([A-Za-z0-9.]+ *|[^A-Za-z0-9.]+ *])')
+
+def _split(string):
+    parts = string.split()
+    string = ' '.join(parts)
+
+    parts = WORDS.split(string)
+    parts = [p for p in parts if p]
+    return parts
 
 ########################################
 
 def day_from_string(string, order="YMD"):
-    """Day number based on a parsing of the string. Input parameter order is one
-    'YMD', 'MDY' or 'DMY', and defines the preferred order for date, month, and
-    year in situations where it might be ambiguous."""
+    """Day number based on a parsing of the string.
 
-    parser = DATE_PARSER_DICT[order]
+    Input parameter order is one 'YMD', 'MDY' or 'DMY', and defines the
+    preferred order for date, month, and year in situations where it might be
+    ambiguous.
+    """
+
+    parser = DATE_PARSER_DICT[order] + pyparsing.StringEnd()
 
     # Give the list a zero month entry for the year and day-of-year case
     parselist = [["MONTH",0]] + parser.parseString(string).asList()
     parsedict = _dict_from_parselist(parselist)
 
     return _day_from_dict(parsedict)
+
+def day_in_string(string, order="YMD"):
+    """Day number derived from the first date that appears in the string.
+
+    Input parameter order is one 'YMD', 'MDY' or 'DMY', and defines the
+    preferred order for date, month, and year in situations where it might be
+    ambiguous.
+    """
+
+    parser = DATE_PARSER_DICT[order]
+
+    words = _split(string)
+    result = None
+    for k in range(len(words)):
+        substring = ''.join(words[k:])
+        try:
+            result = parser.parseString(substring)
+            break
+        except pyparsing.ParseException:
+            pass
+
+    if result:
+        parselist = [["MONTH",0]] + result.asList()
+        parsedict = _dict_from_parselist(parselist)
+        return _day_from_dict(parsedict)
+
+    # Re-raise the original ParseException
+    _ = parser.parseString(string)
 
 ########################################
 
@@ -1974,11 +2071,34 @@ def sec_from_string(string):
     # Give the list zero values for each parameter, in case they are missing
     # from the list returned
     parser = jdp.TIME + pyparsing.StringEnd()
-    parselist = ([["HOUR",0],["MINUTE",0],["SECOND",0]] +
+    parselist = ([["HOUR",0], ["MINUTE",0], ["SECOND",0]] +
                  parser.parseString(string).asList())
     parsedict = _dict_from_parselist(parselist)
 
     return _sec_from_dict(parsedict)
+
+def sec_in_string(string):
+    """Second value based on the first identified time in a string."""
+
+    parser = jdp.TIME_STRICT
+
+    words = _split(string)
+    result = None
+    for k in range(len(words)):
+        substring = ''.join(words[k:])
+        try:
+            result = parser.parseString(substring)
+            break
+        except pyparsing.ParseException:
+            pass
+
+    if result:
+        parselist = [["HOUR",0], ["MINUTE",0], ["SECOND",0]] + result.asList()
+        parsedict = _dict_from_parselist(parselist)
+        return _sec_from_dict(parsedict)
+
+    # Re-raise the original ParseException
+    _ = parser.parseString(string)
 
 ########################################
 
@@ -1991,21 +2111,7 @@ TO_TAI_FUNC = {
     "TDT"   : tai_from_tdt,
 }
 
-def day_sec_type_from_string(string, order="YMD", validate=True):
-    """Day and second based on a parsing of the string. Input parameter order is
-    one of 'YMD', 'MDY' or 'DMY', and defines the preferred order for date,
-    month and year in situations where it might be ambiguous.
-
-    Note: time_types are parsed but are not currently supported. Days and
-    seconds are always expressed in UTC.
-    """
-
-    parser = DATETIME_PARSER_DICT[order]
-
-    # Give the default entries in case they are needed
-    parselist = ([["TYPE","UTC"], ["MONTH",0], ["HOUR",0], ["MINUTE",0],
-                  ["SECOND",0]] + parser.parseString(string).asList())
-    parsedict = _dict_from_parselist(parselist)
+def _day_sec_from_parsedict(parsedict, validate=True):
 
     # Get the time type
     time_type = parsedict["TYPE"]
@@ -2029,8 +2135,59 @@ def day_sec_type_from_string(string, order="YMD", validate=True):
     # Otherwise, it is a calendar date plus time
     day = _day_from_dict(parsedict)
     sec = _sec_from_dict(parsedict, day, validate)
-
     return (day, sec, "UTC")
+
+def day_sec_type_from_string(string, order="YMD", validate=True):
+    """Day and second based on a parsing of the string.
+
+    Input parameter order is one of 'YMD', 'MDY' or 'DMY', and defines the
+    preferred order for date, month and year in situations where it might be
+    ambiguous.
+
+    Note: time_types are parsed but are not currently supported. Days and
+    seconds are always expressed in UTC.
+    """
+
+    parser = DATETIME_PARSER_DICT[order] + pyparsing.StringEnd()
+
+    # Give the default entries in case they are needed
+    parselist = ([["TYPE","UTC"], ["MONTH",0], ["HOUR",0], ["MINUTE",0],
+                  ["SECOND",0]] + parser.parseString(string).asList())
+    parsedict = _dict_from_parselist(parselist)
+
+    return _day_sec_from_parsedict(parsedict, validate=validate)
+
+def day_sec_type_in_string(string, order="YMD", validate=True):
+    """Day and second based on the first occurrence of a date within a string.
+
+    Input parameter order is one of 'YMD', 'MDY' or 'DMY', and defines the
+    preferred order for date, month and year in situations where it might be
+    ambiguous.
+
+    Note: time_types are parsed but are not currently supported. Days and
+    seconds are always expressed in UTC.
+    """
+
+    parser = DATETIME_PARSER_DICT[order]
+
+    words = _split(string)
+    result = None
+    for k in range(len(words)):
+        substring = ' '.join(words[k:])
+        try:
+            result = parser.parseString(substring)
+            break
+        except pyparsing.ParseException:
+            pass
+
+    if result:
+        parselist = ([["TYPE","UTC"], ["MONTH",0], ["HOUR",0], ["MINUTE",0],
+                      ["SECOND",0]] + result.asList())
+        parsedict = _dict_from_parselist(parselist)
+        return _day_sec_from_parsedict(parsedict, validate=validate)
+
+    # Re-raise the first ParseException
+    _ = parseString(string)
 
 ####################
 # internals...
@@ -2109,7 +2266,7 @@ class Test_General_Parsing(unittest.TestCase):
         self.assertEqual(day_from_string("2000-01-01"),
                          day_from_ymd(2000,1,1))
 
-        # Check if other parsers work
+        # Check day_from_string
         self.assertEqual(day_from_string("01-02-2000", "MDY"),
                          day_from_ymd(2000,1,2))
         self.assertEqual(day_from_string("01-02-00", "MDY"),
@@ -2125,6 +2282,22 @@ class Test_General_Parsing(unittest.TestCase):
         self.assertRaises(ValueError, day_from_string, "2001-11-31")
         self.assertRaises(ValueError, day_from_string, "2001-02-29")
 
+        # Check day_in_string
+        self.assertEqual(day_in_string("Today is 01-02-2000!", "MDY"),
+                         day_from_ymd(2000,1,2))
+        self.assertEqual(day_in_string("Today is:[01-02-00]", "MDY"),
+                         day_from_ymd(2000,1,2))
+        self.assertEqual(day_in_string("Is this today?02-01-2000-0", "DMY"),
+                         day_from_ymd(2000,1,2))
+        self.assertEqual(day_in_string("Test--02-01-00-00", "DMY"),
+                         day_from_ymd(2000,1,2))
+        self.assertEqual(day_in_string("Test 2000-02-29=today","DMY"),
+                         day_from_ymd(2000,2,29))
+
+        # Check date validator
+        self.assertRaises(ValueError, day_in_string, "Today=(2001-11-31)")
+        self.assertRaises(ValueError, day_in_string, "Today 2001-02-29T12:34:56")
+
         # Check sec_from_string
         self.assertEqual(sec_from_string("00:00:00.000"), 0.0)
         self.assertEqual(sec_from_string("00:00:00"), 0)
@@ -2136,6 +2309,18 @@ class Test_General_Parsing(unittest.TestCase):
         self.assertEqual(sec_from_string("23:59:69.000"), 86409.0)
         self.assertRaises(pyparsing.ParseException, sec_from_string,
                                                     "23:59:70.000")
+
+        # Check sec_in_string
+        self.assertEqual(sec_in_string("This is the time--00:00:00.000"), 0.0)
+        self.assertEqual(sec_in_string("Is this the time? 00:00:00=now"), 0)
+        self.assertEqual(sec_in_string("Time:00:00:59.000 is now"), 59.0)
+        self.assertEqual(sec_in_string("Time (00:00:59)"), 59)
+
+        # Check sec_in_string with leap seconds
+        self.assertEqual(sec_in_string("End time[23:59:60.000]"), 86400.0)
+        self.assertEqual(sec_in_string("End time is 23:59:69.000 and later"), 86409.0)
+        self.assertRaises(pyparsing.ParseException, sec_in_string,
+                                                    "Error 23:59:70.000:0")
 
         # Check day_sec_type_from_string
         self.assertEqual(day_sec_type_from_string("2000-01-01 00:00:00.00"),
@@ -2181,6 +2366,31 @@ class Test_General_Parsing(unittest.TestCase):
                          day_sec_from_tai(1234567.89))
         self.assertEqual(day_sec_type_from_string("1234567.89 Tdt")[:2],
                          day_sec_from_tai(tai_from_tdt(1234567.89)))
+
+        # Check day_sec_type_in_string
+        self.assertEqual(day_sec_type_in_string("Time:2000-01-01 00:00:00.00"),
+                         (0, 0.0, "UTC"))
+        self.assertEqual(day_sec_type_in_string("Time[2000-01-01 00:00:00.00 tai]"),
+                         (0, 0.0, "UTC"))
+        self.assertEqual(day_sec_type_in_string("2000-01-01 00:00:00.00 Z=now"),
+                         (0, 0.0, "UTC"))
+        self.assertEqual(day_sec_type_in_string("Today is [[2000-01-01 00:00:00.00 TDB]]"),
+                         (0, 0.0, "UTC"))
+
+        # Check if DMY is same as MDY
+        self.assertEqual(day_sec_type_in_string("Today-31-12-2000 12:34:56!", "DMY"),
+                         day_sec_type_in_string("Today:12-31-2000 12:34:56?", "MDY"))
+
+        # Check leap second validator
+        self.assertEqual(day_sec_type_in_string("Date-1998-12-31 23:59:60 xyz"),
+                         (-366, 86400, "UTC"))
+        self.assertEqual(day_sec_type_in_string("Date? 1998-12-31 23:59:60.99 XYZ"),
+                         (-366, 86400.99, "UTC"))
+
+        self.assertRaises(ValueError, day_sec_type_in_string,
+                                      "Today 2000-01-01 23:59:60=leapsecond")
+        self.assertRaises(ValueError, day_sec_type_in_string,
+                                      "today 1999-12-31 23:59:61 leapsecond")
 
 ################################################################################
 # Perform unit testing if executed from the command line

@@ -7,7 +7,7 @@
 #
 # Date grammars:
 #
-#   YMD_PREF_DATE   parses a date string, in which ambiguous dates are 
+#   YMD_PREF_DATE   parses a date string, in which ambiguous dates are
 #                   interpreted in year, month, day order first. "07/08/09" is
 #                   interpreted as August 9, 2007.
 #
@@ -173,8 +173,12 @@ ONE_366_3DIGIT  = (   Combine(Literal("00") + Word(NONZERO,exact=1))
                     | Combine(Literal("3")  + Word("012345",nums,exact=2))
                     | Combine(Literal("36") + Word("0123456",exact=1))
                   ) + WordEnd(nums)
+# This appears to have stopped working in Python 3.9 and 3.10
+# ONE_366         = (ONE_366_3DIGIT |
+#                     (Word(NONZERO,nums,max=2) + WordEnd(nums)))
 ONE_366         = (ONE_366_3DIGIT |
-                    (Word(NONZERO,nums,min=1,max=2) + WordEnd(nums)))
+                    (Word(NONZERO,exact=1) + WordEnd(nums)) |
+                    (Word(NONZERO,nums,exact=2) + WordEnd(nums)))
 
 # A number 60-69. For possible additional leapseconds at the end of a day.
 SIXTY_69        = Combine("6" + Word(nums,exact=1)) + WordEnd(nums)
@@ -591,7 +595,7 @@ class Test_DATE31(unittest.TestCase):
 # A number 1-366, possibly zero-padded to 3 digits.
 ################################################################################
 
-DAY366          = ONE_366.copy()
+DAY366          = ONE_366_3DIGIT.copy()
 DAY366.setParseAction(lambda s,l,t: [["DAY", int(t[0])]])
 
 ########################################
@@ -613,7 +617,7 @@ class Test_DAY366(unittest.TestCase):
 
         # ...cannot complete match
         self.assertEqual(parser.parseString("366a").asList(), [["DAY", 366]])
-        self.assertEqual(parser.parseString("30.").asList(),  [["DAY",  30]])
+        self.assertEqual(parser.parseString("030.").asList(), [["DAY",  30]])
 
         # Doesn't recognize...
         self.assertRaises(ParseException, parser.parseString, " ")
@@ -650,7 +654,7 @@ WEEKDAY_ = (CaselessKeyword("SUN") + DOT |
             CaselessKeyword("FRI") + DOT |
             CaselessKeyword("SAT") + DOT)
 
-WEEKDAY.setParseAction(lambda s,l,t: [["WEEKDAY", t[0][0:3]]])  # keeps 3 chars
+WEEKDAY.setParseAction( lambda s,l,t: [["WEEKDAY", t[0][0:3]]])  # keeps 3 chars
 WEEKDAY_.setParseAction(lambda s,l,t: [["WEEKDAY", t[0][0:3]]])  # keeps 3 chars
 
 ########################################
@@ -664,11 +668,11 @@ class Test_WEEKDAY(unittest.TestCase):
         parser = WEEKDAY
 
         # Matches...
-        self.assertEqual(parser.parseString("MoNdAy")[0],  ["WEEKDAY","MON"])
-        self.assertEqual(parser.parseString(" Tue ")[0],   ["WEEKDAY","TUE"])
+        self.assertEqual(parser.parseString("MoNdAy")[0], ["WEEKDAY","MON"])
+        self.assertEqual(parser.parseString(" Tue ")[0],  ["WEEKDAY","TUE"])
 
         # ...cannot complete match
-        self.assertEqual(parser.parseString(" FrI- ")[0],  ["WEEKDAY","FRI"])
+        self.assertEqual(parser.parseString(" FrI- ")[0], ["WEEKDAY","FRI"])
 
         # Doesn't recognize...
         self.assertRaises(ParseException, parser.parseString, " ")
@@ -756,11 +760,15 @@ OTHER_DATE      = (YD_REQ_DATE | MJD_DAY)
 YMD_PREF        = YMD_REQ_DATE | MDY_REQ_DATE | DMY_REQ_DATE | OTHER_DATE
 MDY_PREF        = MDY_REQ_DATE | YMD_REQ_DATE | DMY_REQ_DATE | OTHER_DATE
 DMY_PREF        = DMY_REQ_DATE | MDY_REQ_DATE | YMD_REQ_DATE | OTHER_DATE
+YMD_PREF_STRICT = YMD_REQ_DATE | MDY_REQ_DATE | DMY_REQ_DATE
+MDY_PREF_STRICT = MDY_REQ_DATE | YMD_REQ_DATE | DMY_REQ_DATE
+DMY_PREF_STRICT = DMY_REQ_DATE | MDY_REQ_DATE | YMD_REQ_DATE
 
 # These versions also tolerate a string beginning with an optional weekday.
-YMD_PREF_DATE   = Optional((WEEKDAY ^ WEEKDAY_) + Optional(COMMA)) + YMD_PREF
-MDY_PREF_DATE   = Optional((WEEKDAY ^ WEEKDAY_) + Optional(COMMA)) + MDY_PREF
-DMY_PREF_DATE   = Optional((WEEKDAY ^ WEEKDAY_) + Optional(COMMA)) + DMY_PREF
+OPTIONAL_WEEKDAY= Optional((WEEKDAY ^ WEEKDAY_) + Optional(COMMA))
+YMD_PREF_DATE   = OPTIONAL_WEEKDAY + YMD_PREF_STRICT | OTHER_DATE
+MDY_PREF_DATE   = OPTIONAL_WEEKDAY + MDY_PREF_STRICT | OTHER_DATE
+DMY_PREF_DATE   = OPTIONAL_WEEKDAY + DMY_PREF_STRICT | OTHER_DATE
 DATE            = YMD_PREF_DATE
 
 ########################################
@@ -867,7 +875,7 @@ class Test_DATE(unittest.TestCase):
         self.assertRaises(ParseException, parser.parseString, "July4, 1776")
         self.assertRaises(ParseException, parser.parseString, "July 32, 1776")
 
-        # Matches to test random unambiguous date formats 
+        # Matches to test random unambiguous date formats
         parser = MDY_PREF_DATE
         self.assertEqual(parser.parseString("July 4, 1776").asList(),
                 [["MONTH",7],["DAY",4],["YEAR",1776]])
@@ -875,7 +883,7 @@ class Test_DATE(unittest.TestCase):
                 [["WEEKDAY","SAT"],["MONTH",7],["DAY",4],["YEAR",1776]])
         self.assertEqual(parser.parseString("Sat 1776-1-31").asList(),
                 [["WEEKDAY","SAT"],["YEAR",1776],["MONTH",1],["DAY",31]])
-        self.assertEqual(parser.parseString("1776-1").asList(),
+        self.assertEqual(parser.parseString("1776- 001").asList(),
                 [["YEAR",1776],["DAY",1]])
         self.assertEqual(parser.parseString("1776-366").asList(),
                 [["YEAR",1776],["DAY",366]])
@@ -889,7 +897,7 @@ class Test_DATE(unittest.TestCase):
                 [["MONTH",7],["DAY",4],["YEAR",1776]])
         self.assertEqual(parser.parseString("Sat July 4, 1776").asList(),
                 [["WEEKDAY","SAT"],["MONTH",7],["DAY",4],["YEAR",1776]])
-        self.assertEqual(parser.parseString("1776-1").asList(),
+        self.assertEqual(parser.parseString("1776-001").asList(),
                 [["YEAR",1776],["DAY",1]])
         self.assertEqual(parser.parseString("1776-366").asList(),
                 [["YEAR",1776],["DAY",366]])
@@ -901,8 +909,8 @@ class Test_DATE(unittest.TestCase):
                 [["MONTH",7],["DAY",4],["YEAR",1776]])
         self.assertEqual(parser.parseString("Sat July 4, 1776").asList(),
                 [["WEEKDAY","SAT"],["MONTH",7],["DAY",4],["YEAR",1776]])
-        self.assertEqual(parser.parseString("1776-1").asList(),
-                [["YEAR",1776],["DAY",1]])
+        self.assertEqual(parser.parseString("1776-011").asList(),
+                [["YEAR",1776],["DAY",11]])
         self.assertEqual(parser.parseString("1776-366").asList(),
                 [["YEAR",1776],["DAY",366]])
         self.assertEqual(parser.parseString(" mJd 012345678").asList(),
@@ -1108,7 +1116,7 @@ class Test_Time_Parts(unittest.TestCase):
             string = "{:02d}".format(i)
             self.assertEqual(parser.parseString(string).asList(),
                 [["MINUTE", i]], "Failed on '" + string + "'")
-            
+
             string = str(i) + "."
             self.assertEqual(parser.parseString(string).asList(),
                 [["MINUTE", float(i)]], "Failed on '" + string + "'")
@@ -1138,7 +1146,7 @@ class Test_Time_Parts(unittest.TestCase):
             string = "{:04d}".format(i)
             self.assertEqual(parser.parseString(string).asList(),
                 [["MINUTE",i]], "Failed on '" + string + "'")
-            
+
             string = str(i) + "."
             self.assertEqual(parser.parseString(string).asList(),
                 [["MINUTE", float(i)]], "Failed on '" + string + "'")
@@ -1159,7 +1167,7 @@ class Test_Time_Parts(unittest.TestCase):
 
         parser = SECOND59
         # Matches...
-        self.assertEqual(parser.parseString(" 59 ").asList(), 
+        self.assertEqual(parser.parseString(" 59 ").asList(),
             [["SECOND", 59]])
 
         for i in range(0,60):
@@ -1170,7 +1178,7 @@ class Test_Time_Parts(unittest.TestCase):
             string = "{:02d}".format(i)
             self.assertEqual(parser.parseString(string).asList(),
                 [["SECOND", i]], "Failed on '" + string + "'")
-            
+
             string = str(i) + "."
             self.assertEqual(parser.parseString(string).asList(),
                 [["SECOND", float(i)]], "Failed on '" + string + "'")
@@ -1198,7 +1206,7 @@ class Test_Time_Parts(unittest.TestCase):
             string = "{:05d}".format(i)
             self.assertEqual(parser.parseString(string).asList(),
                 [["SECOND", i]], "Failed on '" + string + "'")
-            
+
             string = str(i) + "."
             self.assertEqual(parser.parseString(string).asList(),
                 [["SECOND", float(i)]], "Failed on '" + string + "'")
@@ -1230,7 +1238,7 @@ class Test_Time_Parts(unittest.TestCase):
             self.assertEqual(parser.parseString(string).asList(),
                 [['HOUR', 23], ['MINUTE', 59], ["SECOND", i]],
                 "Failed on '" + string + "'")
-            
+
             string = str(i) + "."
             self.assertEqual(parser.parseString(string).asList(),
                 [['HOUR', 23], ['MINUTE', 59], ["SECOND", float(i)]],
@@ -1261,7 +1269,7 @@ class Test_Time_Parts(unittest.TestCase):
             string = "{:02d}".format(i)
             self.assertEqual(parser.parseString(string).asList(),
                 [["SECOND", i]], "Failed on '" + string + "'")
-            
+
             string = str(i) + "."
             self.assertEqual(parser.parseString(string).asList(),
                 [["SECOND", float(i)]], "Failed on '" + string + "'")
@@ -1385,12 +1393,14 @@ NORMAL_TIME     = (   HOUR23 + COLON + MINUTE59 + OPTIONAL_S
                     | SECOND86399 + S
                   )
 
-LEAP_TIME       = (   TWENTYTHREE + COLON + FIFTYNINE + COLON + LEAPSEC69
-                    | LEAPSEC86409 + S
-                  )
+NORMAL_TIME_STRICT = HOUR23 + COLON + MINUTE59 + COLON + SECOND59
+
+LEAP_TIME_HMS   = TWENTYTHREE + COLON + FIFTYNINE + COLON + LEAPSEC69
+LEAP_TIME       = LEAP_TIME_HMS | LEAPSEC86409 + S
 
 # Any time expression
 TIME            = AMPM_TIME | LEAP_TIME | NORMAL_TIME
+TIME_STRICT     = AMPM_TIME | LEAP_TIME_HMS | NORMAL_TIME_STRICT
 
 # A time expression with optional type
 TYPED_TIME      = (   AMPM_TIME
@@ -1540,7 +1550,7 @@ DASH_YMD_FLOAT  = YEAR + DASH  + MONTH + DASH  + DATE31_FLOAT
 SLASH_YMD_FLOAT = YEAR + SLASH + MONTH + SLASH + DATE31_FLOAT
 SPACE_YMD_FLOAT = YEAR + WHITE + MONTH + WHITE + DATE31_FLOAT
 
-DAY366_FLOAT    = Combine(ONE_366 + "." + Optional(Word(nums)))
+DAY366_FLOAT    = Combine(ONE_366_3DIGIT + "." + Optional(Word(nums)))
 DAY366_FLOAT.setParseAction(lambda s,l,t: [["DAY", float(t[0])]])
 
 YD_FLOAT        = YEAR + Optional(DASH | SLASH) + DAY366_FLOAT
@@ -1578,13 +1588,9 @@ class Test_FRACTIONAL_DATE(unittest.TestCase):
         # Test YD_FLOAT
         parser = YD_FLOAT
         Expected = [["YEAR", 2000], ["DAY", 1.0]]
-        self.assertEqual(parser.parseString(" 00 -1. ").asList(),   Expected)
         self.assertEqual(parser.parseString("2000- 001.").asList(), Expected)
-        self.assertEqual(parser.parseString("00 /1.").asList(),     Expected)
         self.assertEqual(parser.parseString("2000/ 001.").asList(), Expected)
-        self.assertEqual(parser.parseString("00 1.").asList(),      Expected)
         self.assertEqual(parser.parseString("2000 001.").asList(),  Expected)
-
         self.assertEqual(parser.parseString("2000-366.").asList(),
                          [["YEAR", 2000], ["DAY", 366.0]])
         self.assertEqual(parser.parseString("2000-366.5").asList(),
@@ -1631,8 +1637,8 @@ class Test_FRACTIONAL_DATE(unittest.TestCase):
         self.assertEqual(parser.parseString("2000 01 01. TDT").asList(),
                         [["YEAR", 2000], ["MONTH", 1], ["DAY", 1.0],
                          ["TYPE", "TDT"]])
-        self.assertEqual(parser.parseString("2000-1.Z").asList(),
-                        [["YEAR", 2000], ["DAY", 1.0], ["TYPE", "UTC"]])
+        self.assertEqual(parser.parseString("2000-001.Z").asList(),
+                         [["YEAR", 2000], ["DAY", 1.0], ["TYPE", "UTC"]])
 
         # Doesn't complete...
         self.assertEqual(parser.parseString("2000 01 01.-Z").asList(),
@@ -1752,8 +1758,8 @@ class Test_DATETIME(unittest.TestCase):
         self.assertEqual(parser.parseString("2000-001.UTC").asList(),
                     [["YEAR", 2000], ["DAY", 1.0],
                      ["TYPE", "UTC"]])
-        self.assertEqual(parser.parseString("2000-1.").asList(),
-                    [["YEAR", 2000], ["DAY", 1.0]])
+        self.assertEqual(parser.parseString("2000-001.5").asList(),
+                    [["YEAR", 2000], ["DAY", 1.5]])
 
 ################################################################################
 # Perform unit testing if executed from the command line
