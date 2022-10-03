@@ -173,9 +173,6 @@ ONE_366_3DIGIT  = (   Combine(Literal("00") + Word(NONZERO,exact=1))
                     | Combine(Literal("3")  + Word("012345",nums,exact=2))
                     | Combine(Literal("36") + Word("0123456",exact=1))
                   ) + WordEnd(nums)
-# This appears to have stopped working in Python 3.9 and 3.10
-# ONE_366         = (ONE_366_3DIGIT |
-#                     (Word(NONZERO,nums,max=2) + WordEnd(nums)))
 ONE_366         = (ONE_366_3DIGIT |
                     (Word(NONZERO,exact=1) + WordEnd(nums)) |
                     (Word(NONZERO,nums,exact=2) + WordEnd(nums)))
@@ -732,44 +729,44 @@ class Test_MJD_Day(unittest.TestCase):
 ################################################################################
 
 # Year-month-day order, separated by dash, slash, dot or spaces.
-DASH_YMD        = YEAR + DASH  + MONTH          + DASH  + DATE31
-SLASH_YMD       = YEAR + SLASH + MONTH          + SLASH + DATE31
-DOT_YMD         = YEAR + DOT   + MONTH          + DOT   + DATE31
-SPACE_YMD       = YEAR +         (MONTH ^ MON_) +         DATE31
-YMD_REQ_DATE    = DASH_YMD | SLASH_YMD | DOT_YMD | SPACE_YMD
+DASH_YMD         = YEAR + DASH  + MONTH          + DASH  + DATE31
+SLASH_YMD        = YEAR + SLASH + MONTH          + SLASH + DATE31
+DOT_YMD          = YEAR + DOT   + MONTH          + DOT   + DATE31
+SPACE_YMD        = YEAR +         (MONTH ^ MON_) +         DATE31
+YMD_REQ_DATE     = DASH_YMD | SLASH_YMD | DOT_YMD | SPACE_YMD
 
 # Month-day-year order, separated by dash, slash, dot or spaces.
-DASH_MDY        = MONTH          + DASH  + DATE31 + DASH  + YEAR
-SLASH_MDY       = MONTH          + SLASH + DATE31 + SLASH + YEAR
-DOT_MDY         = MONTH          + DOT   + DATE31 + DOT   + YEAR
-SPACE_MDY       = (MONTH ^ MON_) +         DATE31 + Optional(COMMA) + YEAR
-MDY_REQ_DATE    = DASH_MDY | SLASH_MDY | DOT_MDY | SPACE_MDY
+DASH_MDY         = MONTH          + DASH  + DATE31 + DASH  + YEAR
+SLASH_MDY        = MONTH          + SLASH + DATE31 + SLASH + YEAR
+DOT_MDY          = MONTH          + DOT   + DATE31 + DOT   + YEAR
+SPACE_MDY        = (MONTH ^ MON_) +         DATE31 + Optional(COMMA) + YEAR
+MDY_REQ_DATE     = DASH_MDY | SLASH_MDY | DOT_MDY | SPACE_MDY
 
 # Day-month-year order, separated by dash, slash, dot or spaces.
-DASH_DMY        = DATE31 + DASH  + MONTH          + DASH  + YEAR
-SLASH_DMY       = DATE31 + SLASH + MONTH          + SLASH + YEAR
-DOT_DMY         = DATE31 + DOT   + MONTH          + DOT   + YEAR
-SPACE_DMY       = DATE31 +         (MONTH ^ MON_) +         YEAR
-DMY_REQ_DATE    = DASH_DMY | SLASH_DMY | DOT_DMY | SPACE_DMY
+DASH_DMY         = DATE31 + DASH  + MONTH          + DASH  + YEAR
+SLASH_DMY        = DATE31 + SLASH + MONTH          + SLASH + YEAR
+DOT_DMY          = DATE31 + DOT   + MONTH          + DOT   + YEAR
+SPACE_DMY        = DATE31 +         (MONTH ^ MON_) +         YEAR
+DMY_REQ_DATE     = DASH_DMY | SLASH_DMY | DOT_DMY | SPACE_DMY
 
 # Year-day order, separated by dash, slash, dot or spaces.
-YD_REQ_DATE     = YEAR + Optional(DASH | SLASH | DOT) + DAY366
-OTHER_DATE      = (YD_REQ_DATE | MJD_DAY)
+YD_REQ_DATE      = YEAR + Optional(DASH | SLASH | DOT) + DAY366
+OTHER_DATE       = (YD_REQ_DATE | MJD_DAY)
 
 # Date parsers in which one order is preferred but others are allowed
-YMD_PREF        = YMD_REQ_DATE | MDY_REQ_DATE | DMY_REQ_DATE | OTHER_DATE
-MDY_PREF        = MDY_REQ_DATE | YMD_REQ_DATE | DMY_REQ_DATE | OTHER_DATE
-DMY_PREF        = DMY_REQ_DATE | MDY_REQ_DATE | YMD_REQ_DATE | OTHER_DATE
-YMD_PREF_STRICT = YMD_REQ_DATE | MDY_REQ_DATE | DMY_REQ_DATE
-MDY_PREF_STRICT = MDY_REQ_DATE | YMD_REQ_DATE | DMY_REQ_DATE
-DMY_PREF_STRICT = DMY_REQ_DATE | MDY_REQ_DATE | YMD_REQ_DATE
+YMD_PREF         = YMD_REQ_DATE | MDY_REQ_DATE | DMY_REQ_DATE | OTHER_DATE
+MDY_PREF         = MDY_REQ_DATE | YMD_REQ_DATE | DMY_REQ_DATE | OTHER_DATE
+DMY_PREF         = DMY_REQ_DATE | MDY_REQ_DATE | YMD_REQ_DATE | OTHER_DATE
+YMD_PREF_STRICT  = YMD_REQ_DATE | MDY_REQ_DATE | DMY_REQ_DATE
+MDY_PREF_STRICT  = MDY_REQ_DATE | YMD_REQ_DATE | DMY_REQ_DATE
+DMY_PREF_STRICT  = DMY_REQ_DATE | MDY_REQ_DATE | YMD_REQ_DATE
 
 # These versions also tolerate a string beginning with an optional weekday.
-OPTIONAL_WEEKDAY= Optional((WEEKDAY ^ WEEKDAY_) + Optional(COMMA))
-YMD_PREF_DATE   = OPTIONAL_WEEKDAY + YMD_PREF_STRICT | OTHER_DATE
-MDY_PREF_DATE   = OPTIONAL_WEEKDAY + MDY_PREF_STRICT | OTHER_DATE
-DMY_PREF_DATE   = OPTIONAL_WEEKDAY + DMY_PREF_STRICT | OTHER_DATE
-DATE            = YMD_PREF_DATE
+OPTIONAL_WEEKDAY = Optional((WEEKDAY ^ WEEKDAY_) + Optional(COMMA))
+YMD_PREF_DATE    = OPTIONAL_WEEKDAY + YMD_PREF_STRICT | OTHER_DATE
+MDY_PREF_DATE    = OPTIONAL_WEEKDAY + MDY_PREF_STRICT | OTHER_DATE
+DMY_PREF_DATE    = OPTIONAL_WEEKDAY + DMY_PREF_STRICT | OTHER_DATE
+DATE             = YMD_PREF_DATE
 
 ########################################
 # UNIT TESTS
@@ -1769,4 +1766,3 @@ if __name__ == "__main__":
     unittest.main()
 
 ################################################################################
-

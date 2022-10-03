@@ -705,7 +705,7 @@ def tdb_from_tai(tai, iters=2):
     to about 30 microseconds but an exact inverse for function tai_from_tdb().
 
     The default value of 2 iterations appears to give full double-precision
-    convergencec for every possible case.
+    convergence for every possible case.
     """
 
     # Solve:
@@ -2061,7 +2061,7 @@ def day_in_string(string, order="YMD"):
         return _day_from_dict(parsedict)
 
     # Re-raise the original ParseException
-    _ = parser.parseString(string)
+    parser.parseString(string)
 
 ########################################
 
