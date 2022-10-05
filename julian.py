@@ -1999,13 +1999,21 @@ class Test_ISO_Parsing(unittest.TestCase):
 # array or array-like arguments.
 ################################################################################
 
-DATE_PARSER_DICT = {"YMD": jdp.YMD_PREF_DATE,
-                    "MDY": jdp.MDY_PREF_DATE,
-                    "DMY": jdp.DMY_PREF_DATE}
+DATE_PARSER_DICT   = {"YMD": jdp.YMD_PREF_DATE,
+                      "MDY": jdp.MDY_PREF_DATE,
+                      "DMY": jdp.DMY_PREF_DATE}
 
-DATETIME_PARSER_DICT = {"YMD": jdp.YMD_PREF_DATETIME,
-                        "MDY": jdp.MDY_PREF_DATETIME,
-                        "DMY": jdp.DMY_PREF_DATETIME}
+DATE_PARSER_STRICT = {"YMD": jdp.YMD_PREF_STRICT,
+                      "MDY": jdp.MDY_PREF_STRICT,
+                      "DMY": jdp.DMY_PREF_STRICT}
+
+DATETIME_PARSER_DICT   = {"YMD": jdp.YMD_PREF_DATETIME,
+                          "MDY": jdp.MDY_PREF_DATETIME,
+                          "DMY": jdp.DMY_PREF_DATETIME}
+
+DATETIME_PARSER_STRICT = {"YMD": jdp.YMD_PREF_DATETIME_STRICT,
+                          "MDY": jdp.MDY_PREF_DATETIME_STRICT,
+                          "DMY": jdp.DMY_PREF_DATETIME_STRICT}
 
 WORDS = re.compile('([A-Za-z0-9.]+ *|[^A-Za-z0-9.]+ *])')
 
@@ -2035,20 +2043,30 @@ def day_from_string(string, order="YMD"):
 
     return _day_from_dict(parsedict)
 
-def day_in_string(string, order="YMD"):
-    """Day number derived from the first date that appears in the string.
+def day_in_string(string, order="YMD", remainder=False):
+    """Day number derived from the first date that appears in the string; None
+    no date was found.
+
+    If remainder is True and a date was found, it returns a tuple (day number,
+    remainder of string).
 
     Input parameter order is one 'YMD', 'MDY' or 'DMY', and defines the
     preferred order for date, month, and year in situations where it might be
     ambiguous.
     """
 
-    parser = DATE_PARSER_DICT[order]
+    parser = DATE_PARSER_STRICT[order]
+
+    # To speed things up, we assume any string containing a date must have at
+    # least a 2-digit number and a 1-digit number separated by 1-12 characters.
+    regex = re.compile(r'.*\d(\d[^\d].{0,11}|[^\d].{0,11}\d)\d')
 
     words = _split(string)
     result = None
     for k in range(len(words)):
         substring = ''.join(words[k:])
+        if not regex.match(substring):
+            break
         try:
             result = parser.parseString(substring)
             break
@@ -2058,10 +2076,36 @@ def day_in_string(string, order="YMD"):
     if result:
         parselist = [["MONTH",0]] + result.asList()
         parsedict = _dict_from_parselist(parselist)
-        return _day_from_dict(parsedict)
+        try:
+            day = _day_from_dict(parsedict)
+        except ValueError:
+            return None
 
-    # Re-raise the original ParseException
-    parser.parseString(string)
+        if remainder:
+            return (day, substring[parsedict['~']:])
+
+        return day
+
+    return None
+
+def days_in_string(string, order="YMD", remainder=False):
+    """List of day numbers found in this string.
+
+    Input parameter order is one 'YMD', 'MDY' or 'DMY', and defines the
+    preferred order for date, month, and year in situations where it might be
+    ambiguous.
+    """
+
+    days = []
+    while True:
+        result = day_in_string(string, order=order, remainder=True)
+        if result:
+            (day, string) = result
+            days.append(day)
+        else:
+            break
+
+    return days
 
 ########################################
 
@@ -2077,15 +2121,26 @@ def sec_from_string(string):
 
     return _sec_from_dict(parsedict)
 
-def sec_in_string(string):
-    """Second value based on the first identified time in a string."""
+def time_in_string(string, remainder=False):
+    """Second value based on the first identified time in a string; None if no
+    time was found.
+
+    If remainder is True and a date was found, it returns a tuple (seconds,
+    remainder of string).
+    """
 
     parser = jdp.TIME_STRICT
+
+    # To speed things up, we assume any string containing a time must have at
+    # least two 2-digit numbers, separated by 1-7 characters.
+    regex = re.compile(r'.*\d\d([^\d].{0,6})\d\d')
 
     words = _split(string)
     result = None
     for k in range(len(words)):
         substring = ''.join(words[k:])
+        if not regex.match(substring):
+            break
         try:
             result = parser.parseString(substring)
             break
@@ -2095,10 +2150,36 @@ def sec_in_string(string):
     if result:
         parselist = [["HOUR",0], ["MINUTE",0], ["SECOND",0]] + result.asList()
         parsedict = _dict_from_parselist(parselist)
-        return _sec_from_dict(parsedict)
+        try:
+            sec = _sec_from_dict(parsedict)
+        except ValueError:
+            return None
 
-    # Re-raise the original ParseException
-    _ = parser.parseString(string)
+        if remainder:
+            return (sec, substring[parsedict['~']:])
+
+        return sec
+
+    return None
+
+def times_in_string(string, remainder=False):
+    """List of seconds values found in this string.
+
+    Input parameter order is one 'YMD', 'MDY' or 'DMY', and defines the
+    preferred order for date, month, and year in situations where it might be
+    ambiguous.
+    """
+
+    times = []
+    while True:
+        result = time_in_string(string, remainder=True)
+        if result:
+            (time, string) = result
+            times.append(time)
+        else:
+            break
+
+    return times
 
 ########################################
 
@@ -2128,8 +2209,7 @@ def _day_sec_from_parsedict(parsedict, validate=True):
     dvalue = parsedict["DAY"]
     if isinstance(dvalue, float):
         day = _day_from_dict(parsedict)
-        dfrac = dvalue - day
-        sec = (dvalue - day) * seconds_of_day(day)
+        sec = (dvalue - day) * seconds_on_day(day)
         return (day, sec, time_type)
 
     # Otherwise, it is a calendar date plus time
@@ -2157,8 +2237,12 @@ def day_sec_type_from_string(string, order="YMD", validate=True):
 
     return _day_sec_from_parsedict(parsedict, validate=validate)
 
-def day_sec_type_in_string(string, order="YMD", validate=True):
-    """Day and second based on the first occurrence of a date within a string.
+def day_sec_type_in_string(string, order="YMD", validate=True, remainder=False):
+    """Day, second, and time type based on the first occurrence of a date within
+    a string; None if no date was found.
+
+    If remainder is True and a date was found, it returns a tuple ((day, sec,
+    type), remainder of string).
 
     Input parameter order is one of 'YMD', 'MDY' or 'DMY', and defines the
     preferred order for date, month and year in situations where it might be
@@ -2168,12 +2252,18 @@ def day_sec_type_in_string(string, order="YMD", validate=True):
     seconds are always expressed in UTC.
     """
 
-    parser = DATETIME_PARSER_DICT[order]
+    parser = DATETIME_PARSER_STRICT[order]
+
+    # To speed things up, we assume any string containing a date/time must have
+    # at least three 2-digit numbers, separated by 1-12 other characters.
+    regex = re.compile(r'.*(\d\d[^\d].{0,11}\d\d[^\d].{0,11}\d\d)')
 
     words = _split(string)
     result = None
     for k in range(len(words)):
-        substring = ' '.join(words[k:])
+        substring = ''.join(words[k:])
+        if not regex.match(substring):
+            break
         try:
             result = parser.parseString(substring)
             break
@@ -2184,10 +2274,42 @@ def day_sec_type_in_string(string, order="YMD", validate=True):
         parselist = ([["TYPE","UTC"], ["MONTH",0], ["HOUR",0], ["MINUTE",0],
                       ["SECOND",0]] + result.asList())
         parsedict = _dict_from_parselist(parselist)
-        return _day_sec_from_parsedict(parsedict, validate=validate)
+        try:
+            day_sec_type = _day_sec_from_parsedict(parsedict,
+                                                   validate=validate)
+        except ValueError:
+            return None
 
-    # Re-raise the first ParseException
-    _ = parseString(string)
+        if remainder:
+            return (day_sec_type, substring[parsedict['~']:])
+
+        return day_sec_type
+
+    return None
+
+def dates_in_string(string, order="YMD", validate=True, remainder=False):
+    """List of the dates found in this string, represented by tuples (day, sec,
+    time_type).
+
+    Input parameter order is one of 'YMD', 'MDY' or 'DMY', and defines the
+    preferred order for date, month and year in situations where it might be
+    ambiguous.
+
+    Note: time_types are parsed but are not currently supported. Days and
+    seconds are always expressed in UTC.
+    """
+
+    dates = []
+    while True:
+        result = day_sec_type_in_string(string, order=order, validate=validate,
+                                                remainder=True)
+        if result:
+            (day_sec_type, string) = result
+            dates.append(day_sec_type)
+        else:
+            break
+
+    return dates
 
 ####################
 # internals...
@@ -2294,9 +2416,28 @@ class Test_General_Parsing(unittest.TestCase):
         self.assertEqual(day_in_string("Test 2000-02-29=today","DMY"),
                          day_from_ymd(2000,2,29))
 
+        # Check days_in_string
+        self.assertEqual(days_in_string("Today is 01-02-2000!", "MDY"),
+                         [day_from_ymd(2000,1,2)])
+        self.assertEqual(days_in_string("Today is:[01-02-00]", "MDY"),
+                         [day_from_ymd(2000,1,2)])
+        self.assertEqual(days_in_string("Is this today?02-01-2000-0", "DMY"),
+                         [day_from_ymd(2000,1,2)])
+        self.assertEqual(days_in_string("Test--02-01-00-00", "DMY"),
+                         [day_from_ymd(2000,1,2)])
+        self.assertEqual(days_in_string("Test 2000-02-29=today","DMY"),
+                         [day_from_ymd(2000,2,29)])
+        self.assertEqual(days_in_string("Test 2000=today","DMY"),
+                         [])
+        self.assertEqual(days_in_string("2020-01-01|30-10-20, etc.",),
+                         [day_from_ymd(2020,1,1), day_from_ymd(2030,10,20)])
+
         # Check date validator
-        self.assertRaises(ValueError, day_in_string, "Today=(2001-11-31)")
-        self.assertRaises(ValueError, day_in_string, "Today 2001-02-29T12:34:56")
+        self.assertEqual(day_in_string("Today=(2001-11-31)"), None)
+        self.assertEqual(day_in_string("Today 2001-02-29T12:34:56"), None)
+
+        self.assertEqual(day_in_string("Today 2001-01-01, not tomorrow", remainder=True),
+                                       (366, ', not tomorrow'))
 
         # Check sec_from_string
         self.assertEqual(sec_from_string("00:00:00.000"), 0.0)
@@ -2310,17 +2451,21 @@ class Test_General_Parsing(unittest.TestCase):
         self.assertRaises(pyparsing.ParseException, sec_from_string,
                                                     "23:59:70.000")
 
-        # Check sec_in_string
-        self.assertEqual(sec_in_string("This is the time--00:00:00.000"), 0.0)
-        self.assertEqual(sec_in_string("Is this the time? 00:00:00=now"), 0)
-        self.assertEqual(sec_in_string("Time:00:00:59.000 is now"), 59.0)
-        self.assertEqual(sec_in_string("Time (00:00:59)"), 59)
+        # Check time_in_string
+        self.assertEqual(time_in_string("This is the time--00:00:00.000"), 0.0)
+        self.assertEqual(time_in_string("Is this the time? 00:00:00=now"), 0)
+        self.assertEqual(time_in_string("Time:00:00:59.000 is now"), 59.0)
+        self.assertEqual(time_in_string("Time (00:00:59)"), 59)
 
-        # Check sec_in_string with leap seconds
-        self.assertEqual(sec_in_string("End time[23:59:60.000]"), 86400.0)
-        self.assertEqual(sec_in_string("End time is 23:59:69.000 and later"), 86409.0)
-        self.assertRaises(pyparsing.ParseException, sec_in_string,
-                                                    "Error 23:59:70.000:0")
+        # Check time_in_string with leap seconds
+        self.assertEqual(time_in_string("End time[23:59:60.000]"), 86400.0)
+        self.assertEqual(time_in_string("End time is 23:59:69.000 and later"), 86409.0)
+        self.assertEqual(time_in_string("Error 23:5z:00.000:0"), None)
+
+        # Check times_in_string with leap seconds
+        self.assertEqual(times_in_string("End time[23:59:60.000]"), [86400.0])
+        self.assertEqual(times_in_string("End time is 23:59:69.000 and later"), [86409.0])
+        self.assertEqual(times_in_string("Error 23:5z:00.000:0"), [])
 
         # Check day_sec_type_from_string
         self.assertEqual(day_sec_type_from_string("2000-01-01 00:00:00.00"),
@@ -2387,10 +2532,22 @@ class Test_General_Parsing(unittest.TestCase):
         self.assertEqual(day_sec_type_in_string("Date? 1998-12-31 23:59:60.99 XYZ"),
                          (-366, 86400.99, "UTC"))
 
-        self.assertRaises(ValueError, day_sec_type_in_string,
-                                      "Today 2000-01-01 23:59:60=leapsecond")
-        self.assertRaises(ValueError, day_sec_type_in_string,
-                                      "today 1999-12-31 23:59:61 leapsecond")
+        self.assertEqual(day_sec_type_in_string("Today 2000-01-01 23:59:60=leapsecond"),
+                         None)
+        self.assertEqual(day_sec_type_in_string("today 1999-12-31 23:59:61 leapsecond"),
+                         None)
+
+        # dates_in_string
+        self.assertEqual(dates_in_string("Time:2000-01-01 00:00:00.00"),
+                         [(0, 0.0, "UTC")])
+        self.assertEqual(dates_in_string("Time[2000-01-01 00:00:00.00 tai]"),
+                         [(0, 0.0, "UTC")])
+        self.assertEqual(dates_in_string("2000-01-01 00:00:00.00 Z=now"),
+                         [(0, 0.0, "UTC")])
+        self.assertEqual(dates_in_string("Today is [[2000-01-01 00:00:00.00 TDB]]"),
+                         [(0, 0.0, "UTC")])
+        self.assertEqual(dates_in_string("Today is [[200z-01-01 0z:00:0z.00 TDB]]"),
+                         [])
 
 ################################################################################
 # Perform unit testing if executed from the command line
