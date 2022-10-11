@@ -1,70 +1,86 @@
-################################################################################
-# julian.py - The Julian Library
-#
-# This is a set of routines for handing date and time conversions. It handles
-# these time systems:
-#   UTC = Universal Coordinates Time, similar to Grenwich Mean Time, expressed
-#         by integer days since January 1, 2000 plus floating-point seconds
-#         since beginning of day. UTC can also be represented in various
-#         standard formats for a calendar date plus an optional time.
-#   TAI = International Atomic Time, which is number of actual elapsed seconds
-#         since December 31, 1999 at 23:59:28. This running tally accounts for
-#         all leap seconds.
-#   TDB = Terrestrial Barycentric Time, which is the number of elapsed seconds
-#         since noon (not midnight!) on January 1, 2000, and adjusted for
-#         relativistic effects that cause a clock on the Earth to vary in speed
-#         relative to one at the solar system barycenter. This quantity is
-#         equivalent to "ephemeris time" in the SPICE time system, although
-#         differences at the level of milliseconds can occur.
-#   TDT = Terrestrial Dynamical Time, which is the preferred time system for
-#         Earth-centered orbits. This is also defined in a manner consistent
-#         with that in the SPICE toolkit.
-#   JD  = Julian Date as a number of elapsed days since noon (not midnight!) on
-#         Monday, January 1, 4713 BCE. Each period from one noon to the next
-#         counts as one day, regardless of whether that day contains leap
-#         seconds. As a result, some days are longer than others. (Note that
-#         leap seconds always occur at midnight, and therefore at the middle of
-#         a Julian day.)
-#   MJD = Modified Julian Date, defined to be JD minus 2400000.5.
-#   JED = Julian Ephmeris Date, defined to be TDB/86400 + 2451545. It is
-#         compatible with SPICE ephemeris time but in units of days rather than
-#         seconds.
-#   MJED = Modified Julian Ephmeris Date, defined as JED minus 2400000.5.
-#
-#   Throughout the library, TAI is the intermediary time relative to which all
-#   others are defined. Note: The term "TAI" is also used infrequently in the
-#   SPICE Toolkit, but the SPICE value is smaller by exactly 43200 seconds. All
-#   other terms used here are essentially identical in meaning to their SPICE
-#   Toolkit equivalents.
-#
-#   If the environment variable SPICE_LSK_FILEPATH is defined, then this SPICE
-#   leapseconds kernel is read at startup. Otherwise, leap seconds through 2020
-#   are always included, as defined in NAIF00012.TLS.
-#
-#   The library also handles calendar conversions and both parses and formats
-#   strings that express time in UTC.
-#
-#   This library duplicates much of the functionality of python's built-in
-#   datetime library, but is separate from them because the datetime library
-#   cannot handle leap seconds.
-#
-#   This library duplicates some of the SPICE toolkit, but has the advantage of
-#   supporting array-based time operations, which can be much faster when
-#   processing large amounts of data. It is also pure Python, and so does not
-#   need to be linked with C or FORTRAN libraries.
-#
-#   Aside from the I/O routines, every argument to every function can be either
-#   a scalar or something array-like, i.e, a NumPy array, a tuple or a list.
-#   Arguments other than scalars are converted to NumPy arrays, the arrays are
-#   broadcasted to the same shape if necessary, and the complete array(s) of
-#   results are returned.
-#
-#   The Julian Library is compatible with both Python 2 and Python 3.
-#
-# PDS Ring-Moon Systems Node, SETI Institute
-# This software is licensed under Academic Free License ("AFL") v. 3.0.
-# See https://opensource.org/licenses/afl-3.0.php
-################################################################################
+"""julian.py - The Julian Library
+
+This is a set of routines for handing date and time conversions. It handles
+these time systems:
+  UTC = Universal Coordinates Time, similar to Grenwich Mean Time, expressed
+        by integer days since January 1, 2000 plus floating-point seconds after
+        beginning of day. UTC can also be represented in various standard
+        formats for a calendar date plus an optional time.
+  TAI = International Atomic Time, which is number of actual elapsed seconds
+        since December 31, 1999 at 23:59:28. This running tally accounts for all
+        leap seconds.
+  TDB = Terrestrial Barycentric Time, which is the number of elapsed seconds
+        since noon (not midnight!) on January 1, 2000, and adjusted for
+        relativistic effects that cause a clock on the Earth to vary in speed
+        relative to one at the solar system barycenter. This quantity is
+        equivalent to "ephemeris time" in the SPICE time system, although
+        differences at the level of milliseconds can occur.
+  TDT = Terrestrial Dynamical Time, which is the preferred time system for
+        Earth-centered orbits. This is also defined in a manner consistent with
+        that in the SPICE toolkit.
+  JD  = Julian Date as a number of elapsed days since noon (not midnight!) on
+        Monday, January 1, 4713 BCE in the Julian calendar, or November 24, 4712
+        in the Gregorian calendar. Each period from one noon to the next counts
+        as one day, regardless of whether that day contains leap seconds. As a
+        result, some days are longer than others. (Note that leap seconds always
+        occur at midnight, and therefore at the middle of a Julian day.)
+  MJD = Modified Julian Date, defined to be JD minus 2400000.5.
+  JED = Julian Ephmeris Date, defined to be TDB/86400 + 2451545. It is
+        compatible with SPICE ephemeris time but in units of days rather than
+        seconds.
+  MJED = Modified Julian Ephmeris Date, defined as JED minus 2400000.5.
+
+Throughout the library, TAI is the intermediary time relative to which all
+others are defined. Note: The term "TAI" is also used infrequently in the
+SPICE Toolkit, but the SPICE value is smaller by exactly 43200 seconds. All
+other terms used here are essentially identical in meaning to their SPICE
+Toolkit equivalents.
+
+If the environment variable SPICE_LSK_FILEPATH is defined, then this SPICE
+leapseconds kernel is read at startup. Otherwise, leap seconds through 2020
+are always included, as defined in SPICE kernel file naif00012.tls.
+
+The library also both parses and formats strings that express the time in UTC,
+in standard ISO 8601 format. It also recognizes dates and times in nearly
+arbitrary formats and can be used to "scrape" dates and times from arbitrary
+text.
+
+Date conversions optionally recognize the transition from the Julian to the
+Gregorian calendar, in which the day after October 4, 1582 (Julian calendar)
+was October 15, 1582 (Gregorian calendar). The user has the option to change
+the date of this transition. For example, Britain adopted the Gregorian
+calendar on September 14, 1752.
+
+All dates prior to the adoption of a particular calendar are proleptic. Years
+prior to 1 CE are specified using the "astronomical year", which includes a year
+zero. As a result, 1 BCE is specified as year 0, 2 BCE as year -1, 4713 BCE as
+year -4712, etc. Note that there is some historical uncertainty about which
+years were recognized as leap years in Rome between the adoption of the Julian
+calendar in 46 BCE and about 8 CE. In this library, the years 4 CE, 0 (1 BCE),
+-4 (5 BCE), -8 (9 BCE), etc. are all leap years.
+
+Aside from the I/O routines, every argument to every function can be either a
+scalar or something array-like, e.g., a NumPy array, tuple, or list. Arguments
+other than scalars are converted to NumPy arrays, the arrays are broadcasted to
+the same shape if necessary, and the complete array(s) of results are returned.
+The ISO date-time parsers are also vectorized, making it possible to interpret a
+long array of date strings, e.g., as read from a table, very quickly.
+
+This library duplicates much of the functionality of python's built-in datetime
+library, but is separate from them because the datetime library cannot handle
+leap seconds and does not support the Julian calendar or dates before 1 CE.
+
+This library duplicates some of the SPICE toolkit, but has the advantage of
+supporting array-based time operations, which can be much faster when processing
+large amounts of data. It is also pure Python, and so does not need to be linked
+with C or FORTRAN libraries.
+
+The Julian Library is compatible with both Python 2 and Python 3.
+
+PDS Ring-Moon Systems Node, SETI Institute
+This software is licensed under Academic Free License ("AFL") v. 3.0.
+See https://opensource.org/licenses/afl-3.0.php
+"""
 
 from __future__ import print_function, division
 
@@ -248,71 +264,221 @@ class Test_Initialize(unittest.TestCase):
 # return scalars; if given anything array-like, they return arrays.
 ################################################################################
 
-def day_from_ymd(y, m, d):
+def day_from_ymd(y, m, d, validate=False, use_julian=True):
     """Day number from year, month and day. All must be integers.
 
-    Supports scalar or array arguments.
+    Supports scalar or array-like arguments.
+
+    Inputs:
+        y               year. Note that 1 BCE corresponds to year 0, and earlier
+                        year values are negative.
+        m               month number, generally 1-12.
+        d               day number, generally 1-31.
+        validate        True to raise ValueError for year, month, and day
+                        numbers out of range; default is False.
+        use_julian      True to apply the correction for the switch from the
+                        Julian to the Gregorian calendar, in which the day after
+                        October 4, 1582 was October 15, 1582 (or at an
+                        alternative date as specified by set_gregorian_start).
+
+    If use_julian is False (the default), then all dates prior to October 15,
+    1582 are interpreted as proleptic Gregorian dates. Regardless of the
+    calendar, dates prior to AD 1 are proleptic. For example, 1 BCE, which
+    corresponds to y == 0, is a leap year.
     """
+
+    global FEB29_1BCE_GREGORIAN, FEB29_1BCE_JULIAN, GREGORIAN_DAY1
 
     y = _INT(y)
     m = _INT(m)
     d = _INT(d)
 
-    m = (m + 9) % 12
-    y = y - m//10
-    return 365*y + y//4 - y//100 + y//400 + (m*306 + 5)//10 + d - 730426
+    if validate:
+        if np.any(d < 1):
+            raise ValueError('days must be between 1 and 31')
+
+        month = month_from_ym(y, m, validate=True)
+        if np.any(d > days_in_month(month, use_julian=False)):
+            raise ValueError('day number cannot exceed days in month')
+
+    mm = (m + 9) % 12   # This makes March the first month and February the last
+    yy = y - mm//10     # This subtracts one from the year if the month is
+                        # January or February.
+
+    # Random notes:
+    #
+    # 306 is the number of days in March-December
+    #
+    # The formula (mm*306 + 5)//10 yields the number of days from the end of
+    # February to the end of the given the month, using mm==1 for March, 2 for
+    # April, ... 10 for December, 11 for January.
+    #
+    # The formula 365*yy + yy//4 - yy//100 + yy//400 is the number of elapsed
+    # days from the end of February in 1 BCE to the end of February in year yy.
+    # (Note that 1 BCE is yy==0.)
+
+    day = ((365*yy + yy//4 - yy//100 + yy//400) + (mm * 306 + 5) // 10
+           + d + FEB29_1BCE_GREGORIAN)
+
+    if not use_julian:
+        return day
+
+    # Handle the Julian-Gregorian calendar transition if necessary
+
+    if np.isscalar(day):
+        if day >= GREGORIAN_DAY1:
+            return day
+        else:
+            alt_day = ((365 * yy + yy//4) + (mm * 306 + 5) // 10
+                       + d + FEB29_1BCE_JULIAN)
+            if validate:
+                alt_ymd = ymd_from_day(alt_day, use_julian=True)
+                if alt_ymd != (y,m,d):
+                    isodate = '%04d-%02d-%02d' % (y, m, d)
+                    raise ValueError(isodate + ' falls between the Julian and '
+                                             + 'Gregorian calendars')
+            return alt_day
+
+    mask = (day < GREGORIAN_DAY1)
+    if np.any(mask):
+        alt_day = ((365 * yy + yy//4) + (mm * 306 + 5) // 10
+                   + d + FEB29_1BCE_JULIAN)
+        day[mask] = alt_day[mask]
+
+        if validate:
+            alt_d = ymd_from_day(alt_day[mask], use_julian=True)[2]
+            dd = np.broadcast_to(d, day.shape)
+            if np.any(alt_d != dd[mask]):
+                raise ValueError('one or more date fall between the Julian and '
+                                 + 'Gregorian calendars')
+
+    return day
 
 ########################################
 
-def ymd_from_day(day):
-    """Year, month and day from day number. Inputs must be integers."""
+def ymd_from_day(day, use_julian=True):
+    """Year, month and day from day number.
+
+    Supports scalar or array arguments.
+
+    Inputs:
+        y, m, d         year, month, and day as integers or integer array-like.
+        use_julian      True to assume that dates prior to October 15, 1582 used
+                        the Julian calendar rather than the Gregorian calendar.
+    """
 
     day = _INT(day)
 
     # Execute the magic algorithm
-    g = day + 730425
-    y = (10000*g + 14780)//3652425
-    ddd = g - (365*y + y//4 - y//100 + y//400)
+    g = day + 730425                    # Elapsed days after March 1, 1 BCE
+    y = (10000*g + 14780)//3652425      # Year assumed starting March 1
+    doy = g - (365*y + y//4 - y//100 + y//400)
+                                        # Day number starting March 1
 
-    # Use scalar version of test...
-    if np.shape(day):
-        y[ddd < 0] -= 1
-    elif ddd < 0:
-        y -= 1
+    if np.any(doy < 0):                 # Needed for dates before March 1, 1 BCE
+        if np.shape(day):
+            y[doy < 0] -= 1
+        elif doy < 0:
+            y -= 1
+        doy = g - (365*y + y//4 - y//100 + y//400)
 
-    ddd = g - (365*y + y//4 - y//100 + y//400)
+    # https://www.quora.com/What-were-the-leap-years-from-45-BC-to-0-BC
+    # https://scienceworld.wolfram.com/astronomy/LeapYear.html
+    # https://www.wwu.edu/astro101/a101_leapyear.shtml
 
-    mi = (100*ddd + 52)//3060
-    mm = (mi + 2)%12 + 1
-    y = y + (mi + 2)//12
-    dd = ddd - (mi*306 + 5)//10 + 1
+    # Prior to year 1, we extrapolate the Julian calendar backward. In reality
+    # there were no leap days prior to 46 BCE, and there is no clear consensus
+    # on which years were leap years in Rome prior to 8 CE.
 
-    return (y, mm, dd)
+    if use_julian:
+        mask = (day < GREGORIAN_DAY1)
+        if np.any(mask):
+            alt_g = day + 730427
+            alt_y = (100 * alt_g + 75) // 36525
+            alt_doy = alt_g - (365 * alt_y + alt_y//4)
+
+            if np.any(doy < 0):
+                if np.shape(day):
+                    alt_y[alt_doy < 0] -= 1
+                elif alt_doy < 0:
+                    alt_y -= 1
+                alt_doy = alt_g - (365 * alt_y + alt_y//4)
+
+            if np.isscalar(day):
+                y = alt_y
+                doy = alt_doy
+            else:
+                y[mask] = alt_y[mask]
+                doy[mask] = alt_doy[mask]
+
+    m0 = (100 * doy + 52)//3060         # mm = month, with m0==0 for March
+    m = (m0 + 2) % 12 + 1
+    y += (m0 + 2) // 12
+    d = doy - (m0 * 306 + 5)//10 + 1
+    return (y, m, d)
 
 ########################################
 
-def yd_from_day(day):
-    """Year and day-of-year from day number."""
+def yd_from_day(day, use_julian=True):
+    """Year and day-of-year from day number.
 
-    (y,m,d) = ymd_from_day(day)
-    return (y, _INT(day) - day_from_ymd(y,1,1) + 1)
+    Supports scalar or array-like arguments.
+
+    Inputs:
+        day             day as number of days relative to January 1, 2000.
+        use_julian      True to assume that dates prior to October 15, 1582 used
+                        the Julian calendar rather than the Gregorian calendar.
+    """
+
+    (y,m,d) = ymd_from_day(day, use_julian=use_julian)
+    return (y, _INT(day) - day_from_ymd(y, 1, 1, use_julian=use_julian) + 1)
 
 ########################################
 
-def day_from_yd(y, d):
-    """Day number from year and day-of-year."""
+def day_from_yd(y, d, validate=False, use_julian=True):
+    """Day number from year and day-of-year.
 
-    return day_from_ymd(y,1,1) + _INT(d) - 1
+    Supports scalar or array-like arguments.
+
+    Inputs:
+        y               year. Note that 1 BCE corresponds to year 0, and earlier
+                        year values are negative.
+        d               day of year, generally 1-366.
+        validate        True to raise ValueError for year, month, and day
+                        numbers out of range; default is False.
+        use_julian      True to apply the correction for the switch from the
+                        Julian to the Gregorian calendar, in which the day after
+                        October 4, 1582 was October 15, 1582 (or at an
+                        alternative date as specified by set_gregorian_start).
+    """
+
+    if validate:
+        if np.any(d < 1) or np.any(d > days_in_year(y)):
+            raise ValueError('day number cannot exceed the number of days in the ' +
+                             'year')
+
+    return day_from_ymd(y, 1, 1, use_julian=use_julian) + _INT(d) - 1
 
 ########################################
 
-def month_from_ym(y, m):
+def month_from_ym(y, m, validate=False):
     """Number of elapsed months since January 2000.
 
     Supports scalar or array arguments.
+
+    Inputs:
+        y               year. Note that 1 BCE corresponds to year 0, and earlier
+                        year values are negative.
+        m               month number, generally 1-12.
+        validate        True to raise ValueError for year, month, and day
+                        numbers out of range; default is False.
     """
 
-    return 12*(_INT(y) - 2000) + (_INT(m) - 1)
+    if validate:
+        if np.any(m < 1) or np.any(m > 12):
+            raise ValueError('month number must be between 1 and 12')
+
+    return 12*(y - 2000) + (_INT(m) - 1)
 
 ########################################
 
@@ -321,8 +487,8 @@ def ym_from_month(month):
 
     month = _INT(month)
 
-    y = _INT(month//12)
-    m = month - 12*y
+    y = _INT(month // 12)
+    m = month - 12 * y
     y += 2000
     m += 1
 
@@ -330,23 +496,103 @@ def ym_from_month(month):
 
 ########################################
 
-def days_in_month(month):
-    """Number of days in month."""
+def days_in_month(month, use_julian=True):
+    """Number of days in month, given the number of elapsed months since January
+    2000.
+
+    Supports scalar or array-like arguments.
+
+    Inputs:
+        month           month number, as the number of elapsed months since the
+                        beginning of January 2000.
+        use_julian      True to apply the correction for the switch from the
+                        Julian to the Gregorian calendar, in which the day after
+                        October 4, 1582 was October 15, 1582 (or at an
+                        alternative date as specified by set_gregorian_start).
+    """
 
     (y, m) = ym_from_month(month)
-    day0 = day_from_ymd(y, m, 1)
+    day0 = day_from_ymd(y, m, 1, use_julian=use_julian)
 
     (y, m) = ym_from_month(month + 1)
-    day1 = day_from_ymd(y, m, 1)
+    day1 = day_from_ymd(y, m, 1, use_julian=use_julian)
 
     return day1 - day0
 
 ########################################
 
-def days_in_year(year):
+def days_in_ym(y, m, validate=False, use_julian=True):
+    """Number of days in month.
+
+    Inputs:
+        month           year. Note that 1 BCE corresponds to year 0, and earlier
+                        year values are negative.
+        validate        True to raise ValueError for year and month numbers out
+                        of range; default is False.
+        use_julian      True to apply the correction for the switch from the
+                        Julian to the Gregorian calendar, in which the day after
+                        October 4, 1582 was October 15, 1582 (or at an
+                        alternative date as specified by set_gregorian_start).
+    """
+
+    month = month_from_ym(y, m, validate=validate)
+    return days_in_month(month, use_julian=use_julian)
+
+########################################
+
+def days_in_year(year, use_julian=True):
     """Number of days in year."""
 
-    return day_from_ymd(year+1, 1, 1) - day_from_ymd(year, 1, 1)
+    return (day_from_ymd(year+1, 1, 1, use_julian=use_julian) -
+            day_from_ymd(year,   1, 1, use_julian=use_julian))
+
+########################################
+
+def set_gregorian_start(y=1582, m=10, d=15):
+    """Set the first day of the Gregorian calendar globally.
+
+    Use set_gregorian_start(None) for proleptic backward extrapolation of the
+    Gregorian calendar.
+    """
+
+    global GREGORIAN_DAY1, GREGORIAN_DAY1_YMD, GREGORIAN_DAY0_YMD
+
+    if y == None:       # prevents any Julian calendar date from being used
+        GREGORIAN_DAY1 = -1.e30
+        return
+
+    GREGORIAN_DAY1 = day_from_ymd(y, m, d, use_julian=False)
+    GREGORIAN_DAY1_YMD = (y, m, d)
+    GREGORIAN_DAY0_YMD = ymd_from_day(GREGORIAN_DAY1-1, use_julian=True)
+
+# Fill in some constants used by day_from_ymd
+
+# Day number of February 29 1 BCE (year 0) in the Gregorian and Julian
+# calendars, relative to January 1, 2000 in the Gregorian calendar.
+# Should be...
+# FEB29_1BCE_GREGORIAN = -730426
+# FEB29_1BCE_JULIAN    = -730428
+
+# Day number of the first day of the Gregorian calendar, October 15, 1582.
+# Should be...
+# GREGORIAN_DAY1 = -152384
+# GREGORIAN_DAY1_YMD = (1582, 10, 15)
+# GREGORIAN_DAY0_YMD = (1582, 10,  4)
+
+# Deriving from first principles...
+FEB29_1BCE_GREGORIAN = 0
+FEB29_1BCE_GREGORIAN = (day_from_ymd(0, 2, 29, use_julian=False) -
+                        day_from_ymd(2000, 1, 1, use_julian=False))
+
+GREGORIAN_DAY1_YMD = (1582, 10, 15)
+GREGORIAN_DAY1 = day_from_ymd(*GREGORIAN_DAY1_YMD, use_julian=False)
+
+FEB29_1BCE_JULIAN = 0
+FEB29_1BCE_JULIAN = (day_from_ymd(0, 2, 29, use_julian=True)
+                     - day_from_ymd(1582, 10, 5, use_julian=True)
+                     + GREGORIAN_DAY1)
+
+GREGORIAN_DAY0_YMD = ymd_from_day(GREGORIAN_DAY1-1, use_julian=True)
 
 ########################################
 # UNIT TESTS
@@ -446,6 +692,42 @@ class Test_Calendar(unittest.TestCase):
         self.assertTrue(np.all(days_in_month(month_from_ym(ylist[select],2))
             == 28), "Not every non-leap year February has 28 days")
 
+        # Julian vs. Gregorian calendars around 1 CE
+        for use_julian in (False, True):
+          start_day = day_from_ymd(-10, 1, 1, use_julian=use_julian)
+          stop_day  = day_from_ymd( 11, 1, 1, use_julian=use_julian)
+          for day in range(start_day, stop_day+1):
+            (y, m, d) = ymd_from_day(day, use_julian=use_julian)
+            day2 = day_from_ymd(y, m, d, use_julian=use_julian)
+            self.assertEqual(day, day2)
+
+        # Julian vs. Gregorian calendars around 1582
+        for use_julian in (False, True):
+          start_day = day_from_ymd(1572, 1, 1, use_julian=use_julian)
+          stop_day  = day_from_ymd(1593, 1, 1, use_julian=use_julian)
+          for day in range(start_day, stop_day+1):
+            (y, m, d) = ymd_from_day(day, use_julian=use_julian)
+            day2 = day_from_ymd(y, m, d, use_julian=use_julian)
+            self.assertEqual(day, day2)
+
+        # Reality checks, set_gregorian_start
+        self.assertEqual(day_from_ymd(-4712, 1, 1, use_julian=True),  -2451545)
+        self.assertEqual(day_from_ymd(-4713,11,24, use_julian=False), -2451545)
+        self.assertEqual(days_in_year(1582, use_julian=True),  355)
+        self.assertEqual(days_in_year(1582, use_julian=False), 365)
+
+        set_gregorian_start(None)
+        self.assertEqual(day_from_ymd(-4713,11,24, use_julian=False), -2451545)
+        self.assertEqual(day_from_ymd(-4713,11,24, use_julian=True),  -2451545)
+
+        set_gregorian_start(1752, 9, 14)
+        self.assertEqual(days_in_year(1582, use_julian=True),  365)
+        self.assertEqual(days_in_year(1582, use_julian=False), 365)
+        self.assertEqual(days_in_year(1752, use_julian=True),  355)
+        self.assertEqual(days_in_year(1752, use_julian=False), 365)
+
+        set_gregorian_start()
+
 ################################################################################
 # Leapsecond routines
 ################################################################################
@@ -454,10 +736,12 @@ def leapsecs_from_ym(y, m):
     """Number of elapsed leapseconds for a given year and month."""
 
     # Scalar version...
-    if np.shape(y) == () and np.shape(m) == ():
+    if np.isscalar(y) and np.isscalar(m):
         index = 2*(y - LS_YEAR0) + (m-1)//6
-        if index <= 0:               return LS_ARRAY1D[0]
-        if index >= LS_ARRAY1D.size: return LS_ARRAY1D[-1]
+        if index <= 0:
+            return LS_ARRAY1D[0]
+        if index >= LS_ARRAY1D.size:
+            return LS_ARRAY1D[-1]
         return LS_ARRAY1D[index]
 
     # Array version...
@@ -483,10 +767,12 @@ def seconds_on_day(day, leapseconds=True):
     2000.
     """
 
-    if not leapseconds: return 86400
+    if not leapseconds:
+        return 86400
 
     shape = np.shape(day)
-    if shape != (): day = np.asarray(day)
+    if shape:
+        day = np.asarray(day)
 
     return 86400 + leapsecs_from_day(day+1) - leapsecs_from_day(day)
 
@@ -608,8 +894,10 @@ def hms_from_sec(sec):
     sec = _FLOAT(sec)
 
     # Test for valid range
-    if (np.any(sec < 0.)):     raise ValueError("seconds < 0")
-    if (np.any(sec > 86410.)): raise ValueError("seconds > 86410")
+    if (np.any(sec < 0.)):
+        raise ValueError("seconds < 0")
+    if (np.any(sec > 86410.)):
+        raise ValueError("seconds > 86410")
 
     h = np.minimum(_INT(sec//3600), 23)
     t = sec - 3600*h
@@ -1047,7 +1335,8 @@ def tai_from_jed(jed):
 def utc_from_day_sec_as_type(day, sec, time_type="UTC"):
 
     # Conversion UTC to UCT is easy
-    if time_type == "UTC": return (day, sec)
+    if time_type == "UTC":
+        return (day, sec)
 
     day = _INT(day)
     sec = _FLOAT(sec)
@@ -1068,7 +1357,8 @@ def utc_from_day_sec_as_type(day, sec, time_type="UTC"):
 def day_sec_as_type_from_utc(day, sec, time_type="UTC"):
 
     # Conversion UTC to UCT is easy
-    if time_type == "UTC": return (day, sec)
+    if time_type == "UTC":
+        return (day, sec)
 
     day = _INT(day)
     sec = _FLOAT(sec)
@@ -1161,7 +1451,7 @@ class Test_Conversions(unittest.TestCase):
 # Formatting Routines
 ################################################################################
 
-def ymd_format_from_day(day, buffer=None):
+def ymd_format_from_day(day, buffer=None, use_julian=True):
     """Date in 'yyyy-mm-dd' format. Supports scalars or arrays.
 
     Input:
@@ -1169,11 +1459,14 @@ def ymd_format_from_day(day, buffer=None):
                     relative to January 1, 2000.
         buffer      an optional byte array into which to write the results.
                     Only used if day is an array. Must have sufficient length.
+        use_julian  True to interpret dates prior to the beginning of the
+                    Gregorian calendar using the Julian calendar; False for
+                    proleptic Gregorian dates.
     """
 
-    return _yxd_format_from_day(day, True, buffer)
+    return _yxd_format_from_day(day, True, buffer, use_julian=use_julian)
 
-def yd_format_from_day(day, buffer=None):
+def yd_format_from_day(day, buffer=None, use_julian=True):
     """Date in 'yyyy-ddd' format. Supports scalars or arrays.
 
     Input:
@@ -1181,28 +1474,31 @@ def yd_format_from_day(day, buffer=None):
                     relative to January 1, 2000.
         buffer      an optional byte array into which to write the results.
                     Only used if day is an array. Must have sufficient length.
+        use_julian  True to interpret dates prior to the beginning of the
+                    Gregorian calendar using the Julian calendar; False for
+                    proleptic Gregorian dates.
     """
 
-    return _yxd_format_from_day(day, False, buffer)
+    return _yxd_format_from_day(day, False, buffer, use_julian=use_julian)
 
-def _yxd_format_from_day(day, ymd=True, buffer=None):
+def _yxd_format_from_day(day, ymd=True, buffer=None, use_julian=True):
     """Support function for ymd and yd ISO date formats."""
 
     # Translate the days and set up the formatting parameters
     if ymd:
-        tuple = ymd_from_day(day)
+        tuple_ = ymd_from_day(day, use_julian=use_julian)
         fmt = "{:04d}-{:02d}-{:02d}"
         dtype = "|S10"
         lstring = 10
     else:
-        tuple = yd_from_day(day)
+        tuple_ = yd_from_day(day, use_julian=use_julian)
         fmt = "{:04d}-{:03d}"
         dtype = "|S8"
         lstring = 8
 
     # Return a scalar
-    if np.shape(day) == ():
-        return fmt.format(*tuple)   # "*tuple" expands the tuple into its parts
+    if np.isscalar(day):
+        return fmt.format(*tuple_)
 
     # Create or check the buffer
     if buffer is None:
@@ -1215,11 +1511,11 @@ def _yxd_format_from_day(day, ymd=True, buffer=None):
 
     # Fill the buffer
     if ymd:
-        (y,m,d) = tuple
+        (y,m,d) = tuple_
         for i,value in np.ndenumerate(day):
             buffer[i] = fmt.format(y[i], m[i], d[i])
     else:
-        (y,d) = tuple
+        (y,d) = tuple_
         for i,value in np.ndenumerate(day):
             buffer[i] = fmt.format(y[i], d[i])
 
@@ -1259,10 +1555,11 @@ def hms_format_from_sec(sec, digits=None, suffix="", buffer=None):
 
     fmt = ("{:02d}:{:02d}:" + secfmt + "{:s}")
 
-    if suffix != "Z": suffix = ""
+    if suffix != "Z":
+        suffix = ""
     lstring = 6 + lsec + len(suffix)
 
-    if np.shape(sec) == ():
+    if np.isscalar(sec):
         return fmt.format(h,m,s,suffix)
 
     if buffer is None:
@@ -1281,7 +1578,7 @@ def hms_format_from_sec(sec, digits=None, suffix="", buffer=None):
 ########################################
 
 def ymdhms_format_from_day_sec(day, sec, sep="T", digits=None, suffix="",
-                               buffer=None):
+                               buffer=None, use_julian=True):
     """Date and time in ISO format 'yyyy-mm-ddThh:mm:ss....'.
 
     Works for both scalars and arrays.
@@ -1302,13 +1599,16 @@ def ymdhms_format_from_day_sec(day, sec, sep="T", digits=None, suffix="",
         buffer      an optional byte array into which to write the results.
                     Only used if day/sec are arrays. If the buffer is provided,
                     the elements must have sufficient length.
+        use_julian  True to interpret dates prior to the beginning of the
+                    Gregorian calendar using the Julian calendar; False for
+                    proleptic Gregorian dates.
     """
 
     return _yxdhms_format_from_day_sec(day, sec, True, sep, digits, suffix,
-                                       buffer)
+                                       buffer, use_julian=use_julian)
 
 def ydhms_format_from_day_sec(day, sec, sep="T", digits=None, suffix="",
-                              buffer=None):
+                              buffer=None, use_julian=True):
     """Date and time in ISO format 'yyyy-dddThh:mm:ss....'.
 
     Works for both scalars and arrays.
@@ -1329,13 +1629,16 @@ def ydhms_format_from_day_sec(day, sec, sep="T", digits=None, suffix="",
         buffer      an optional byte array into which to write the results.
                     Only used if day/sec are arrays. If the buffer is provided,
                     the elements must have sufficient length.
+        use_julian  True to interpret dates prior to the beginning of the
+                    Gregorian calendar using the Julian calendar; False for
+                    proleptic Gregorian dates.
     """
 
     return _yxdhms_format_from_day_sec(day, sec, False, sep, digits, suffix,
-                                       buffer)
+                                       buffer, use_julian=use_julian)
 
 def _yxdhms_format_from_day_sec(day, sec, ymd=True, sep="T", digits=None,
-                                suffix="", buffer=None):
+                                suffix="", buffer=None, use_julian=True):
     """Support function for ymd and yd ISO date-time formats."""
 
     day = _INT(day)
@@ -1361,7 +1664,7 @@ def _yxdhms_format_from_day_sec(day, sec, ymd=True, sep="T", digits=None,
         sec = ((sec*factor + 0.5)//1) / factor
 
     # Return a scalar
-    if np.shape(day) == () and np.shape(sec) == ():
+    if np.isscalar(day) and np.isscalar(sec):
         if sec >= seconds_on_day(day):
             sec -= seconds_on_day(day)
             day += 1
@@ -1376,9 +1679,7 @@ def _yxdhms_format_from_day_sec(day, sec, ymd=True, sep="T", digits=None,
     sec[crossovers] -= secs_on_day[crossovers]
 
     # Determine the sizes of the fields
-    if ymd: lday = 10
-    else:   lday = 8
-
+    lday = 10 if ymd else 8
     lstring = lday + 1 + 6 + lsec + len(suffix)
 
     # Create or check the buffer
@@ -1399,7 +1700,7 @@ def _yxdhms_format_from_day_sec(day, sec, ymd=True, sep="T", digits=None,
     b = buffer.view(np.dtype(dtype_dict))
 
     # Fill in the date, separator and time
-    _yxd_format_from_day(day, ymd, buffer=b["day"])
+    _yxd_format_from_day(day, ymd, buffer=b["day"], use_julian=use_julian)
     b["sep"] = sep.encode('utf-8')
     hms_format_from_sec(sec, digits, suffix, buffer=b["sec"])
 
@@ -1408,7 +1709,7 @@ def _yxdhms_format_from_day_sec(day, sec, ymd=True, sep="T", digits=None,
 ########################################
 
 def ymdhms_format_from_tai(tai, sep="T", digits=None, suffix="",
-                           buffer=None):
+                           buffer=None, use_julian=True):
     """Date and time in ISO format 'yyyy-mm-ddThh:mm:ss....' given seconds TAI.
 
     Works for both scalars and arrays.
@@ -1424,14 +1725,17 @@ def ymdhms_format_from_tai(tai, sep="T", digits=None, suffix="",
         buffer      an optional byte array into which to write the results.
                     Only used if day/sec are arrays. If the buffer is provided,
                     the elements must have sufficient length.
+        use_julian  True to interpret dates prior to the beginning of the
+                    Gregorian calendar using the Julian calendar; False for
+                    proleptic Gregorian dates.
     """
 
     (day, sec) = day_sec_from_tai(tai)
     return _yxdhms_format_from_day_sec(day, sec, True, sep, digits, suffix,
-                                       buffer)
+                                       buffer, use_julian=use_julian)
 
 def ydhms_format_from_tai(tai, sep="T", digits=None, suffix="",
-                          buffer=None):
+                          buffer=None, use_julian=True):
     """Date and time in ISO format 'yyyy-dddThh:mm:ss....' given seconds TAI.
 
     Works for both scalars and arrays.
@@ -1447,13 +1751,16 @@ def ydhms_format_from_tai(tai, sep="T", digits=None, suffix="",
         buffer      an optional byte array into which to write the results.
                     Only used if day/sec are arrays. If the buffer is provided,
                     the elements must have sufficient length.
+        use_julian  True to interpret dates prior to the beginning of the
+                    Gregorian calendar using the Julian calendar; False for
+                    proleptic Gregorian dates.
     """
 
     (day, sec) = day_sec_from_tai(tai)
     return _yxdhms_format_from_day_sec(day, sec, False, sep, digits, suffix,
-                                       buffer)
+                                       buffer, use_julian=use_julian)
 
-def iso_from_tai(tai, digits=None, ymd=True, suffix=""):
+def iso_from_tai(tai, digits=None, ymd=True, suffix="", use_julian=True):
     """Date and time in ISO format given seconds tai.
 
     Input:
@@ -1464,12 +1771,17 @@ def iso_from_tai(tai, digits=None, ymd=True, suffix=""):
         ymd         True for year-month-day format; False for year plus
                     day-of-year format.
         suffix      "Z" to include the Zulu time zone indicator.
+        use_julian  True to interpret dates prior to the beginning of the
+                    Gregorian calendar using the Julian calendar; False for
+                    proleptic Gregorian dates.
     """
 
     if ymd:
-      return ymdhms_format_from_tai(tai, sep="T", digits=digits, suffix=suffix)
+      return ymdhms_format_from_tai(tai, sep="T", digits=digits, suffix=suffix,
+                                         use_julian=use_julian)
     else:
-      return ydhms_format_from_tai(tai, sep="T", digits=digits, suffix=suffix)
+      return ydhms_format_from_tai(tai, sep="T", digits=digits, suffix=suffix,
+                                        use_julian=use_julian)
 
 ########################################
 # UNIT TESTS
@@ -1533,18 +1845,23 @@ class Test_Formatting(unittest.TestCase):
 # ISO format parsers
 ################################################################################
 
-def day_from_iso(strings, validate=True, strip=False):
+def day_from_iso(strings, validate=True, strip=False, use_julian=True):
     """Day number based on a parsing of a date string in ISO format.
 
-    The format is strictly required to be either "yyyy-mm-dd" or "yyyy-ddd". It
-    works on bytestring arrays in addition to individual strings or bytestrings.
+    The format is strictly required to be either "yyyy-mm-dd" or "yyyy-ddd".
 
-    Now revised to avoid the slow julian_isoparser routines. It should be very
-    fast. It also works for lists or arrays of arbitrary shape, provided every
-    item uses the same format. Note that syntax is no longer checked in detail.
+    Input:
+        strings         One or more strings or bytestrings to interpret.
+        validate        True to check the year/month/day syntax and values more
+                        carefully.
+        strip           True to skip over leading and trailing blanks.
+        use_julian      True to interpret dates prior to the adoption of the
+                        Gregorian calendar as dates in the Julian calendar.
 
-    If validate=True, then the syntax and year/month/day values are checked more
-    carefully.
+    This function has been revised to avoid the slow julian_isoparser routines.
+    It should be very fast. It also works for lists or arrays of arbitrary
+    shape, provided every item uses the same format. Note that syntax is no
+    longer checked in detail.
     """
 
     # Convert to bytestring if necessary
@@ -1606,10 +1923,10 @@ def day_from_iso(strings, validate=True, strip=False):
                 np.any(m <  1) or
                 np.any(m > 12) or
                 np.any(d <  1) or
-                np.any(d > days_in_month(month_from_ym(y,m)))):
+                np.any(d > days_in_month(month_from_ym(y, m, use_julian)))):
                     raise ValueError("invalid numeric value in ISO date")
 
-        return day_from_ymd(y,m,d)
+        return day_from_ymd(y, m, d, use_julian=use_julian)
 
     # yyyy-ddd case:
     if strings.itemsize - k0  == 8:
@@ -1635,7 +1952,7 @@ def day_from_iso(strings, validate=True, strip=False):
                 np.any(d > days_in_year(y))):
                     raise ValueError("invalid numeric value in ISO date")
 
-        return day_from_yd(y,d)
+        return day_from_yd(y, d, use_julian=use_julian)
 
     # Invalid string length
     raise ValueError("invalid ISO date format: " + strings.ravel()[0].decode())
@@ -1648,13 +1965,16 @@ def sec_from_iso(strings, validate=True, strip=False):
     The format is strictly required to be "hh:mm:ss[.s...][Z]". It works on
     bytestring arrays in addition to individual strings or bytestrings.
 
+    Input:
+        strings         One or more strings or bytestrings to interpret.
+        validate        True to check the year/month/day syntax and values more
+                        carefully.
+        strip           True to skip over leading and trailing blanks.
+
     Now revised to avoid the slow julian_isoparser routines. It should be very
     fast. It also works for lists or arrays of arbitrary shape, provided every
     item uses the same format. By default, the syntax is no longer checked in
     detail.
-
-    If validate=True, then the syntax and hour/minute/second values are checked
-    more carefully.
     """
 
     # Old, slow procedure...
@@ -1779,12 +2099,19 @@ def sec_from_iso(strings, validate=True, strip=False):
 
 ########################################
 
-def day_sec_from_iso(strings, validate=True, strip=False):
+def day_sec_from_iso(strings, validate=True, strip=False, use_julian=True):
     """Day and second based on a parsing of the string in ISO date-time format.
 
     The format is strictly enforced to be an ISO date plus an ISO time,
-    separated by a single space or a "T". It works for bytestring arrays in
-    addition to individual strings or bytestrings.
+    separated by a single space or a "T".
+
+    Input:
+        strings         One or more strings or bytestrings to interpret.
+        validate        True to check the year/month/day syntax and values more
+                        carefully.
+        strip           True to skip over leading and trailing blanks.
+        use_julian      True to interpret dates prior to the adoption of the
+                        Gregorian calendar as dates in the Julian calendar.
     """
 
     # Old, slow procedure...
@@ -1849,15 +2176,21 @@ def day_sec_from_iso(strings, validate=True, strip=False):
 
 ########################################
 
-def tai_from_iso(strings, validate=True, strip=False):
+def tai_from_iso(strings, validate=True, strip=False, use_julian=True):
     """Elapsed seconds TAI from January 1, 2000 given an ISO date or date-time
     string.
 
-    Works for individual strings or bytestrings and also for arrays of
-    bytestrings
+    Input:
+        strings         One or more strings or bytestrings to interpret.
+        validate        True to check the year/month/day syntax and values more
+                        carefully.
+        strip           True to skip over leading and trailing blanks.
+        use_julian      True to interpret dates prior to the adoption of the
+                        Gregorian calendar as dates in the Julian calendar.
     """
 
-    (day, sec) = day_sec_from_iso(strings, validate, strip)
+    (day, sec) = day_sec_from_iso(strings, validate=validate, strip=strip,
+                                  use_julian=use_julian)
     return tai_from_day(day) + sec
 
 ########################################
@@ -2027,32 +2360,48 @@ def _split(string):
 
 ########################################
 
-def day_from_string(string, order="YMD"):
-    """Day number based on a parsing of the string.
+def day_from_string(string, order="YMD", use_julian=True):
+    """Day number based on a parsing of a free-form string.
 
-    Input parameter order is one 'YMD', 'MDY' or 'DMY', and defines the
-    preferred order for date, month, and year in situations where it might be
-    ambiguous.
+    The format is strictly enforced to be an ISO date plus an ISO time,
+    separated by a single space or a "T".
+
+    Input:
+        strings         One or more strings or bytestrings to interpret.
+        order           One of 'YMD', 'MDY', or 'DMY'; this defines the default
+                        order for date, month, and year in situations where it
+                        might be ambiguous.
+        use_julian      True to interpret dates prior to the adoption of the
+                        Gregorian calendar as dates in the Julian calendar.
     """
 
     parser = DATE_PARSER_DICT[order] + pyparsing.StringEnd()
 
     # Give the list a zero month entry for the year and day-of-year case
-    parselist = [["MONTH",0]] + parser.parseString(string).asList()
+    try:
+        parselist = [["MONTH",0]] + parser.parseString(string).asList()
+    except pyparsing.ParseException:
+        raise ValueError('unrecognized date format: "%s"' % string)
+
     parsedict = _dict_from_parselist(parselist)
 
-    return _day_from_dict(parsedict)
+    return _day_from_dict(parsedict, use_julian=use_julian)
 
-def day_in_string(string, order="YMD", remainder=False):
-    """Day number derived from the first date that appears in the string; None
-    no date was found.
+def day_in_string(string, order="YMD", remainder=False, use_julian=True):
+    """Day number derived from the first date that appears in the string.
 
-    If remainder is True and a date was found, it returns a tuple (day number,
-    remainder of string).
+    Returns None if no date was found.
 
-    Input parameter order is one 'YMD', 'MDY' or 'DMY', and defines the
-    preferred order for date, month, and year in situations where it might be
-    ambiguous.
+    Input:
+        string          string to interpret.
+        order           One of 'YMD', 'MDY', or 'DMY'; this defines the default
+                        order for date, month, and year in situations where it
+                        might be ambiguous.
+        remainder       If True and a date was found, return a tuple:
+                            (day number, remainder of string).
+                        Otherwise, just return the day number.
+        use_julian      True to interpret dates prior to the adoption of the
+                        Gregorian calendar as dates in the Julian calendar.
     """
 
     parser = DATE_PARSER_STRICT[order]
@@ -2061,7 +2410,7 @@ def day_in_string(string, order="YMD", remainder=False):
     # least a 2-digit number and a 1-digit number separated by 1-12 characters.
     regex = re.compile(r'.*\d(\d[^\d].{0,11}|[^\d].{0,11}\d)\d')
 
-    words = _split(string)
+    words = _split(str(string))
     result = None
     for k in range(len(words)):
         substring = ''.join(words[k:])
@@ -2077,7 +2426,7 @@ def day_in_string(string, order="YMD", remainder=False):
         parselist = [["MONTH",0]] + result.asList()
         parsedict = _dict_from_parselist(parselist)
         try:
-            day = _day_from_dict(parsedict)
+            day = _day_from_dict(parsedict, use_julian=use_julian)
         except ValueError:
             return None
 
@@ -2088,17 +2437,22 @@ def day_in_string(string, order="YMD", remainder=False):
 
     return None
 
-def days_in_string(string, order="YMD", remainder=False):
+def days_in_string(string, order="YMD", use_julian=True):
     """List of day numbers found in this string.
 
-    Input parameter order is one 'YMD', 'MDY' or 'DMY', and defines the
-    preferred order for date, month, and year in situations where it might be
-    ambiguous.
+    Input:
+        string          string to interpret.
+        order           One of 'YMD', 'MDY', or 'DMY'; this defines the default
+                        order for date, month, and year in situations where it
+                        might be ambiguous.
+        use_julian      True to interpret dates prior to the adoption of the
+                        Gregorian calendar as dates in the Julian calendar.
     """
 
     days = []
     while True:
-        result = day_in_string(string, order=order, remainder=True)
+        result = day_in_string(string, order=order, remainder=True,
+                                       use_julian=use_julian)
         if result:
             (day, string) = result
             days.append(day)
@@ -2115,18 +2469,26 @@ def sec_from_string(string):
     # Give the list zero values for each parameter, in case they are missing
     # from the list returned
     parser = jdp.TIME + pyparsing.StringEnd()
-    parselist = ([["HOUR",0], ["MINUTE",0], ["SECOND",0]] +
-                 parser.parseString(string).asList())
+    try:
+        parselist = ([["HOUR",0], ["MINUTE",0], ["SECOND",0]] +
+                     parser.parseString(string).asList())
+    except pyparsing.ParseException:
+        raise ValueError('unrecognized time format: "%s"' % string)
+
     parsedict = _dict_from_parselist(parselist)
 
     return _sec_from_dict(parsedict)
 
 def time_in_string(string, remainder=False):
-    """Second value based on the first identified time in a string; None if no
-    time was found.
+    """Second value based on the first identified time in a string.
 
-    If remainder is True and a date was found, it returns a tuple (seconds,
-    remainder of string).
+    Returns None if no time was found.
+
+    Input:
+        string          string to interpret.
+        remainder       If True and a date was found, return a tuple:
+                            (seconds, remainder of string).
+                        Otherwise, just return the day number.
     """
 
     parser = jdp.TIME_STRICT
@@ -2162,13 +2524,8 @@ def time_in_string(string, remainder=False):
 
     return None
 
-def times_in_string(string, remainder=False):
-    """List of seconds values found in this string.
-
-    Input parameter order is one 'YMD', 'MDY' or 'DMY', and defines the
-    preferred order for date, month, and year in situations where it might be
-    ambiguous.
-    """
+def times_in_string(string):
+    """List of seconds values found in this string."""
 
     times = []
     while True:
@@ -2192,7 +2549,7 @@ TO_TAI_FUNC = {
     "TDT"   : tai_from_tdt,
 }
 
-def _day_sec_from_parsedict(parsedict, validate=True):
+def _day_sec_from_parsedict(parsedict, validate=True, use_julian=False):
 
     # Get the time type
     time_type = parsedict["TYPE"]
@@ -2208,48 +2565,67 @@ def _day_sec_from_parsedict(parsedict, validate=True):
     # Handle the case of a fractional day
     dvalue = parsedict["DAY"]
     if isinstance(dvalue, float):
-        day = _day_from_dict(parsedict)
+        day = _day_from_dict(parsedict, use_julian=use_julian)
         sec = (dvalue - day) * seconds_on_day(day)
         return (day, sec, time_type)
 
     # Otherwise, it is a calendar date plus time
-    day = _day_from_dict(parsedict)
+    day = _day_from_dict(parsedict, use_julian=use_julian)
     sec = _sec_from_dict(parsedict, day, validate)
     return (day, sec, "UTC")
 
-def day_sec_type_from_string(string, order="YMD", validate=True):
+def day_sec_type_from_string(string, order="YMD", validate=True,
+                                     use_julian=True):
     """Day and second based on a parsing of the string.
-
-    Input parameter order is one of 'YMD', 'MDY' or 'DMY', and defines the
-    preferred order for date, month and year in situations where it might be
-    ambiguous.
 
     Note: time_types are parsed but are not currently supported. Days and
     seconds are always expressed in UTC.
+
+    Input:
+        string          String to interpret.
+        order           One of 'YMD', 'MDY', or 'DMY'; this defines the default
+                        order for date, month, and year in situations where it
+                        might be ambiguous.
+        validate        True to check the syntax and values more carefully.
+        use_julian      True to interpret dates prior to the adoption of the
+                        Gregorian calendar as dates in the Julian calendar.
     """
 
     parser = DATETIME_PARSER_DICT[order] + pyparsing.StringEnd()
 
     # Give the default entries in case they are needed
-    parselist = ([["TYPE","UTC"], ["MONTH",0], ["HOUR",0], ["MINUTE",0],
-                  ["SECOND",0]] + parser.parseString(string).asList())
+    try:
+        parselist = ([["TYPE","UTC"], ["MONTH",0], ["HOUR",0], ["MINUTE",0],
+                      ["SECOND",0]] + parser.parseString(string).asList())
+    except pyparsing.ParseException:
+        raise ValueError('unrecognized date format: "%s"' % string)
+
     parsedict = _dict_from_parselist(parselist)
 
-    return _day_sec_from_parsedict(parsedict, validate=validate)
+    return _day_sec_from_parsedict(parsedict, validate=validate,
+                                              use_julian=use_julian)
 
-def day_sec_type_in_string(string, order="YMD", validate=True, remainder=False):
+def day_sec_type_in_string(string, order="YMD", remainder=False,
+                                   use_julian=True):
     """Day, second, and time type based on the first occurrence of a date within
-    a string; None if no date was found.
+    a string.
 
-    If remainder is True and a date was found, it returns a tuple ((day, sec,
-    type), remainder of string).
-
-    Input parameter order is one of 'YMD', 'MDY' or 'DMY', and defines the
-    preferred order for date, month and year in situations where it might be
-    ambiguous.
+    None if no date was found.
 
     Note: time_types are parsed but are not currently supported. Days and
     seconds are always expressed in UTC.
+
+    Input:
+        string          string to interpret.
+        order           One of 'YMD', 'MDY', or 'DMY'; this defines the default
+                        order for date, month, and year in situations where it
+                        might be ambiguous.
+        remainder       If True and a date was found, return a 4-element tuple:
+                            (day, sec, type, remainder of string).
+                        Otherwise, just return the 3-element tuple:
+                            (day, sec, type).
+        use_julian      True to interpret dates prior to the adoption of the
+                        Gregorian calendar as dates in the Julian calendar.
     """
 
     parser = DATETIME_PARSER_STRICT[order]
@@ -2276,36 +2652,40 @@ def day_sec_type_in_string(string, order="YMD", validate=True, remainder=False):
         parsedict = _dict_from_parselist(parselist)
         try:
             day_sec_type = _day_sec_from_parsedict(parsedict,
-                                                   validate=validate)
+                                                   use_julian=use_julian)
         except ValueError:
             return None
 
         if remainder:
-            return (day_sec_type, substring[parsedict['~']:])
+            return day_sec_type + (substring[parsedict['~']:],)
 
         return day_sec_type
 
     return None
 
-def dates_in_string(string, order="YMD", validate=True, remainder=False):
+def dates_in_string(string, order="YMD", use_julian=True):
     """List of the dates found in this string, represented by tuples (day, sec,
     time_type).
 
-    Input parameter order is one of 'YMD', 'MDY' or 'DMY', and defines the
-    preferred order for date, month and year in situations where it might be
-    ambiguous.
-
     Note: time_types are parsed but are not currently supported. Days and
     seconds are always expressed in UTC.
+
+    Input:
+        string          string to interpret.
+        order           One of 'YMD', 'MDY', or 'DMY'; this defines the default
+                        order for date, month, and year in situations where it
+                        might be ambiguous.
+        use_julian      True to interpret dates prior to the adoption of the
+                        Gregorian calendar as dates in the Julian calendar.
     """
 
     dates = []
     while True:
-        result = day_sec_type_in_string(string, order=order, validate=validate,
-                                                remainder=True)
+        result = day_sec_type_in_string(string, order=order, remainder=True,
+                                                use_julian=use_julian)
         if result:
-            (day_sec_type, string) = result
-            dates.append(day_sec_type)
+            string = result[-1]
+            dates.append(result[:3])
         else:
             break
 
@@ -2324,14 +2704,15 @@ def _dict_from_parselist(parselist):
 
 ####################
 
-def _day_from_dict(parsedict):
+def _day_from_dict(parsedict, use_julian=True):
     """Day number based on the contents of a dictionary."""
 
     # First check for MJD date
     try:
         mjd = parsedict["MJD"]
-        return day_from_mjd(mjd)
-    except KeyError: pass
+        return day_from_mjd(mjd, use_julian=use_julian)
+    except KeyError:
+        pass
 
     # Look up year, month and day
     y = parsedict["YEAR"]
@@ -2341,20 +2722,20 @@ def _day_from_dict(parsedict):
 
     # Year and day-of-year case
     if m == 0:
-        if d > days_in_year(y):
+        if d > days_in_year(y, use_julian=use_julian):
             raise ValueError("Day value out of range in year: " +
                               "{:04d}-{:03d}".format(y,d))
 
-        return day_from_yd(y,d)
+        return day_from_yd(y, d, use_julian=use_julian)
 
     # Year-month-day case
     else:
         month = month_from_ym(y,m)
-        if d > days_in_month(month):
+        if d > days_in_month(month, use_julian=use_julian):
             raise ValueError("Day value out of range for month: "
                              "{:04d}-{:02d}-{:02d}".format(y,m,d))
 
-    return day_from_ymd(y,m,d)
+    return day_from_ymd(y, m, d, use_julian=use_julian)
 
 #####################
 
@@ -2448,8 +2829,7 @@ class Test_General_Parsing(unittest.TestCase):
         # Check leap seconds
         self.assertEqual(sec_from_string("23:59:60.000"), 86400.0)
         self.assertEqual(sec_from_string("23:59:69.000"), 86409.0)
-        self.assertRaises(pyparsing.ParseException, sec_from_string,
-                                                    "23:59:70.000")
+        self.assertRaises(ValueError, sec_from_string, "23:59:70.000")
 
         # Check time_in_string
         self.assertEqual(time_in_string("This is the time--00:00:00.000"), 0.0)
