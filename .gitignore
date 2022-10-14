@@ -6,8 +6,4 @@
 cspice1/_cspice_swig.so
 .project
 .pydevproject
-/cspice*/cspice/
-cspice/_cspice.pyd
-cspice-w32/
-cspice-w64/
-cspyce/cspyce0/cspice
+**/.vscode

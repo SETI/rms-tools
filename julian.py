@@ -2098,7 +2098,7 @@ def sec_in_string(string):
         return _sec_from_dict(parsedict)
 
     # Re-raise the original ParseException
-    _ = parser.parseString(string)
+    parser.parseString(string)
 
 ########################################
 
@@ -2128,8 +2128,7 @@ def _day_sec_from_parsedict(parsedict, validate=True):
     dvalue = parsedict["DAY"]
     if isinstance(dvalue, float):
         day = _day_from_dict(parsedict)
-        dfrac = dvalue - day
-        sec = (dvalue - day) * seconds_of_day(day)
+        sec = (dvalue - day) * seconds_on_day(day)
         return (day, sec, time_type)
 
     # Otherwise, it is a calendar date plus time
