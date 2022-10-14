@@ -2186,7 +2186,7 @@ def day_sec_type_in_string(string, order="YMD", validate=True):
         return _day_sec_from_parsedict(parsedict, validate=validate)
 
     # Re-raise the first ParseException
-    _ = parseString(string)
+    parser.parseString(string)
 
 ####################
 # internals...
