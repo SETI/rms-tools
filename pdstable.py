@@ -258,6 +258,7 @@ class PdsTable(object):
             if column_info.items > 1:
 
                 # Replace the column substring with a list of sub-substrings
+                from IPython import embed; print('+++++++++++++'); embed()
                 column.dtype = np.dtype(column_info.dtype1)
 
                 items = []
